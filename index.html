@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anton Ko — Product & Growth</title>
+  <meta name="description" content="Anton Ko — Product & Growth. Notes, projects, and small web experiments.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site">
+    <div class="container hero">
+      <p class="eyebrow">Product • Growth • Experiments</p>
+      <h1>Anton Ko</h1>
+      <p class="tagline">I help products grow and love building experiments. Living near Lake Garda, Italy.</p>
+      <div class="cta">
+        <a class="btn" href="about.html">About Me</a>
+        <a class="btn alt" href="contact.html">Contact</a>
+        <a class="btn" href="AntonKo-CV.pdf">Download CV</a>
+        <a class="btn alt" href="snake.html">Play Snake 🐍</a>
+        <a class="btn" href="multiply.html">Multiply Game ✖️</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Now section -->
+    <section class="card">
+      <h2>Now</h2>
+      <ul class="bullets">
+        <li>🎯 Looking for remote <b>Product Manager</b> roles in Europe</li>
+        <li>📚 Learning CS fundamentals & coding small games</li>
+        <li>🏐 Playing volleyball twice a week & enjoying life at Lake Garda</li>
+      </ul>
+    </section>
+
+    <!-- Mini projects / experiments -->
+    <section class="card">
+      <div class="flexhead">
+        <h2>Mini Projects & Experiments</h2>
+        <span class="note">Ship small, ship often</span>
+      </div>
+      <div class="grid">
+        <article class="tile">
+          <h3>Snake 🐍</h3>
+          <p>A classic on HTML Canvas. Arrow keys/WASD to move.</p>
+          <a class="link" href="snake.html">Play →</a>
+        </article>
+        <article class="tile">
+          <h3>Multiply Game ✖️</h3>
+          <p>Quick math for kids: hearts, timer, and a prize emoji.</p>
+          <a class="link" href="multiply.html">Play →</a>
+        </article>
+        <article class="tile disabled">
+          <h3>Tic‑Tac‑Toe</h3>
+          <p>Coming soon — a simple JS logic exercise.</p>
+          <span class="pill">soon</span>
+        </article>
+      </div>
+    </section>
+
+    <!-- Notes / Blog (future) -->
+    <section class="card">
+      <div class="flexhead">
+        <h2>Notes & Ideas</h2>
+        <a class="mini" href="#">See all notes →</a>
+      </div>
+      <div class="grid notes">
+        <article class="note">
+          <h3>Goal Discovery > Goal Setting</h3>
+          <p>Why discovering goals you truly own beats forcing goals the world imposes.</p>
+        </article>
+        <article class="note">
+          <h3>2‑Minute Hack vs Procrastination</h3>
+          <p>Break the inertia with a ridiculously small first step.</p>
+        </article>
+        <article class="note">
+          <h3>Relieve Your Worries</h3>
+          <p>Simple prompts to reframe anxious loops in seconds.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Content / Socials -->
+    <section class="card">
+      <h2>Content & Socials</h2>
+      <p>I share practical product thinking and personal growth tactics:</p>
+      <div class="chips">
+        <a class="chip" href="https://www.tiktok.com/" target="_blank" rel="noopener">TikTok</a>
+        <a class="chip" href="https://www.linkedin.com/" target="_blank" rel="noopener">LinkedIn</a>
+        <a class="chip" href="https://www.threads.net/" target="_blank" rel="noopener">Threads</a>
+        <a class="chip" href="https://github.com/KaratePanther" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footwrap">
+      <nav class="footnav">
+        <a href="index.html">Home</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact</a>
+        <a href="snake.html">Snake</a>
+        <a href="multiply.html">Multiply</a>
+      </nav>
+      <small>© <span id="year"></span> <span class="sig">Anton Ko</span></small>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const y = document.getElementById('year');
+      if (y) y.textContent = new Date().getFullYear();
+    });
+  </script>
+</body>
+</html>

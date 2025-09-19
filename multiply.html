@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mark's Multiplying Game</title>
+  <style>
+    :root {
+      --bg:#0f1320;
+      --ink:#eaf2ff;
+      --muted:#9fb0c9;
+      --card:#141a2b;
+      --accent:#80d27c;
+      --danger:#ef5b67;
+      --warning:#f5c451;
+      --btn:#1b2236;
+      --btn-b:#273152;
+    }
+    * { box-sizing: border-box; }
+    html, body { height:100%; margin:0; }
+    body {
+      display:grid; place-items:center; background:var(--bg); color:var(--ink);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap { width:100%; max-width:560px; padding:20px; }
+    h1 { margin:0 0 6px; font-size:28px; text-align:center; }
+    .sub { text-align:center; margin:0 0 14px; color:var(--muted); }
+    .card { background:var(--card); border:1px solid #202a44; border-radius:16px; padding:18px; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
+    .hearts { font-size:22px; letter-spacing:3px; }
+    .score { font-weight:700; }
+    .mode { display:flex; gap:8px; align-items:center; }
+    .mode button {
+      background:var(--btn); color:var(--ink); border:1px solid var(--btn-b);
+      border-radius:999px; padding:6px 12px; cursor:pointer; font-weight:600;
+    }
+    .mode button.active { background:var(--accent); color:#0b111e; border-color:#6ec86a; }
+    .question {
+      text-align:center; font-size:48px; font-weight:800; letter-spacing:1px; margin:10px 0 6px;
+    }
+    .timer {
+      height:10px; border-radius:999px; background:#263050; overflow:hidden; margin:8px 0 14px;
+      border:1px solid #2e3a60;
+    }
+    .timer .bar { height:100%; width:100%; background:linear-gradient(90deg, #6adf88, #8ae2f8); }
+    .controls { display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap;}
+    .answrap { display:flex; gap:8px; align-items:center; justify-content:center; width:100%; }
+    input.answer {
+      width:160px; font-size:26px; text-align:center; padding:12px 14px; border-radius:12px;
+      border:1px solid #2a365c; background:#10182b; color:var(--ink);
+    }
+    button.primary {
+      background:var(--accent); color:#0b111e; border:none; border-radius:12px; padding:12px 16px;
+      font-size:18px; font-weight:800; cursor:pointer; min-width:140px;
+    }
+    .keypad {
+      margin-top:10px; display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;
+    }
+    .keypad button {
+      background:var(--btn); color:var(--ink); border:1px solid var(--btn-b);
+      padding:14px; border-radius:12px; font-size:20px; font-weight:700; cursor:pointer;
+    }
+    .keypad button.action { background:#213055; }
+    .keypad button.wide { grid-column: span 2; }
+    .progress {
+      margin-top:14px; background:#263050; border:1px solid #2e3a60; border-radius:12px; height:14px; overflow:hidden;
+    }
+    .progress .fill { height:100%; width:0%; background:#6adf88; transition:width .25s ease; }
+    .center { text-align:center; }
+    .msg { margin:8px 0; color:var(--muted); min-height:20px; text-align:center; }
+    .pill { display:inline-block; padding:6px 10px; background:#1b2236; border:1px solid #273152; border-radius:999px; color:var(--muted); font-size:12px; }
+    .hidden { display:none; }
+    .footer { text-align:center; color:var(--muted); margin-top:10px; font-size:13px; }
+    .gift { font-size:40px; }
+    .lost { color:var(--danger); }
+    @media (max-width:420px) {
+      .question { font-size:40px; }
+      input.answer { width:140px; font-size:22px; }
+      button.primary { min-width:120px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Mark's Multiplying Game</h1>
+    <p class="sub">Reach <b>10 points</b> before you run out of hearts. Easy: <b>10s</b> • Hard: <b>5s</b> per question.</p>
+
+    <div class="card">
+      <div class="topbar">
+        <div class="hearts" id="hearts">❤️❤️❤️</div>
+        <div class="score">Score: <span id="score">0</span>/10</div>
+        <div class="mode">
+          <button id="easy" class="active">Easy</button>
+          <button id="hard">Hard</button>
+        </div>
+      </div>
+
+      <div class="timer"><div id="timebar" class="bar"></div></div>
+      <div class="question" id="question">— × —</div>
+
+      <div class="controls">
+        <div class="answrap">
+          <input id="answer" class="answer" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="?" readonly />
+          <button id="submit" class="primary">Submit ↵</button>
+        </div>
+        <div class="keypad" aria-label="Number keypad">
+          <button data-k="7">7</button>
+          <button data-k="8">8</button>
+          <button data-k="9">9</button>
+          <button data-k="4">4</button>
+          <button data-k="5">5</button>
+          <button data-k="6">6</button>
+          <button data-k="1">1</button>
+          <button data-k="2">2</button>
+          <button data-k="3">3</button>
+          <button class="action" data-k="C">C</button>
+          <button data-k="0">0</button>
+          <button class="action" data-k="B">⌫</button>
+        </div>
+      </div>
+
+      <div id="msg" class="msg"></div>
+
+      <div class="progress"><div id="progress" class="fill"></div></div>
+
+      <div id="startRow" class="center hidden" style="margin-top:10px;">
+        <button id="startBtn" class="primary">Start</button>
+      </div>
+
+      <div id="win" class="center hidden" style="margin-top:12px;">
+        <p><b>You win!</b> Great job! Your gift:</p>
+        <div id="gift" class="gift">🎁</div>
+        <p><button id="again1" class="primary">Play Again</button></p>
+      </div>
+
+      <div id="lose" class="center hidden" style="margin-top:12px;">
+        <p class="lost"><b>Out of hearts!</b></p>
+        <p><button id="again2" class="primary">Try Again</button></p>
+      </div>
+    </div>
+
+    <p class="footer">Tap the keypad or press <span class="pill">Enter</span> to submit. Timer resets each question.</p>
+  </div>
+
+  <script>
+    // --- Game State ---
+    const heartsEl = document.getElementById('hearts');
+    const scoreEl = document.getElementById('score');
+    const qEl = document.getElementById('question');
+    const ansEl = document.getElementById('answer');
+    const msgEl = document.getElementById('msg');
+    const barEl = document.getElementById('timebar');
+    const progEl = document.getElementById('progress');
+    const startRow = document.getElementById('startRow');
+    const startBtn = document.getElementById('startBtn');
+    const winBox = document.getElementById('win');
+    const loseBox = document.getElementById('lose');
+    const giftEl = document.getElementById('gift');
+    const again1 = document.getElementById('again1');
+    const again2 = document.getElementById('again2');
+    const easyBtn = document.getElementById('easy');
+    const hardBtn = document.getElementById('hard');
+    const submitBtn = document.getElementById('submit');
+    const keypad = document.querySelector('.keypad');
+
+    const GIFTS = ["🎉","🚀","🦄","🐲","🧠","🏆","🍀","💎","🎮","🛰️","🪄","🦕","🦸‍♂️","🐱","🧩","⚽️","🏹","🚁"];
+    let timePerQ = 10000; // easy default
+    let a=0, b=0, correct=0, hearts=3, score=0, timer=null, startTime=0;
+
+    // --- Helpers ---
+    function heartsStr(n){ return "❤️".repeat(n) + "🖤".repeat(3-n); }
+    function pickQuestion(){
+      // one-digit 1..9, skip only 1x1
+      do {
+        a = 1 + Math.floor(Math.random()*9);
+        b = 1 + Math.floor(Math.random()*9);
+      } while (a===1 && b===1);
+      qEl.textContent = `${a} × ${b}`;
+      correct = a*b;
+      ansEl.value = "";
+      ansEl.blur(); // keep keypad usage
+      startTimer();
+    }
+    function startTimer(){
+      stopTimer();
+      startTime = Date.now();
+      barEl.style.width = "100%";
+      timer = setInterval(()=>{
+        const elapsed = Date.now()-startTime;
+        const left = Math.max(0, timePerQ - elapsed);
+        const pct = (left / timePerQ) * 100;
+        barEl.style.width = pct + "%";
+        if (left <= 0){
+          clearInterval(timer); timer = null;
+          wrong("⏰ Time's up!");
+        }
+      }, 20);
+    }
+    function stopTimer(){ if(timer){ clearInterval(timer); timer=null; } }
+    function updateUI(){
+      heartsEl.textContent = heartsStr(hearts);
+      scoreEl.textContent = score;
+      progEl.style.width = (score/10*100) + "%";
+    }
+    function wrong(text){
+      hearts--; updateUI();
+      msgEl.textContent = text || "Oops — try the next one!";
+      if (hearts <= 0){ lose(); return; }
+      setTimeout(()=>{ msgEl.textContent=""; pickQuestion(); }, 700);
+    }
+    function win(){
+      stopTimer();
+      const emoji = GIFTS[Math.floor(Math.random()*GIFTS.length)];
+      giftEl.textContent = emoji;
+      winBox.classList.remove('hidden');
+      hidePlayArea();
+    }
+    function lose(){
+      stopTimer();
+      loseBox.classList.remove('hidden');
+      hidePlayArea();
+    }
+    function hidePlayArea(){
+      qEl.classList.add('hidden');
+      document.querySelector('.controls').classList.add('hidden');
+      document.querySelector('.timer').classList.add('hidden');
+    }
+    function showPlayArea(){
+      qEl.classList.remove('hidden');
+      document.querySelector('.controls').classList.remove('hidden');
+      document.querySelector('.timer').classList.remove('hidden');
+    }
+
+    // --- Game Flow ---
+    function startGame(){
+      hearts = 3; score = 0; msgEl.textContent = "";
+      winBox.classList.add('hidden'); loseBox.classList.add('hidden');
+      startRow.classList.add('hidden');
+      showPlayArea();
+      updateUI();
+      pickQuestion();
+    }
+
+    function submit(){
+      stopTimer();
+      if (ansEl.value === "") { msgEl.textContent="Type your answer"; startTimer(); return; }
+      const guess = Number(ansEl.value);
+      if (guess === correct){
+        score++; updateUI();
+        msgEl.textContent = "✅ Nice!";
+        if (score >= 10){ win(); return; }
+        setTimeout(()=>{ msgEl.textContent=""; pickQuestion(); }, 400);
+      } else {
+        wrong("❌ Not " + guess + ". It was " + correct + ".");
+      }
+    }
+
+    // --- Events ---
+    submitBtn.addEventListener('click', submit);
+    document.addEventListener('keydown', e => { if(e.key === 'Enter'){ submit(); }});
+    again1.addEventListener('click', startGame);
+    again2.addEventListener('click', startGame);
+    startBtn.addEventListener('click', startGame);
+    easyBtn.addEventListener('click', ()=>{ timePerQ=10000; easyBtn.classList.add('active'); hardBtn.classList.remove('active'); startGame(); });
+    hardBtn.addEventListener('click', ()=>{ timePerQ=5000; hardBtn.classList.add('active'); easyBtn.classList.remove('active'); startGame(); });
+
+    keypad.addEventListener('click', (e)=>{
+      const k = e.target.getAttribute('data-k');
+      if (!k) return;
+      if (k === 'C') { ansEl.value = ""; return; }
+      if (k === 'B') { ansEl.value = ansEl.value.slice(0,-1); return; }
+      if (/^\d$/.test(k)) {
+        // limit to 3 digits just in case
+        if (ansEl.value.length < 3) ansEl.value += k;
+        return;
+      }
+    });
+
+    // initial
+    startRow.classList.remove('hidden');
+    timePerQ = 10000; // default Easy
+  </script>
+</body>
+</html>
