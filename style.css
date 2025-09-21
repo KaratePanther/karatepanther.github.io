@@ -37,6 +37,22 @@ a{color:inherit}
 .eyebrow{margin:0 0 6px;color:var(--muted);font-size:14px}
 h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 .tagline{margin:0 0 14px;color:var(--muted)}
+
+/* Profile with avatar next to name/tagline */
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--line); /* optional border to match theme */
+}
+
 .cta{display:flex;gap:10px;flex-wrap:wrap}
 .btn{background:var(--accent);color:#fff;border:1px solid var(--accent-2);padding:10px 14px;border-radius:12px;text-decoration:none;font-weight:700}
 .btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
