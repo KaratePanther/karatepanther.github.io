@@ -24,8 +24,16 @@ a{color:inherit}
 }
 
 /* Site header */
-.site{border-bottom:1px solid var(--line)}
-.hero{padding:26px 0 12px}
+.site {
+  border-bottom: 1px solid var(--line);
+}
+
+.hero {
+  padding-top: 26px;
+  padding-bottom: 12px;
+  /* no left/right reset here — let .container handle gutters */
+}
+
 .eyebrow{margin:0 0 6px;color:var(--muted);font-size:14px}
 h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 .tagline{margin:0 0 14px;color:var(--muted)}
