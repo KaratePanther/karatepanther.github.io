@@ -14,7 +14,16 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.6}
 a{color:inherit}
-.container{max-width:var(--maxw);margin:0 auto;padding:var(--pad)}
+
+/* Container with fluid side padding */
+.container{
+  max-width:var(--maxw);
+  margin:0 auto;
+  padding-left:clamp(16px, 5vw, 32px);
+  padding-right:clamp(16px, 5vw, 32px);
+}
+
+/* Site header */
 .site{border-bottom:1px solid var(--line)}
 .hero{padding:26px 0 12px}
 .eyebrow{margin:0 0 6px;color:var(--muted);font-size:14px}
@@ -23,10 +32,16 @@ h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 .cta{display:flex;gap:10px;flex-wrap:wrap}
 .btn{background:var(--accent);color:#fff;border:1px solid var(--accent-2);padding:10px 14px;border-radius:12px;text-decoration:none;font-weight:700}
 .btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
+
+/* Cards */
 main .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);margin:16px 0}
 .bullets{padding-left:18px;margin:0}
+
+/* Flex heading row */
 .flexhead{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .note{color:var(--muted);font-size:14px}
+
+/* Grids */
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:8px}
 .tile,.note{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
 .tile h3{margin:0 0 4px}
@@ -36,13 +51,19 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
 .tile.disabled .pill{position:absolute;top:10px;right:10px;background:#eef2f7;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px;color:#445}
 .grid.notes .note h3{margin:0 0 6px}
 .grid.notes .note p{margin:0;color:var(--muted)}
+
+/* Chips */
 .chips{display:flex;gap:10px;flex-wrap:wrap}
 .chip{display:inline-block;background:#fff;border:1px solid var(--line);padding:8px 12px;border-radius:999px;text-decoration:none}
+
+/* Footer */
 .footer{border-top:1px solid var(--line);margin-top:18px}
 .footwrap{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .footnav a{text-decoration:none;opacity:.85;margin-right:12px}
 .footnav a:hover{opacity:1}
 .sig{font-family:'Brush Script MT','Comic Sans MS',cursive;opacity:.85}
+
+/* Mobile tweaks */
 @media (max-width:520px){
   h1{font-size:30px}
 }
