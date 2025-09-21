@@ -42,7 +42,7 @@ h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 .profile {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px; /* try 12px or even 10px */
 }
 
 .avatar {
