@@ -46,11 +46,11 @@ h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 }
 
 .avatar {
-  width: 72px;
-  height: 72px;
+  width: 108px;
+  height: 108px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--line); /* optional border to match theme */
+  border: 2px solid var(--line);
 }
 
 .cta{display:flex;gap:10px;flex-wrap:wrap}
