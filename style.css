@@ -29,10 +29,46 @@ a{color:inherit}
 }
 
 .hero {
-  padding-top: 26px;
+  padding-top: 12px; /* was 26px, reduced for tighter look with topnav */
   padding-bottom: 12px;
-  /* no left/right reset here — let .container handle gutters */
 }
+
+/* Top navigation */
+.topnav{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:10px 0;
+}
+.topnav .brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'Brush Script MT', 'Comic Sans MS', cursive;
+  color: var(--accent);
+  text-decoration: none;
+  border: 2px solid var(--accent);
+  border-radius: 50%; /* circle */
+  line-height: 1;
+}
+.topnav .brand:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+
+.topnav a{
+  text-decoration:none;
+  color:var(--muted);
+  font-weight:500;
+}
+.topnav a:hover{ color:var(--ink) }
+.topnav .spacer{ flex:1 }
+
 
 .eyebrow{margin:0 0 6px;color:var(--muted);font-size:14px}
 h1{font-size:36px;line-height:1.1;margin:0 0 8px}
@@ -42,19 +78,28 @@ h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 .profile {
   display: flex;
   align-items: center;
-  gap: 12px; /* try 12px or even 10px */
+  gap: 12px;
 }
 
 .avatar {
-  width: 108px;
-  height: 108px;
+  width: 144px;
+  height: 144px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid var(--line);
 }
 
-.cta{display:flex;gap:10px;flex-wrap:wrap}
-.btn{background:var(--accent);color:#fff;border:1px solid var(--accent-2);padding:10px 14px;border-radius:12px;text-decoration:none;font-weight:700}
+/* CTA */
+.cta{margin-top:10px}
+.btn{
+  background:var(--accent);
+  color:#fff;
+  border:1px solid var(--accent-2);
+  padding:10px 14px;
+  border-radius:12px;
+  text-decoration:none;
+  font-weight:700;
+}
 .btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
 
 /* Cards */
@@ -90,4 +135,5 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
 /* Mobile tweaks */
 @media (max-width:520px){
   h1{font-size:30px}
+  .topnav{flex-wrap:wrap;gap:8px}
 }
