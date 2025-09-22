@@ -40,26 +40,6 @@ a{color:inherit}
   gap:16px;
   padding:10px 0;
 }
-.topnav .brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  font-size: 18px;
-  font-weight: 700;
-  font-family: 'Brush Script MT', 'Comic Sans MS', cursive;
-  color: var(--accent);
-  text-decoration: none;
-  border: 2px solid var(--accent);
-  border-radius: 50%; /* circle */
-  line-height: 1;
-}
-.topnav .brand:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
 
 .topnav a{
   text-decoration:none;
@@ -69,28 +49,27 @@ a{color:inherit}
 .topnav a:hover{ color:var(--ink) }
 .topnav .spacer{ flex:1 }
 
-
-.eyebrow{margin:0 0 6px;color:var(--muted);font-size:14px}
 h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 .tagline{margin:0 0 14px;color:var(--muted)}
 
 /* Profile with avatar next to name/tagline */
 .profile {
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* instead of center */
   gap: 12px;
 }
 
 .avatar {
-  width: 144px;
-  height: 144px;
+  width: 160px;
+  height: 160px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid var(--line);
+  margin-top: 0px; /* adjust until it feels right */
 }
 
 /* CTA */
-.cta{margin-top:10px}
+.cta{margin-top:24px}
 .btn{
   background:var(--accent);
   color:#fff;
