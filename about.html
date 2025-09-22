@@ -2,26 +2,233 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>About — My GitHub Pages Site</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>About — Anton Ko</title>
+  <meta name="description" content="About Anton Ko — product manager, builder, and lifelong learner based near Lake Garda, Italy." />
+  <!-- Your global stylesheet -->
   <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* --- About page lightweight styles (uses your CSS variables) --- */
+    .site{border-bottom:1px solid var(--line)}
+    .nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800}
+    .brand .sig{font-family: "Brush Script MT", "Snell Roundhand", "Segoe Script", cursive; font-size:22px}
+    .nav a{color:inherit;text-decoration:none;padding:8px 10px;border-radius:10px}
+    .nav a:hover{background:var(--card)}
+    .nav .now{color:var(--muted);font-size:14px}
+    .nav .links{display:flex;gap:4px;flex-wrap:wrap}
+
+    .hero{padding:28px 0 8px}
+    .eyebrow{margin:0 0 6px;color:var(--muted);font-size:14px}
+    h1{font-size:36px;line-height:1.1;margin:0 0 10px}
+    .tagline{margin:0 0 16px;color:var(--muted)}
+    .cta{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{background:var(--accent);color:#fff;border:1px solid var(--accent-2);padding:10px 14px;border-radius:12px;text-decoration:none;font-weight:700}
+    .btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
+
+    .about-grid{display:grid;grid-template-columns: 1.2fr .8fr;gap:28px;margin:10px 0 24px}
+    @media (max-width: 860px){ .about-grid{grid-template-columns:1fr} }
+
+    .pill{display:inline-block;padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--muted);margin:0 8px 8px 0}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .card + .card{margin-top:12px}
+
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:8px 0 2px}
+    @media (max-width: 600px){ .stats{grid-template-columns:1fr 1fr} }
+    .stat{border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;background:#fff}
+    .stat b{display:block;font-size:22px;line-height:1.2}
+    .stat span{color:var(--muted);font-size:13px}
+
+    .timeline{display:grid;gap:14px;margin-top:6px}
+    .t-item{display:grid;grid-template-columns:120px 1fr;gap:14px}
+    @media (max-width: 560px){ .t-item{grid-template-columns:1fr} .t-date{color:var(--muted)} }
+    .t-date{color:var(--muted);font-size:14px;white-space:nowrap}
+    .t-role{font-weight:700}
+    .t-note{color:var(--muted)}
+
+    .values{display:grid;gap:10px;margin-top:8px}
+    .values li{list-style:none;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}
+
+    .footer{border-top:1px solid var(--line);margin-top:26px;padding:18px 0;color:var(--muted);font-size:14px}
+  </style>
 </head>
 <body>
-  <header class="container">
-    <h1>About</h1>
-    <p>A tiny static site you can customize.</p>
+  <!-- Header / shared nav -->
+  <header class="site">
+    <div class="container">
+      <nav class="nav" aria-label="Main">
+        <a class="brand" href="/">
+          <span class="sig">AK</span>
+          <span>Anton Ko</span>
+        </a>
+        <div class="links">
+          <a href="/">Home</a>
+          <a href="/about.html" aria-current="page">About</a>
+          <a href="/projects.html">Projects</a>
+          <a href="/writing.html">Writing</a>
+          <a href="/contact.html">Contact</a>
+        </div>
+      </nav>
+    </div>
   </header>
-  <main class="container">
-    <p>Edit <code>about.html</code> to change this page.</p>
+
+  <main>
+    <!-- Intro -->
+    <section class="hero">
+      <div class="container">
+        <p class="eyebrow">About</p>
+        <h1>Hi, I’m Anton — product-minded builder living near Lake Garda, Italy.</h1>
+        <p class="tagline">
+          I help ideas become real: scoping, shipping, and iterating based on signal.  
+          Recently: e-commerce & CRM, learning CS fundamentals, and coding small games for the web.
+        </p>
+        <div class="cta">
+          <a class="btn" href="/AntonKo_CV.pdf">Download CV</a>
+          <a class="btn alt" href="mailto:hello@antonko.com">Email me</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Two-column: story + quick facts -->
+    <section>
+      <div class="container about-grid">
+        <article>
+          <div class="card">
+            <h2 style="margin-top:0">The short story</h2>
+            <p>
+              I grew a family business (<strong>Di Murano</strong>, premium glass) and led the launch of a new online shop,
+              acting as Product Owner across backlog, releases, and integrations. I’m now focusing on
+              <strong>Product Management</strong> roles in Europe (remote-friendly), while sharpening my
+              <strong>CS & coding</strong> foundations by building tiny games and tools.
+            </p>
+            <p>
+              Outside of work: I play volleyball twice a week, do Freeletics HIIT, and explore Veneto with my family.
+              I share practical notes on building, learning, and designing a simpler life.
+            </p>
+            <div style="margin-top:8px">
+              <span class="pill">Product Strategy</span>
+              <span class="pill">E-commerce</span>
+              <span class="pill">CRM & Segmentation</span>
+              <span class="pill">Analytics</span>
+              <span class="pill">UX & CRO</span>
+              <span class="pill">Agile</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-top:0">What I’m doing now</h3>
+            <ul style="margin:0;padding-left:18px">
+              <li>Polishing my PM toolkit and portfolio by shipping tiny web apps & games.</li>
+              <li>Helping Di Murano with marketing experiments and website fixes.</li>
+              <li>Learning Italian (B1–B2) and enjoying Northern Italy life by the lake.</li>
+            </ul>
+          </div>
+        </article>
+
+        <aside>
+          <div class="stats">
+            <div class="stat"><b>10+ yrs</b><span>Retail & Ops</span></div>
+            <div class="stat"><b>2 shops</b><span>Di Murano (Moscow)</span></div>
+            <div class="stat"><b>2500-day</b><span>Duolingo streak*</span></div>
+          </div>
+          <p class="tagline" style="margin-top:6px">*approx — consistency over perfection.</p>
+
+          <div class="card">
+            <h3 style="margin-top:0">Tools I use</h3>
+            <p class="tagline" style="margin:0 0 8px">Daily drivers & favorites</p>
+            <div>
+              <span class="pill">GitHub Pages</span>
+              <span class="pill">VS Code</span>
+              <span class="pill">Jira / Asana</span>
+              <span class="pill">Trello</span>
+              <span class="pill">Google Analytics</span>
+              <span class="pill">Obsidian</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-top:0">Elsewhere</h3>
+            <p style="margin:0 0 6px">Find my notes, code, and short videos:</p>
+            <p style="margin:0">
+              <a href="https://github.com/KaratePanther" target="_blank" rel="noopener">GitHub</a> ·
+              <a href="https://www.linkedin.com/in/antonko" target="_blank" rel="noopener">LinkedIn</a> ·
+              <a href="https://www.tiktok.com/@" target="_blank" rel="noopener">TikTok</a> ·
+              <a href="https://antonko.com" rel="noopener">Blog</a>
+            </p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Experience timeline -->
+    <section>
+      <div class="container">
+        <h2>Experience</h2>
+        <div class="timeline">
+          <div class="t-item">
+            <div class="t-date">2020–2025</div>
+            <div>
+              <div class="t-role">Product Owner / PM · Di Murano (e-commerce)</div>
+              <div class="t-note">Launched new online shop; managed backlog, releases, analytics; ran marketing experiments; integrated stock/accounting.</div>
+            </div>
+          </div>
+          <div class="t-item">
+            <div class="t-date">2013–2019</div>
+            <div>
+              <div class="t-role">Ops & Marketing Manager · Di Murano (retail)</div>
+              <div class="t-note">Scaled multi-store operations, introduced online sales, and improved merchandising & customer experience.</div>
+            </div>
+          </div>
+          <div class="t-item">
+            <div class="t-date">Ongoing</div>
+            <div>
+              <div class="t-role">Builder · Personal Projects</div>
+              <div class="t-note">Tiny web games (Snake, Tic-Tac-Toe, multiplication trainer), site components, and PM templates.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Values / principles -->
+    <section>
+      <div class="container">
+        <h2>Principles I work by</h2>
+        <ul class="values">
+          <li><strong>Ship small, learn fast.</strong> Imperfect action beats perfect plans.</li>
+          <li><strong>Clarity over complexity.</strong> Simple beats clever; measure what matters.</li>
+          <li><strong>Customer truths first.</strong> Talk to users, watch behavior, follow the signal.</li>
+          <li><strong>Write it down.</strong> Good docs = speed, alignment, and fewer fires.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Contact CTA -->
+    <section>
+      <div class="container">
+        <div class="card">
+          <h2 style="margin-top:0">Want to collaborate?</h2>
+          <p class="tagline">I’m open to remote Product roles and selective consulting on e-commerce & CRM.</p>
+          <div class="cta">
+            <a class="btn" href="mailto:hello@antonko.com">Get in touch</a>
+            <a class="btn alt" href="/AntonKo_CV.pdf">Read my CV</a>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
-  <footer class="container footer">
-    <nav>
-      <a href="index.html">Home</a>
-      <a href="about.html">About</a>
-      <a href="contact.html">Contact</a>
-    </nav>
-    <small>© <span id="year"></span> Your Name</small>
+
+  <footer class="footer">
+    <div class="container">
+      © <span id="y"></span> Anton Ko · Living near Verona, Italy ·
+      <a href="/now.html">Now</a>
+    </div>
   </footer>
-  <script src="script.js"></script>
+
+  <script>
+    // tiny nicety: current year
+    document.getElementById('y').textContent = new Date().getFullYear();
+  </script>
 </body>
 </html>
