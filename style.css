@@ -33,22 +33,6 @@ a{color:inherit}
   padding-bottom: 12px;
 }
 
-/* Top navigation */
-.topnav{
-  display:flex;
-  align-items:center;
-  gap:16px;
-  padding:10px 0;
-}
-
-.topnav a{
-  text-decoration:none;
-  color:var(--muted);
-  font-weight:500;
-}
-.topnav a:hover{ color:var(--ink) }
-.topnav .spacer{ flex:1 }
-
 h1{font-size:36px;line-height:1.1;margin:0 0 8px}
 .tagline{margin:0 0 14px;color:var(--muted)}
 
@@ -110,9 +94,3 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
 .footnav a{text-decoration:none;opacity:.85;margin-right:12px}
 .footnav a:hover{opacity:1}
 .sig{font-family:'Brush Script MT','Comic Sans MS',cursive;opacity:.85}
-
-/* Mobile tweaks */
-@media (max-width:520px){
-  h1{font-size:30px}
-  .topnav{flex-wrap:wrap;gap:8px}
-}
