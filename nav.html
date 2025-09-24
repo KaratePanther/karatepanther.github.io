@@ -1,0 +1,40 @@
+<nav class="site-nav" role="navigation">
+  <a class="brand" href="/">Anton Ko</a>
+
+  <button class="burger" aria-expanded="false" aria-controls="nav-links" aria-label="Toggle menu">
+    ☰
+  </button>
+
+  <ul id="nav-links" class="links">
+    <li><a href="/">Home</a></li>
+    <li><a href="/notes.html">Notes</a></li>
+    <li><a href="/projects.html">Projects</a></li>
+    <li><a href="/about.html">About</a></li>
+    <li><a href="/contact.html">Contact</a></li>
+  </ul>
+</nav>
+
+<style>
+  .site-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
+  .site-nav .brand{font-weight:800;text-decoration:none}
+  .site-nav .links{display:flex;gap:14px;list-style:none;margin:0;padding:0}
+  .site-nav .links a{text-decoration:none}
+  .site-nav .links a.active{font-weight:700; text-decoration:underline}
+
+  /* Mobile */
+  @media (max-width: 768px){
+    .site-nav{position:relative}
+    .site-nav .burger{display:inline-block;border:1px solid var(--line, #e6ebf2);background:transparent;border-radius:10px;padding:8px 10px;cursor:pointer;font-size:18px}
+    .site-nav .links{
+      position:absolute; top:100%; right:0; left:0;
+      display:block; background:var(--card, #f7f9fc); border:1px solid var(--line, #e6ebf2);
+      border-radius:12px; padding:10px; margin-top:8px;
+    }
+    .site-nav .links[hidden]{display:none}
+    .site-nav .links li{padding:6px 2px}
+  }
+  /* Desktop */
+  @media (min-width: 769px){
+    .site-nav .burger{display:none}
+  }
+</style>
