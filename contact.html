@@ -7,6 +7,48 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Shared navigation -->
+  <div id="nav"></div>
+  <script>
+    (async () => {
+      const mount = document.getElementById("nav");
+      const html = await fetch("/nav.html").then(r => r.text());
+      mount.innerHTML = html;
+
+      const nav = mount.querySelector(".site-nav");
+      const btn = nav.querySelector(".burger");
+      const list = nav.querySelector("#nav-links");
+      const mq = window.matchMedia("(max-width: 768px)");
+
+      const here = location.pathname.replace(/index\.html$/, "/");
+      nav.querySelectorAll(".links a").forEach(a => {
+        const href = a.getAttribute("href");
+        if (href === here) a.classList.add("active");
+      });
+
+      const setState = () => {
+        const mobile = mq.matches;
+        list.hidden = mobile;
+        btn?.setAttribute("aria-expanded", (!mobile).toString());
+      };
+      setState();
+
+      btn?.addEventListener("click", () => {
+        const expanded = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", (!expanded).toString());
+        list.hidden = expanded;
+      });
+
+      list?.addEventListener("click", e => {
+        if (mq.matches && e.target.tagName === "A") {
+          btn.setAttribute("aria-expanded", "false");
+          list.hidden = true;
+        }
+      });
+
+      mq.addEventListener("change", setState);
+    })();
+  </script>
   <header class="container">
     <h1>Contact</h1>
     <p>Replace this with your contact info or a form service link.</p>
