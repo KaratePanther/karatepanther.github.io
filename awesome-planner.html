@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Awesome Day Planner</title>
+<meta name="description" content="A lightweight, single-file day planning flow." />
+<style>
+  :root{
+    --bg:#0b1020; --card:#121932; --ink:#e8ecff; --muted:#aab3d9;
+    --line:#233055; --accent:#6ea8fe; --accent-2:#90c2ff; --ok:#22c55e; --warn:#f59e0b;
+    --radius:18px; --pad:18px; --maxw:860px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:linear-gradient(180deg,#0b1020,#0e1430);color:var(--ink);
+    font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  a{color:inherit}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:24px clamp(16px,4vw,32px) 40px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 18px}
+  .brand{font-weight:800;letter-spacing:.2px;font-size:20px}
+  .card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);
+    box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .muted{color:var(--muted)}
+  .grid{display:grid;gap:14px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .step{border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;background:rgba(255,255,255,.02)}
+  .step input{margin-right:8px;transform:translateY(1px)}
+  h1{font-size:30px;line-height:1.2;margin:8px 0 8px}
+  h2{font-size:22px;margin:6px 0 8px}
+  h3{font-size:18px;margin:14px 0 6px}
+  ul{margin:8px 0 0 0;padding:0 0 0 20px}
+  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .btn{background:var(--accent);color:#0a0f1f;border:1px solid var(--accent-2);padding:10px 14px;border-radius:12px;
+    font-weight:700;text-decoration:none;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.good{background:var(--ok);border-color:#45d07a;color:#062213}
+  .btn.warn{background:var(--warn);border-color:#f7b94e;color:#1d1202}
+  .progress{height:10px;background:#0b1330;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#b0d0ff)}
+  .note{font-size:14px;color:var(--muted)}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted)}
+  .list-check input{margin-right:8px}
+  .footer{margin-top:26px;color:var(--muted);font-size:13px;text-align:center}
+  .q{background:#0f1633;border:1px dashed #2a3a70;border-radius:12px;padding:12px;margin:10px 0}
+  .finish{font-size:20px;text-align:center;padding:24px}
+  .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;border:1px solid var(--line);
+    background:#0c1228;border-radius:6px;padding:2px 6px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">🌟 Awesome Day Planner</div>
+      <div class="pill" id="today"></div>
+    </header>
+
+    <!-- Selection Screen -->
+    <section id="select" class="card grid">
+      <div>
+        <h1>Plan an Awesome Day</h1>
+        <p class="muted">Pick the steps you want to include, then press <em>Start</em>. You’ll move through each section with gentle prompts.</p>
+      </div>
+      <div class="steps" role="group" aria-label="Choose steps">
+        <label class="step"><input type="checkbox" value="mood" checked> Mood Setup</label>
+        <label class="step"><input type="checkbox" value="core" checked> Core Plan</label>
+        <label class="step"><input type="checkbox" value="bonus"> Bonus</label>
+      </div>
+      <div class="btns">
+        <button class="btn" id="startBtn">Start</button>
+        <button class="btn ghost" id="restoreBtn" title="Restore your last selection">Restore last</button>
+        <span class="note">Tip: press <span class="kbd">S</span> to start.</span>
+      </div>
+    </section>
+
+    <!-- Flow Screen -->
+    <section id="flow" class="card" style="display:none">
+      <div class="grid">
+        <div class="progress" aria-label="Progress">
+          <div class="bar" id="bar"></div>
+        </div>
+        <div class="muted" id="crumbs"></div>
+        <h2 id="stepTitle"></h2>
+        <div id="stepBody"></div>
+        <div class="btns">
+          <button class="btn ghost" id="backBtn">Back</button>
+          <button class="btn" id="nextBtn">Next</button>
+          <button class="btn warn" id="skipBtn" title="Skip this step">Skip</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Finish Screen -->
+    <section id="finish" class="card finish" style="display:none">
+      <div style="font-size:44px;margin-bottom:10px">✅</div>
+      <h2>You've done it! Enjoy your day.</h2>
+      <p class="muted">You can copy the summary below into your notes.</p>
+      <div class="q" id="summaryBox" style="text-align:left;white-space:pre-wrap"></div>
+      <div class="btns" style="justify-content:center">
+        <button class="btn good" id="copyBtn">Copy Summary</button>
+        <button class="btn ghost" id="restartBtn">Plan Again</button>
+      </div>
+    </section>
+
+    <div class="footer">
+      Built for speed, privacy, and focus. No logins. No tracking. Everything stays in your browser.
+    </div>
+  </div>
+
+<script>
+/* ------------------ Content Model ------------------ */
+const QUESTIONS = [
+  "🚀 Which single task has the highest ROI today?",
+  "😎 What would this look like if it were easy?",
+  "🗓️ What would tomorrow-you want today-you to do?"
+];
+
+const CONTENT = {
+  mood: {
+    title: "Mood Setup",
+    blocks: [
+      { type: "list", title: "Quick Setup", items: [
+        "Put headphones for focus",
+        "Set timer for 25–50 mins",
+        "Put yourself in a good mood: remember it's all made up, relax for the same result, what would an Awesome version of you do now?",
+        "Take a simple notebook for tasks to simplify your day"
+      ]}
+    ]
+  },
+  core: {
+    title: "Core Plan",
+    blocks: [
+      { type: "text", html:
+        `<p><strong>Zoom out:</strong> What do you want to do most in life? What's your strategy / context?</p>
+         <p>Open your notebook and put in key items. Ask key questions.</p>`},
+      { type: "randomQ" }
+    ]
+  },
+  bonus: {
+    title: "Bonus",
+    blocks: [
+      { type: "list", title: "Keep it elegant & simple", items: [
+        "Make your plan elegant and simple",
+        "Judo Solution or not do at all — HMW solve core problem in an elegant, simple way?",
+        "😎 What would this look like if it were easy?",
+        "🚫 What if I don’t do it? Does it have to be done at all?",
+        "🔍 80/20. What are the key parts here? Where should I focus?",
+        "Satisficing >> Maximising",
+        "📍 What's the maximum impact and minimum effort now?",
+        "Which minimal solution would be enough?",
+        "Less, but better",
+        "HMW solve it with what we have?"
+      ]},
+      { type: "list", title: "Highlight & Anti-Procrastination", items: [
+        "⭐ Pick the Highlight of the Day — more satisfaction, calm & focus",
+        "✂️ Simplify next step for important but procrastinated tasks — make it trivially easy",
+        "But: some of those tasks should be ditched and not be done at all",
+        "Reduce procrastination gap",
+        "Make it as easy as possible for your instant gratification monkey",
+        "Pinch off an even smaller part — define 1–2 first initial mins",
+        "Trick your inner monkey to start doing things",
+        "No perfection, just start on the core"
+      ]}
+    ]
+  }
+};
+
+/* ------------------ State ------------------ */
+const $ = s => document.querySelector(s);
+const today = new Date().toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+$("#today").textContent = today;
+
+let flow = {
+  order: [],
+  index: 0,
+  notes: { mood: [], core: [], bonus: [] }, // what user ticks/inputs
+  skipped: new Set()
+};
+
+/* ------------------ Helpers ------------------ */
+function saveSelection(order){
+  localStorage.setItem("adp_selection", JSON.stringify(order));
+}
+function loadSelection(){
+  try { return JSON.parse(localStorage.getItem("adp_selection")||"[]"); } catch(e){ return []; }
+}
+function percent(n, d){ return d ? Math.round((n/d)*100) : 0; }
+function makeId(){ return Math.random().toString(36).slice(2,9); }
+
+/* ------------------ Renderers ------------------ */
+function renderStep(){
+  const key = flow.order[flow.index];
+  const data = CONTENT[key];
+  $("#stepTitle").textContent = data.title;
+  $("#crumbs").textContent = `Step ${flow.index+1} of ${flow.order.length}`;
+  $("#bar").style.width = `${percent(flow.index, flow.order.length)}%`;
+
+  const body = document.createElement("div");
+  body.className = "grid";
+
+  data.blocks.forEach(block => {
+    if(block.type === "text"){
+      const div = document.createElement("div");
+      div.innerHTML = block.html;
+      body.appendChild(div);
+    }
+    if(block.type === "list"){
+      const box = document.createElement("div");
+      const h = document.createElement("h3"); h.textContent = block.title; box.appendChild(h);
+      const ul = document.createElement("ul"); ul.className = "list-check";
+      block.items.forEach(item=>{
+        const id = makeId();
+        const li = document.createElement("li");
+        li.style.margin = "6px 0";
+        li.innerHTML = `<label><input type="checkbox" id="${id}"> ${item}</label>`;
+        ul.appendChild(li);
+        // restore checked from notes
+        (flow.notes[key]||[]).forEach(saved=>{
+          if(saved.text===item && saved.done) li.querySelector("input").checked = true;
+        });
+        // handle change
+        ul.addEventListener("change", e=>{
+          if(e.target && e.target.type==="checkbox"){
+            const text = item;
+            const done = e.target.checked;
+            const arr = flow.notes[key]||[];
+            const idx = arr.findIndex(x=>x.text===text);
+            if(idx>-1){ arr[idx].done = done; }
+            else arr.push({ text, done });
+            flow.notes[key] = arr;
+          }
+        }, { once:false });
+      });
+      box.appendChild(ul);
+      body.appendChild(box);
+    }
+    if(block.type === "randomQ"){
+      const box = document.createElement("div");
+      const h = document.createElement("h3"); h.textContent = "Key Question";
+      const q = document.createElement("div"); q.className = "q"; q.textContent = "Press the button to draw a question.";
+      const row = document.createElement("div"); row.className = "btns";
+      const draw = document.createElement("button"); draw.className="btn"; draw.textContent = "Draw a random question";
+      draw.onclick = ()=>{
+        const pick = QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)];
+        q.textContent = pick;
+      };
+      const addNote = document.createElement("button"); addNote.className="btn ghost"; addNote.textContent = "Add a quick note";
+      const ta = document.createElement("textarea");
+      ta.rows = 3; ta.placeholder = "Optional: jot thoughts here…";
+      ta.style.width="100%"; ta.style.background="#0c1228"; ta.style.color="var(--ink)";
+      ta.style.border="1px solid var(--line)"; ta.style.borderRadius="10px"; ta.style.padding="10px"; ta.style.marginTop="8px";
+      ta.addEventListener("input", ()=>{
+        flow.notes[key] = (flow.notes[key]||[]).filter(x=>x.text || x.done); // keep checklist entries
+        flow.notes[key].push({ text: ta.value, done:false, kind:"note" });
+      });
+      addNote.onclick = ()=> ta.focus();
+
+      row.appendChild(draw);
+      row.appendChild(addNote);
+      box.appendChild(h); box.appendChild(q); box.appendChild(row); box.appendChild(ta);
+      body.appendChild(box);
+    }
+  });
+
+  const host = $("#stepBody");
+  host.innerHTML = "";
+  host.appendChild(body);
+
+  // buttons visibility
+  $("#backBtn").disabled = flow.index===0;
+  $("#nextBtn").textContent = (flow.index===flow.order.length-1) ? "Finish" : "Next";
+}
+
+function makeSummary(){
+  const lines = [];
+  lines.push(`Awesome Day Planner — ${new Date().toLocaleString()}`);
+  lines.push("");
+  flow.order.forEach(key=>{
+    const title = CONTENT[key].title;
+    lines.push(`## ${title}`);
+    const items = flow.notes[key]||[];
+    if(items.length===0){ lines.push("• (no notes)"); }
+    items.forEach(x=>{
+      if(x.kind==="note"){ lines.push(`📝 ${x.text}`); }
+      else { lines.push(`${x.done ? "✅" : "⬜️"} ${x.text}`); }
+    });
+    if(flow.skipped.has(key)) lines.push("⏭️ Step was skipped.");
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+/* ------------------ Navigation ------------------ */
+function startFlow(){
+  const chosen = Array.from(document.querySelectorAll('#select .step input:checked')).map(i=>i.value);
+  if(chosen.length===0){ alert("Pick at least one step to start."); return; }
+  saveSelection(chosen);
+  flow.order = chosen;
+  flow.index = 0;
+  flow.notes = { mood:[], core:[], bonus:[] };
+  flow.skipped = new Set();
+
+  $("#select").style.display="none";
+  $("#finish").style.display="none";
+  $("#flow").style.display="block";
+  renderStep();
+}
+
+function nextStep(){
+  const last = flow.index===flow.order.length-1;
+  if(last){
+    $("#flow").style.display="none";
+    $("#finish").style.display="block";
+    $("#bar").style.width = "100%";
+    $("#summaryBox").textContent = makeSummary();
+    return;
+  }
+  flow.index++;
+  renderStep();
+}
+
+function backStep(){
+  if(flow.index>0){ flow.index--; renderStep(); }
+}
+
+function skipStep(){
+  flow.skipped.add(flow.order[flow.index]);
+  nextStep();
+}
+
+/* ------------------ Wire up ------------------ */
+$("#startBtn").addEventListener("click", startFlow);
+$("#restoreBtn").addEventListener("click", ()=>{
+  const saved = loadSelection();
+  if(!saved.length){ alert("No saved selection yet."); return; }
+  document.querySelectorAll('#select .step input').forEach(i=>{
+    i.checked = saved.includes(i.value);
+  });
+});
+$("#nextBtn").addEventListener("click", nextStep);
+$("#backBtn").addEventListener("click", backStep);
+$("#skipBtn").addEventListener("click", skipStep);
+$("#copyBtn").addEventListener("click", async ()=>{
+  const txt = $("#summaryBox").textContent;
+  try { await navigator.clipboard.writeText(txt); alert("Summary copied!"); }
+  catch(e){ alert("Could not copy automatically. Select and copy manually."); }
+});
+$("#restartBtn").addEventListener("click", ()=>{
+  $("#finish").style.display="none";
+  $("#select").style.display="block";
+  window.scrollTo({top:0, behavior:"smooth"});
+});
+
+// keyboard
+document.addEventListener("keydown", (e)=>{
+  if(e.key.toLowerCase()==="s" && $("#select").style.display!=="none"){ startFlow(); }
+  if(e.key==="ArrowRight" && $("#flow").style.display!=="none"){ nextStep(); }
+  if(e.key==="ArrowLeft" && $("#flow").style.display!=="none"){ backStep(); }
+});
+</script>
+</body>
+</html>
