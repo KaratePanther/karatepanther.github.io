@@ -9,16 +9,52 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="nav"></div>
+<script>
+  (async () => {
+    const mount = document.getElementById("nav");
+    const html = await fetch("/nav.html").then(r => r.text());
+    mount.innerHTML = html;
+
+    // init hamburger + active link
+    const nav = mount.querySelector(".site-nav");
+    const btn = nav.querySelector(".burger");
+    const list = nav.querySelector("#nav-links");
+    const mq = window.matchMedia("(max-width: 768px)");
+
+    // highlight current page
+    const here = location.pathname.replace(/index\.html$/, "/");
+    nav.querySelectorAll(".links a").forEach(a => {
+      const href = a.getAttribute("href");
+      if (href === here) a.classList.add("active");
+    });
+
+    const setState = () => {
+      const mobile = mq.matches;
+      list.hidden = mobile;
+      btn?.setAttribute("aria-expanded", (!mobile).toString());
+    };
+    setState();
+
+    btn?.addEventListener("click", () => {
+      const expanded = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", (!expanded).toString());
+      list.hidden = expanded;
+    });
+
+    list?.addEventListener("click", e => {
+      if (mq.matches && e.target.tagName === "A") {
+        btn.setAttribute("aria-expanded", "false");
+        list.hidden = true;
+      }
+    });
+
+    mq.addEventListener("change", setState);
+  })();
+</script>
+
   <header class="site">
     <div class="container hero">
-      <!-- Top navigation -->
-      <nav class="topnav" aria-label="Primary">
-        <div class="spacer"></div>
-        <a href="about.html">About</a>
-        <a href="#projects">Projects</a>
-        <a href="#notes">Notes</a>
-        <a href="contact.html">Contact</a>
-      </nav>
   
       <div class="profile">
         <img src="anton-ko.jpeg" alt="Anton Ko" class="avatar" width="108" height="108">
