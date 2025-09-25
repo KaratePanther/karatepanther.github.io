@@ -120,21 +120,26 @@ const CONTENT = {
     blocks: [
       { type: "list", title: "Quick Setup", items: [
         "🎧 Quiet Focus — Put on the headphones and find a tranquil spot",
-        "⏲️ Timer — Set 25–50 mins and do active physical breaks in between",
+        "⏲️ Timer — Set for 25–50 mins and do active physical breaks in between",
         "🧠 Good Mood — remember, it's all made up, relax for the same result, what would an Awesome version of you do now?",
         "🗒️ Take a simple notebook for tasks to simplify your day"
       ]}
     ]
   },
   core: {
-    title: "Core Plan",
-    blocks: [
-      { type: "text", html:
-        `<p><strong>Zoom out:</strong> What do you want to do most in life? What's your strategy / context?</p>
-         <p>Open your notebook and put in key items. Ask key questions.</p>`},
-      { type: "randomQ" }
-    ]
-  },
+  title: "Core Plan",
+  blocks: [
+    {
+      type: "list",
+      title: "Core Moves",
+      items: [
+        "Zoom out: What do you want to do most in life? What's your strategy / context?",
+        "Open your notebook and put in key items. Ask key questions."
+      ]
+    },
+    { type: "randomQ" }
+  ]
+},
   bonus: {
     title: "Bonus",
     blocks: [
