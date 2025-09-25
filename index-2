@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Anton Ko — Product & Growth</title>
+  <meta name="description" content="Product Manager focused on growth. Small web experiments, simple apps, and practical product thinking. Based near Verona, Italy." />
+
+  <!-- Open Graph for pretty previews -->
+  <meta property="og:title" content="Anton Ko — Product & Growth" />
+  <meta property="og:description" content="Product Manager. Building small web experiments. Let's talk." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://antonko.com/" />
+  <!-- Replace with a real 1200×630 image in your repo -->
+  <meta property="og:image" content="https://antonko.com/og-image.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="icon" href="favicon.ico">
+  <link rel="preload" as="image" href="anton-ko.jpeg" imagesrcset="anton-ko.jpeg 1x" />
+
+  <style>
+    :root{
+      --bg:#ffffff; --ink:#0f172a; --muted:#475569; --line:#e6ebf2;
+      --card:#f7f9fc; --accent:#111827; --accent-2:#1f2937;
+      --radius:18px; --pad:20px; --maxw:720px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.55}
+    a{color:inherit;text-decoration:none}
+    .container{max-width:var(--maxw);margin:0 auto;padding:32px 18px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);margin:14px 0}
+    .hero{display:flex;align-items:center;gap:16px}
+    .avatar{width:96px;height:96px;border-radius:50%;object-fit:cover;border:1px solid var(--line)}
+    h1{font-size:28px;line-height:1.15;margin:0}
+    .tag{margin:6px 0 0;color:var(--muted)}
+    .cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+    .btn{background:var(--accent);color:#fff;border:1px solid var(--accent-2);padding:10px 14px;border-radius:12px;font-weight:700}
+    .btn.alt{background:#fff;color:var(--accent);border:1px solid var(--line)}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+    .chip{display:inline-block;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:#fff}
+    .section-title{font-size:16px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .footer{font-size:13px;color:var(--muted);text-align:center;margin-top:10px}
+    @media (min-width:680px){
+      .avatar{width:108px;height:108px}
+      h1{font-size:32px}
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <!-- HERO -->
+    <section class="card">
+      <div class="hero">
+        <img src="anton-ko.jpeg" alt="Anton Ko" class="avatar" width="108" height="108">
+        <div>
+          <h1>Anton Ko</h1>
+          <p class="tag">Product Manager — growth, experiments, and simple web apps.<br>Based near Verona, Italy.</p>
+          <div class="cta">
+            <a class="btn" href="contact.html">Let’s talk</a>
+            <a class="btn alt" href="Anton-Korolev-CV.pdf" target="_blank" rel="noopener">View CV</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUICK LINKS (link-in-bio style) -->
+    <section class="card">
+      <p class="section-title">Links</p>
+      <div class="chips">
+        <a class="chip" href="https://www.linkedin.com/" target="_blank" rel="noopener">LinkedIn</a>
+        <a class="chip" href="https://www.tiktok.com/" target="_blank" rel="noopener">TikTok</a>
+        <a class="chip" href="https://www.threads.net/" target="_blank" rel="noopener">Threads</a>
+        <a class="chip" href="https://github.com/KaratePanther" target="_blank" rel="noopener">GitHub</a>
+        <a class="chip" href="mailto:anton@antonko.com">anton@antonko.com</a>
+      </div>
+    </section>
+
+    <!-- SMALL EXPERIMENTS -->
+    <section class="card">
+      <p class="section-title">Small Web Experiments</p>
+      <div class="chips">
+        <a class="chip" href="snake.html">Play Snake</a>
+        <a class="chip" href="multiply.html">Multiply Game</a>
+      </div>
+    </section>
+
+    <!-- NOW (tight) -->
+    <section class="card">
+      <p class="section-title">Now</p>
+      <div class="chips">
+        <span class="chip">🎯 Remote/Hybrid PM roles (EU)</span>
+        <span class="chip">💻 Learning by building</span>
+        <span class="chip">🏐 Volleyball 2×/week</span>
+      </div>
+    </section>
+
+    <p class="footer">© 2025 Anton Ko • Prefer email? <a href="mailto:anton@antonko.com">Write me</a></p>
+  </main>
+</body>
+</html>
