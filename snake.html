@@ -12,12 +12,12 @@
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <title>Snake (with Swipe)</title>
+  <title>Snake (with Swipe Anywhere)</title>
   <style>
     :root { --bg:#0f1218; --fg:#eaf2ff; --muted:#a7b1c2; --accent:#7cc36b; }
     * { box-sizing: border-box; }
 
-    /* Lock page in place (no scroll or rubber-band) */
+    /* Lock viewport: no scroll, no rubber-band */
     html, body {
       height: 100%;
       margin: 0;
@@ -25,11 +25,11 @@
       color: var(--fg);
       font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
     }
-    body {
-      position: fixed;           /* lock viewport */
+    body{
+      position: fixed;    /* prevents iOS bounce */
       inset: 0;
       overflow: hidden;
-      overscroll-behavior: none; /* no pull-to-refresh */
+      overscroll-behavior: none;
       display: grid;
       place-items: center;
     }
@@ -41,7 +41,7 @@
     canvas {
       display:block; width:100%; height:auto;
       background:#141925; border:2px solid #222b3a; border-radius:12px;
-      touch-action: none; /* all swipes captured by the game */
+      touch-action: none; /* capture gestures on canvas */
     }
 
     .hint { margin-top:10px; font-size:13px; color:var(--muted); text-align:center; }
@@ -49,7 +49,7 @@
     button {
       background:#1c2332; color:var(--fg); border:1px solid #2a3447;
       padding:12px 14px; border-radius:10px; cursor:pointer; font-size:14px;
-      touch-action: manipulation;   /* allow taps */
+      touch-action: manipulation; /* allow taps */
     }
     button:active { filter:brightness(0.95); }
     button:hover  { filter:brightness(1.08); }
@@ -70,7 +70,7 @@
       <button id="pause"   type="button" aria-label="Pause/Resume">Pause (P)</button>
     </div>
 
-    <p class="hint">Keyboard: arrows/WASD • Mobile: <b>swipe</b> on the board.</p>
+    <p class="hint">Keyboard: arrows/WASD • Mobile: <b>swipe anywhere</b> on the page.</p>
   </div>
 
   <script>
@@ -90,9 +90,7 @@
     // --- Game state
     let snake, dir, nextDir, food, score, best, paused, dead, loop;
 
-    function randCell(){
-      return { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
-    }
+    function randCell(){ return { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) }; }
 
     function placeFood(){
       let f;
@@ -179,7 +177,7 @@
     function gameOver(){ dead = true; draw(); }
 
     function setDir(nx, ny){
-      if (dead || paused) return;           // <-- don't auto-unpause on move
+      if (dead || paused) return;                 // don't move while paused
       if (nx === -dir.x && ny === -dir.y) return; // no instant reverse
       nextDir = { x:nx, y:ny };
     }
@@ -195,21 +193,50 @@
       else if (k === 'p') { paused = !paused; draw(); }
     }, { passive:true });
 
-    // --- Touch / swipe (only on canvas)
-    let startX=0, startY=0, moved=false;
+    // --- Global swipe anywhere (with scroll lock)
+    // We capture touches anywhere on the document and prevent scrolling,
+    // EXCEPT on interactive controls (buttons/links/inputs).
+    const isInteractive = (el) => {
+      return el.closest && el.closest('button, a, input, textarea, select, label');
+    };
+
+    let touchId = null, startX = 0, startY = 0, moved = false;
     const SWIPE_MIN = 24;
 
-    canvas.addEventListener('touchstart', (e) => {
+    document.addEventListener('touchstart', (e) => {
       const t = e.changedTouches[0];
+      // If started on an interactive element, let the browser handle it
+      if (isInteractive(e.target)) return;
+      touchId = t.identifier;
       startX = t.clientX; startY = t.clientY; moved = false;
-    }, { passive:true });
+      e.preventDefault(); // stop page scroll / rubber-band
+    }, { passive:false });
 
-    canvas.addEventListener('touchmove', () => { moved = true; }, { passive:true });
+    document.addEventListener('touchmove', (e) => {
+      if (isInteractive(e.target)) return;
+      // Only care about our tracked touch
+      for (const t of e.changedTouches) {
+        if (t.identifier === touchId) {
+          moved = true;
+          e.preventDefault(); // keep page from moving
+          break;
+        }
+      }
+    }, { passive:false });
 
-    canvas.addEventListener('touchend', (e) => {
-      const t = e.changedTouches[0];
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
+    document.addEventListener('touchend', (e) => {
+      if (isInteractive(e.target)) return;
+      let ended = null;
+      for (const t of e.changedTouches) {
+        if (t.identifier === touchId) { ended = t; break; }
+      }
+      if (!ended) return;
+      e.preventDefault();
+
+      const dx = ended.clientX - startX;
+      const dy = ended.clientY - startY;
+      touchId = null;
+
       if (!moved) return;
       if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) return;
 
@@ -218,9 +245,9 @@
       } else {
         setDir(0, dy > 0 ? 1 : -1);
       }
-    }, { passive:true });
+    }, { passive:false });
 
-    // --- Buttons (use CLICK only to avoid double-fire on mobile)
+    // --- Buttons (CLICK only)
     const handleRestart = (e) => { e.preventDefault(); reset(); }
     const handlePause   = (e) => { e.preventDefault(); paused = !paused; draw(); }
 
