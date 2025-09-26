@@ -2,31 +2,59 @@
 <html lang="en">
 <head>
   <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-LN5WKNMNR1');
-</script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-LN5WKNMNR1');
+  </script>
 
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Lock zoom/scroll on mobile for game feel -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Snake (with Swipe)</title>
   <style>
     :root { --bg:#0f1218; --fg:#eaf2ff; --muted:#a7b1c2; --accent:#7cc36b; }
     * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; }
-    body { display: grid; place-items: center; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+
+    /* Lock the viewport so it won't move/rubber-band on swipe */
+    html, body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      overflow: hidden;              /* no scrolling */
+      overscroll-behavior: none;     /* no pull-to-refresh/rubber-band */
+      touch-action: none;            /* disable gestures by default */
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+
+    /* Re-enable normal tap behavior for interactive controls */
+    button, a {
+      touch-action: manipulation;
+    }
+
+    body { display: grid; place-items: center; }
     .wrap { width: 100%; max-width: 520px; padding: 20px; }
     h1 { margin: 0 0 10px; font-size: 22px; text-align: center; }
     .bar { display:flex; justify-content: space-between; align-items:center; margin: 8px 0 14px; font-size: 14px; color: var(--muted); }
-    canvas { display:block; width:100%; height:auto; background: #141925; border: 2px solid #222b3a; border-radius: 12px; touch-action: none; }
+
+    canvas {
+      display:block; width:100%; height:auto;
+      background: #141925; border: 2px solid #222b3a; border-radius: 12px;
+      touch-action: none; /* make sure swipes go to the game, not the page */
+    }
+
     .hint { margin-top: 10px; font-size: 13px; color: var(--muted); text-align: center; }
     .btns { display:flex; gap:8px; justify-content:center; margin-top:10px; }
-    button { background:#1c2332; color: var(--fg); border:1px solid #2a3447; padding:8px 12px; border-radius:10px; cursor:pointer; }
-    button:hover { filter:brightness(1.1); }
+    button {
+      background:#1c2332; color: var(--fg); border:1px solid #2a3447;
+      padding:12px 14px; border-radius:10px; cursor:pointer; font-size:14px;
+    }
+    button:active { filter:brightness(0.95); }
+    button:hover { filter:brightness(1.08); }
   </style>
 </head>
 <body>
@@ -38,15 +66,24 @@
     </div>
     <canvas id="game" width="420" height="420" aria-label="Snake game" role="img"></canvas>
     <div class="btns">
-      <button id="restart">Restart (Space)</button>
-      <button id="pause">Pause (P)</button>
+      <button id="restart" type="button" aria-label="Restart">Restart (Space)</button>
+      <button id="pause"   type="button" aria-label="Pause/Resume">Pause (P)</button>
     </div>
     <p class="hint">Keyboard: arrows/WASD • Mobile: <b>swipe</b> on the board.</p>
   </div>
 
   <script>
+    // ---- Hard lock scroll as a JS fallback (just in case) ----
+    // Blocks page scroll/overscroll even if CSS is overridden by the browser
+    document.addEventListener('touchmove', (e) => {
+      // Allow interactions on buttons/links if ever needed
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'button' || tag === 'a' || tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      e.preventDefault();
+    }, { passive: false });
+
     // Grid config
-    const CELL = 20;                 // grid cell size (px)
+    const CELL = 20;
     const COLS = 21, ROWS = 21;      // 420x420 canvas
     const SPEED = 120;               // ms per tick
 
@@ -122,7 +159,8 @@
         ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
       }
       for (let y = CELL; y < canvas.height; y += CELL) {
-        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(0,y); ctx.moveTo(0,y); // no-op to keep path clean
+        ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
       }
 
       // food
@@ -154,30 +192,28 @@
     }
 
     function setDir(nx, ny) {
-      // prevent reversing direction in one step
       if (dead) return;
       if (paused) paused = false;
-      if (nx === -dir.x && ny === -dir.y) return;
+      if (nx === -dir.x && ny === -dir.y) return; // no instant reverse
       nextDir = {x:nx, y:ny};
     }
 
-    // Keyboard controls
+    // Keyboard
     window.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
       if (k === 'arrowup' || k === 'w') setDir(0,-1);
       else if (k === 'arrowdown' || k === 's') setDir(0,1);
       else if (k === 'arrowleft' || k === 'a') setDir(-1,0);
       else if (k === 'arrowright' || k === 'd') setDir(1,0);
-      else if (k === ' ' ) { reset(); }
+      else if (k === ' ') { reset(); }
       else if (k === 'p') { paused = !paused; draw(); }
     }, { passive: true });
 
-    // --- Swipe controls for mobile ---
+    // Swipe (mobile)
     let touchStartX = 0, touchStartY = 0, touchMoved = false;
     const SWIPE_MIN = 24; // px threshold
 
     canvas.addEventListener('touchstart', (e) => {
-      // prevent page scroll while swiping on canvas
       e.preventDefault();
       const t = e.changedTouches[0];
       touchStartX = t.clientX;
@@ -200,19 +236,27 @@
       if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) return;
 
       if (Math.abs(dx) > Math.abs(dy)) {
-        // horizontal swipe
         if (dx > 0) setDir(1,0); else setDir(-1,0);
       } else {
-        // vertical swipe
         if (dy > 0) setDir(0,1); else setDir(0,-1);
       }
     }, { passive: false });
+
+    // Buttons: make sure taps work instantly on mobile
+    const onRestart = (e) => { e.preventDefault(); reset(); }
+    const onPause   = (e) => { e.preventDefault(); paused = !paused; draw(); }
+
+    btnRestart.addEventListener('click', onRestart);
+    btnRestart.addEventListener('pointerdown', onRestart);
+
+    btnPause.addEventListener('click', onPause);
+    btnPause.addEventListener('pointerdown', onPause);
 
     // Start
     best = Number(localStorage.getItem('snake-best') || 0);
     bestEl.textContent = best;
     reset();
-    loop = setInterval(tick, SPEED);
+    const loop = setInterval(tick, SPEED);
   </script>
 </body>
 </html>
