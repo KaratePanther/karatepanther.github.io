@@ -110,26 +110,8 @@
       </div>
     </section>
 
-    <!-- FOOTER with JS-protected email -->
-    <p class="footer">🌍 © 2025 Anton Ko • Prefer email?
-      <script>
-        // simple obfuscation to deter basic scrapers
-        (function(){
-          var u = 'antonko.hq', at = '@', d = 'gmail.com';
-          var addr = u + at + d;
-          var a = document.createElement('a');
-          a.href = 'mailto:' + addr;
-          a.textContent = 'Write me';
-          a.rel = 'noopener noreferrer';
-          a.setAttribute('aria-label','Email Anton');
-          document.currentScript.replaceWith(a);
-        })();
-      </script>
-      <noscript>
-        <!-- No-JS fallback (still a bit obfuscated for bots) -->
-        <span>Write to: antonko<strong>&nbsp;dot&nbsp;</strong>hq <strong>&nbsp;at&nbsp;</strong> gmail <strong>&nbsp;dot&nbsp;</strong> com</span>
-      </noscript>
-    </p>
+    <!-- CLEAN FOOTER -->
+    <p class="footer">🌍 © 2025 Anton Ko</p>
   </main>
 </body>
 </html>
