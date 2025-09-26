@@ -11,50 +11,49 @@
   </script>
 
   <meta charset="utf-8" />
-  <!-- Lock zoom/scroll on mobile for game feel -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <!-- Keep viewport steady; no pinch zoom (prevents accidental zoom) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
   <title>Snake (with Swipe)</title>
   <style>
     :root { --bg:#0f1218; --fg:#eaf2ff; --muted:#a7b1c2; --accent:#7cc36b; }
     * { box-sizing: border-box; }
 
-    /* Lock the viewport so it won't move/rubber-band on swipe */
+    /* Lock page in place (no scroll or rubber-band) */
     html, body {
       height: 100%;
-      width: 100%;
       margin: 0;
-      overflow: hidden;              /* no scrolling */
-      overscroll-behavior: none;     /* no pull-to-refresh/rubber-band */
-      touch-action: none;            /* disable gestures by default */
       background: var(--bg);
       color: var(--fg);
       font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
     }
-
-    /* Re-enable normal tap behavior for interactive controls */
-    button, a {
-      touch-action: manipulation;
+    body {
+      position: fixed;           /* lock viewport */
+      inset: 0;
+      overflow: hidden;
+      overscroll-behavior: none; /* no pull-to-refresh */
+      display: grid;
+      place-items: center;
     }
 
-    body { display: grid; place-items: center; }
     .wrap { width: 100%; max-width: 520px; padding: 20px; }
     h1 { margin: 0 0 10px; font-size: 22px; text-align: center; }
-    .bar { display:flex; justify-content: space-between; align-items:center; margin: 8px 0 14px; font-size: 14px; color: var(--muted); }
+    .bar { display:flex; justify-content:space-between; align-items:center; margin:8px 0 14px; font-size:14px; color:var(--muted); }
 
     canvas {
       display:block; width:100%; height:auto;
-      background: #141925; border: 2px solid #222b3a; border-radius: 12px;
-      touch-action: none; /* make sure swipes go to the game, not the page */
+      background:#141925; border:2px solid #222b3a; border-radius:12px;
+      touch-action: none; /* all swipes captured by the game */
     }
 
-    .hint { margin-top: 10px; font-size: 13px; color: var(--muted); text-align: center; }
+    .hint { margin-top:10px; font-size:13px; color:var(--muted); text-align:center; }
     .btns { display:flex; gap:8px; justify-content:center; margin-top:10px; }
     button {
-      background:#1c2332; color: var(--fg); border:1px solid #2a3447;
+      background:#1c2332; color:var(--fg); border:1px solid #2a3447;
       padding:12px 14px; border-radius:10px; cursor:pointer; font-size:14px;
+      touch-action: manipulation;   /* allow taps */
     }
     button:active { filter:brightness(0.95); }
-    button:hover { filter:brightness(1.08); }
+    button:hover  { filter:brightness(1.08); }
   </style>
 </head>
 <body>
@@ -64,51 +63,45 @@
       <div>Score: <span id="score">0</span></div>
       <div>Best: <span id="best">0</span></div>
     </div>
+
     <canvas id="game" width="420" height="420" aria-label="Snake game" role="img"></canvas>
+
     <div class="btns">
       <button id="restart" type="button" aria-label="Restart">Restart (Space)</button>
       <button id="pause"   type="button" aria-label="Pause/Resume">Pause (P)</button>
     </div>
+
     <p class="hint">Keyboard: arrows/WASD • Mobile: <b>swipe</b> on the board.</p>
   </div>
 
   <script>
-    // ---- Hard lock scroll as a JS fallback (just in case) ----
-    // Blocks page scroll/overscroll even if CSS is overridden by the browser
-    document.addEventListener('touchmove', (e) => {
-      // Allow interactions on buttons/links if ever needed
-      const tag = (e.target.tagName || '').toLowerCase();
-      if (tag === 'button' || tag === 'a' || tag === 'input' || tag === 'textarea' || tag === 'select') return;
-      e.preventDefault();
-    }, { passive: false });
-
-    // Grid config
+    // --- Config
     const CELL = 20;
-    const COLS = 21, ROWS = 21;      // 420x420 canvas
-    const SPEED = 120;               // ms per tick
+    const COLS = 21, ROWS = 21;   // 420x420 canvas
+    const SPEED = 120;            // ms / tick
 
-    // DOM
+    // --- DOM
     const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d', { alpha:false });
     const scoreEl = document.getElementById('score');
-    const bestEl = document.getElementById('best');
+    const bestEl  = document.getElementById('best');
     const btnRestart = document.getElementById('restart');
-    const btnPause = document.getElementById('pause');
+    const btnPause   = document.getElementById('pause');
 
-    // Game state
-    let snake, dir, nextDir, food, score, best, loop, paused, dead;
+    // --- Game state
+    let snake, dir, nextDir, food, score, best, paused, dead, loop;
 
-    function randCell() {
+    function randCell(){
       return { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
     }
 
-    function placeFood() {
+    function placeFood(){
       let f;
-      do { f = randCell(); } while (snake.some(s => s.x === f.x && s.y === f.y));
+      do { f = randCell(); } while (snake.some(s => s.x===f.x && s.y===f.y));
       food = f;
     }
 
-    function reset() {
+    function reset(){
       snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
       dir = {x:1,y:0};
       nextDir = dir;
@@ -120,19 +113,18 @@
       draw();
     }
 
-    function tick() {
+    function tick(){
       if (paused || dead) return;
       dir = nextDir;
 
       const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-      // Collisions
+      // Walls / self
       if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { gameOver(); return; }
       if (snake.some(s => s.x === head.x && s.y === head.y)) { gameOver(); return; }
 
       snake.unshift(head);
 
-      // Eat
       if (head.x === food.x && head.y === food.y) {
         score++;
         scoreEl.textContent = score;
@@ -147,20 +139,19 @@
       draw();
     }
 
-    function draw() {
-      // background
+    function draw(){
+      // bg
       ctx.fillStyle = '#0e1422';
       ctx.fillRect(0,0,canvas.width,canvas.height);
 
-      // grid (subtle)
+      // grid
       ctx.strokeStyle = '#192236';
       ctx.lineWidth = 1;
       for (let x = CELL; x < canvas.width; x += CELL) {
         ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
       }
       for (let y = CELL; y < canvas.height; y += CELL) {
-        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(0,y); ctx.moveTo(0,y); // no-op to keep path clean
-        ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
       }
 
       // food
@@ -169,94 +160,83 @@
 
       // snake
       ctx.fillStyle = '#7cc36b';
-      snake.forEach((s) => { ctx.fillRect(s.x*CELL+2, s.y*CELL+2, CELL-4, CELL-4); });
+      snake.forEach(s => ctx.fillRect(s.x*CELL+2, s.y*CELL+2, CELL-4, CELL-4));
 
       if (paused) overlay('Paused');
-      if (dead) overlay('Game Over');
+      if (dead)   overlay('Game Over');
     }
 
-    function overlay(text) {
+    function overlay(text){
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(0,0,canvas.width,canvas.height);
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 32px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.font = 'bold 32px system-ui,-apple-system,Segoe UI,Roboto,Arial';
       ctx.textAlign = 'center';
       ctx.fillText(text, canvas.width/2, canvas.height/2);
-      ctx.font = '14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.font = '14px system-ui,-apple-system,Segoe UI,Roboto,Arial';
       ctx.fillText('Press Space to restart', canvas.width/2, canvas.height/2 + 26);
     }
 
-    function gameOver() {
-      dead = true;
-      draw();
-    }
+    function gameOver(){ dead = true; draw(); }
 
-    function setDir(nx, ny) {
+    function setDir(nx, ny){
       if (dead) return;
       if (paused) paused = false;
       if (nx === -dir.x && ny === -dir.y) return; // no instant reverse
-      nextDir = {x:nx, y:ny};
+      nextDir = { x:nx, y:ny };
     }
 
-    // Keyboard
+    // --- Keyboard
     window.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
-      if (k === 'arrowup' || k === 'w') setDir(0,-1);
-      else if (k === 'arrowdown' || k === 's') setDir(0,1);
+      if (k === 'arrowup'   || k === 'w') setDir(0,-1);
+      else if (k === 'arrowdown' || k === 's') setDir(0, 1);
       else if (k === 'arrowleft' || k === 'a') setDir(-1,0);
-      else if (k === 'arrowright' || k === 'd') setDir(1,0);
+      else if (k === 'arrowright'|| k === 'd') setDir(1, 0);
       else if (k === ' ') { reset(); }
       else if (k === 'p') { paused = !paused; draw(); }
-    }, { passive: true });
+    }, { passive:true });
 
-    // Swipe (mobile)
-    let touchStartX = 0, touchStartY = 0, touchMoved = false;
-    const SWIPE_MIN = 24; // px threshold
+    // --- Touch / swipe (only on canvas)
+    let startX=0, startY=0, moved=false;
+    const SWIPE_MIN = 24;
 
     canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
       const t = e.changedTouches[0];
-      touchStartX = t.clientX;
-      touchStartY = t.clientY;
-      touchMoved = false;
-    }, { passive: false });
+      startX = t.clientX; startY = t.clientY; moved = false;
+    }, { passive:true });
 
-    canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      touchMoved = true;
-    }, { passive: false });
+    canvas.addEventListener('touchmove', () => { moved = true; }, { passive:true });
 
     canvas.addEventListener('touchend', (e) => {
-      e.preventDefault();
       const t = e.changedTouches[0];
-      const dx = t.clientX - touchStartX;
-      const dy = t.clientY - touchStartY;
-
-      if (!touchMoved) return;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (!moved) return;
       if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) return;
 
       if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx > 0) setDir(1,0); else setDir(-1,0);
+        setDir(dx > 0 ? 1 : -1, 0);
       } else {
-        if (dy > 0) setDir(0,1); else setDir(0,-1);
+        setDir(0, dy > 0 ? 1 : -1);
       }
-    }, { passive: false });
+    }, { passive:true });
 
-    // Buttons: make sure taps work instantly on mobile
-    const onRestart = (e) => { e.preventDefault(); reset(); }
-    const onPause   = (e) => { e.preventDefault(); paused = !paused; draw(); }
+    // --- Buttons (mobile-safe)
+    const handleRestart = (e) => { e.preventDefault(); reset(); }
+    const handlePause   = (e) => { e.preventDefault(); paused = !paused; draw(); }
 
-    btnRestart.addEventListener('click', onRestart);
-    btnRestart.addEventListener('pointerdown', onRestart);
+    btnRestart.addEventListener('click', handleRestart);
+    btnRestart.addEventListener('pointerdown', handleRestart);
 
-    btnPause.addEventListener('click', onPause);
-    btnPause.addEventListener('pointerdown', onPause);
+    btnPause.addEventListener('click', handlePause);
+    btnPause.addEventListener('pointerdown', handlePause);
 
-    // Start
+    // --- Start
     best = Number(localStorage.getItem('snake-best') || 0);
     bestEl.textContent = best;
     reset();
-    const loop = setInterval(tick, SPEED);
+    loop = setInterval(tick, SPEED);
   </script>
 </body>
 </html>
