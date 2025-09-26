@@ -41,7 +41,7 @@
     canvas {
       display:block; width:100%; height:auto;
       background:#141925; border:2px solid #222b3a; border-radius:12px;
-      touch-action: none; /* capture gestures on canvas */
+      touch-action: none;
     }
 
     .hint { margin-top:10px; font-size:13px; color:var(--muted); text-align:center; }
@@ -49,7 +49,7 @@
     button {
       background:#1c2332; color:var(--fg); border:1px solid #2a3447;
       padding:12px 14px; border-radius:10px; cursor:pointer; font-size:14px;
-      touch-action: manipulation; /* allow taps */
+      touch-action: manipulation;
     }
     button:active { filter:brightness(0.95); }
     button:hover  { filter:brightness(1.08); }
@@ -116,7 +116,6 @@
 
       const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-      // Walls / self
       if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { gameOver(); return; }
       if (snake.some(s => s.x === head.x && s.y === head.y)) { gameOver(); return; }
 
@@ -137,11 +136,9 @@
     }
 
     function draw(){
-      // bg
       ctx.fillStyle = '#0e1422';
       ctx.fillRect(0,0,canvas.width,canvas.height);
 
-      // grid
       ctx.strokeStyle = '#192236';
       ctx.lineWidth = 1;
       for (let x = CELL; x < canvas.width; x += CELL) {
@@ -151,11 +148,9 @@
         ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
       }
 
-      // food
       ctx.fillStyle = '#e06d6d';
       ctx.fillRect(food.x*CELL+2, food.y*CELL+2, CELL-4, CELL-4);
 
-      // snake
       ctx.fillStyle = '#7cc36b';
       snake.forEach(s => ctx.fillRect(s.x*CELL+2, s.y*CELL+2, CELL-4, CELL-4));
 
@@ -177,8 +172,8 @@
     function gameOver(){ dead = true; draw(); }
 
     function setDir(nx, ny){
-      if (dead || paused) return;                 // don't move while paused
-      if (nx === -dir.x && ny === -dir.y) return; // no instant reverse
+      if (dead || paused) return;
+      if (nx === -dir.x && ny === -dir.y) return;
       nextDir = { x:nx, y:ny };
     }
 
@@ -193,61 +188,59 @@
       else if (k === 'p') { paused = !paused; draw(); }
     }, { passive:true });
 
-    // --- Global swipe anywhere (with scroll lock)
-    // We capture touches anywhere on the document and prevent scrolling,
-    // EXCEPT on interactive controls (buttons/links/inputs).
-    const isInteractive = (el) => {
-      return el.closest && el.closest('button, a, input, textarea, select, label');
-    };
-
-    let touchId = null, startX = 0, startY = 0, moved = false;
-    const SWIPE_MIN = 24;
+    // --- Swipe anywhere (buttons included) ---
+    const SWIPE_MIN = 24;   // must move this far for swipe
+    const CANCEL_CLICK = 10; // cancel tap if moved more than this
+    let touchId = null, startX = 0, startY = 0, captured = false;
 
     document.addEventListener('touchstart', (e) => {
       const t = e.changedTouches[0];
-      // If started on an interactive element, let the browser handle it
-      if (isInteractive(e.target)) return;
       touchId = t.identifier;
-      startX = t.clientX; startY = t.clientY; moved = false;
-      e.preventDefault(); // stop page scroll / rubber-band
-    }, { passive:false });
+      startX = t.clientX;
+      startY = t.clientY;
+      captured = false;
+    }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
-      if (isInteractive(e.target)) return;
-      // Only care about our tracked touch
       for (const t of e.changedTouches) {
-        if (t.identifier === touchId) {
-          moved = true;
-          e.preventDefault(); // keep page from moving
-          break;
+        if (t.identifier !== touchId) continue;
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        if (!captured && (Math.abs(dx) > CANCEL_CLICK || Math.abs(dy) > CANCEL_CLICK)) {
+          captured = true;
         }
+        if (captured) e.preventDefault();
+        break;
       }
     }, { passive:false });
 
     document.addEventListener('touchend', (e) => {
-      if (isInteractive(e.target)) return;
       let ended = null;
       for (const t of e.changedTouches) {
         if (t.identifier === touchId) { ended = t; break; }
       }
       if (!ended) return;
-      e.preventDefault();
 
       const dx = ended.clientX - startX;
       const dy = ended.clientY - startY;
-      touchId = null;
 
-      if (!moved) return;
-      if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) return;
-
-      if (Math.abs(dx) > Math.abs(dy)) {
-        setDir(dx > 0 ? 1 : -1, 0);
-      } else {
-        setDir(0, dy > 0 ? 1 : -1);
+      if (captured) {
+        e.preventDefault();
+        if (!paused && !dead) {
+          if (Math.abs(dx) >= SWIPE_MIN || Math.abs(dy) >= SWIPE_MIN) {
+            if (Math.abs(dx) > Math.abs(dy)) {
+              setDir(dx > 0 ? 1 : -1, 0);
+            } else {
+              setDir(0, dy > 0 ? 1 : -1);
+            }
+          }
+        }
       }
+      touchId = null;
+      captured = false;
     }, { passive:false });
 
-    // --- Buttons (CLICK only)
+    // --- Buttons
     const handleRestart = (e) => { e.preventDefault(); reset(); }
     const handlePause   = (e) => { e.preventDefault(); paused = !paused; draw(); }
 
