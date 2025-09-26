@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
   <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-LN5WKNMNR1');
-</script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-LN5WKNMNR1');
+  </script>
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -21,7 +20,6 @@
   <meta property="og:description" content="Find me on TikTok, YouTube, Instagram, Threads & LinkedIn. Plus mini web apps." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://antonko.com/socials" />
-  <!-- Replace with a real 1200×630 image in your repo -->
   <meta property="og:image" content="https://antonko.com/og-image.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
 
@@ -70,11 +68,11 @@
     <section class="card">
       <p class="section-title">Links</p>
       <div class="chips">
-        <a class="chip" href="https://www.tiktok.com/@antonko.vlog" target="_blank" rel="noopener">🎥 TikTok</a>
-        <a class="chip" href="https://www.youtube.com/@antonko_vlog" target="_blank" rel="noopener">▶️ YouTube</a>
-        <a class="chip" href="https://www.instagram.com/antonko.vlog" target="_blank" rel="noopener">📸 Instagram</a>
-        <a class="chip" href="https://www.threads.com/@antonio.korolev" target="_blank" rel="noopener">🧵 Threads</a>
-        <a class="chip" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener">🔗 LinkedIn</a>
+        <a class="chip" href="https://www.tiktok.com/@antonko.vlog" target="_blank" rel="noopener noreferrer" aria-label="TikTok">🎥 TikTok</a>
+        <a class="chip" href="https://www.youtube.com/@antonko_vlog" target="_blank" rel="noopener noreferrer" aria-label="YouTube">▶️ YouTube</a>
+        <a class="chip" href="https://www.instagram.com/antonko.vlog" target="_blank" rel="noopener noreferrer" aria-label="Instagram">📸 Instagram</a>
+        <a class="chip" href="https://www.threads.com/@antonio.korolev" target="_blank" rel="noopener noreferrer" aria-label="Threads">🧵 Threads</a>
+        <a class="chip" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">🔗 LinkedIn</a>
       </div>
     </section>
 
@@ -97,7 +95,26 @@
       </div>
     </section>
 
-    <p class="footer">🌍 © 2025 Anton Ko • Prefer email? <a href="mailto:anton@antonko.com">Write me</a></p>
+    <!-- FOOTER with JS-protected email -->
+    <p class="footer">🌍 © 2025 Anton Ko • Prefer email?
+      <script>
+        // simple obfuscation to deter basic scrapers
+        (function(){
+          var u = 'antonko.hq', at = '@', d = 'gmail.com';
+          var addr = u + at + d;
+          var a = document.createElement('a');
+          a.href = 'mailto:' + addr;
+          a.textContent = 'Write me';
+          a.rel = 'noopener noreferrer';
+          a.setAttribute('aria-label','Email Anton');
+          document.currentScript.replaceWith(a);
+        })();
+      </script>
+      <noscript>
+        <!-- No-JS fallback (still a bit obfuscated for bots) -->
+        <span>Write to: antonko<strong>&nbsp;dot&nbsp;</strong>hq <strong>&nbsp;at&nbsp;</strong> gmail <strong>&nbsp;dot&nbsp;</strong> com</span>
+      </noscript>
+    </p>
   </main>
 </body>
 </html>
