@@ -73,6 +73,21 @@
         <a class="chip" href="https://www.instagram.com/antonko.vlog" target="_blank" rel="noopener noreferrer" aria-label="Instagram">📸 Instagram</a>
         <a class="chip" href="https://www.threads.com/@antonio.korolev" target="_blank" rel="noopener noreferrer" aria-label="Threads">🧵 Threads</a>
         <a class="chip" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">🔗 LinkedIn</a>
+        
+        <!-- Email button (protected with JS) -->
+        <script>
+          (function(){
+            var u = 'antonko.hq', at = '@', d = 'gmail.com';
+            var addr = u + at + d;
+            var a = document.createElement('a');
+            a.className = 'chip';
+            a.href = 'mailto:' + addr;
+            a.textContent = '✉️ Email';
+            a.rel = 'noopener noreferrer';
+            a.setAttribute('aria-label','Email Anton');
+            document.currentScript.replaceWith(a);
+          })();
+        </script>
       </div>
     </section>
 
