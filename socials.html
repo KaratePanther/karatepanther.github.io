@@ -13,14 +13,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Anton Ko — Socials</title>
-  <meta name="description" content="Find me on TikTok, YouTube, Instagram, Threads & LinkedIn. Plus mini web apps." />
+
+  <!-- Updated description -->
+  <meta name="description" content="Sharing growth tactics, personal experiments & mini apps." />
 
   <!-- Open Graph for pretty previews -->
   <meta property="og:title" content="Anton Ko — Socials" />
-  <meta property="og:description" content="Find me on TikTok, YouTube, Instagram, Threads & LinkedIn. Plus mini web apps." />
+  <meta property="og:description" content="Sharing growth tactics, personal experiments & mini apps." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://antonko.com/socials" />
   <meta property="og:image" content="https://antonko.com/og-image.jpg" />
+  <meta property="og:image:alt" content="Anton Ko — Sharing growth tactics, personal experiments & mini apps." />
   <meta name="twitter:card" content="summary_large_image" />
 
   <link rel="icon" href="favicon.ico">
@@ -29,20 +32,37 @@
   <style>
     :root{
       --bg:#ffffff; --ink:#0f172a; --muted:#475569; --line:#e6ebf2;
-      --card:#f7f9fc; --accent:#111827; --accent-2:#1f2937;
-      --radius:18px; --pad:20px; --maxw:720px;
+      --card:#f7f9fc; --chip:#ffffff; --chip-ink:#0f172a; --chip-border:#e6ebf2;
+      --chip-hover:#0f172a; --chip-hover-ink:#ffffff;
+      --radius:18px; --pad:20px; --maxw:720px; --focus:#2563eb;
     }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0b1020; --ink:#e8ecff; --muted:#aab3d9; --line:#233055;
+        --card:#121932; --chip:#0e1430; --chip-ink:#e8ecff; --chip-border:#233055;
+        --chip-hover:#6ea8fe; --chip-hover-ink:#0b1020; --focus:#90c2ff;
+      }
+    }
+
     *{box-sizing:border-box}
-    html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.55}
+    html,body{margin:0;background:var(--bg);color:var(--ink);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.55}
     a{color:inherit;text-decoration:none}
+    a:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:12px}
     .container{max-width:var(--maxw);margin:0 auto;padding:32px 18px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);margin:14px 0}
     .hero{display:flex;align-items:center;gap:16px}
     .avatar{width:96px;height:96px;border-radius:50%;object-fit:cover;border:1px solid var(--line)}
     h1{font-size:28px;line-height:1.15;margin:0}
     .tag{margin:6px 0 0;color:var(--muted)}
-    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-    .chip{display:inline-block;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:#fff}
+    .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    .chip{
+      display:inline-block;padding:10px 14px;border:1px solid var(--chip-border);
+      border-radius:999px;background:var(--chip); color:var(--chip-ink);
+      transition:transform .06s ease, background .15s ease, color .15s ease, border-color .15s ease;
+      font-weight:500
+    }
+    .chip:hover,.chip:active{background:var(--chip-hover);color:var(--chip-hover-ink);border-color:transparent;transform:translateY(-1px)}
     .section-title{font-size:16px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
     .footer{font-size:13px;color:var(--muted);text-align:center;margin-top:10px}
     @media (min-width:680px){
@@ -59,31 +79,31 @@
         <img src="anton-ko.jpeg" alt="Anton Ko" class="avatar" width="108" height="108">
         <div>
           <h1>Anton Ko</h1>
-          <p class="tag">Hi, I’m Anton 👋 Find me on socials and try my mini apps.</p>
+          <p class="tag">Sharing growth tactics, personal experiments & mini apps.</p>
         </div>
       </div>
     </section>
 
     <!-- LINKS -->
-    <section class="card">
-      <p class="section-title">Links</p>
-      <div class="chips">
-        <a class="chip" href="https://www.tiktok.com/@antonko.vlog" target="_blank" rel="noopener noreferrer" aria-label="TikTok">🎥 TikTok</a>
-        <a class="chip" href="https://www.youtube.com/@antonko_vlog" target="_blank" rel="noopener noreferrer" aria-label="YouTube">▶️ YouTube</a>
-        <a class="chip" href="https://www.instagram.com/antonko.vlog" target="_blank" rel="noopener noreferrer" aria-label="Instagram">📸 Instagram</a>
-        <a class="chip" href="https://www.threads.com/@antonio.korolev" target="_blank" rel="noopener noreferrer" aria-label="Threads">🧵 Threads</a>
-        <a class="chip" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">🔗 LinkedIn</a>
-        
+    <section class="card" aria-labelledby="links">
+      <p id="links" class="section-title">Links</p>
+      <div class="chips" role="navigation" aria-label="Social links">
+        <a class="chip" href="https://www.tiktok.com/@antonko.vlog" target="_blank" rel="noopener noreferrer me" aria-label="TikTok profile">🎥 TikTok</a>
+        <a class="chip" href="https://www.youtube.com/@antonko_vlog" target="_blank" rel="noopener noreferrer me" aria-label="YouTube channel">▶️ YouTube</a>
+        <a class="chip" href="https://www.instagram.com/antonko.vlog" target="_blank" rel="noopener noreferrer me" aria-label="Instagram profile">📸 Instagram</a>
+        <a class="chip" href="https://www.threads.net/@antonio.korolev" target="_blank" rel="noopener noreferrer me" aria-label="Threads profile">🧵 Threads</a>
+        <a class="chip" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener noreferrer me" aria-label="LinkedIn profile">🔗 LinkedIn</a>
+
         <!-- Email button (protected with JS) -->
         <script>
           (function(){
-            var u = 'antonko.hq', at = '@', d = 'gmail.com';
-            var addr = u + at + d;
-            var a = document.createElement('a');
-            a.className = 'chip';
-            a.href = 'mailto:' + addr;
-            a.textContent = '✉️ Email';
-            a.rel = 'noopener noreferrer';
+            var u='antonko.hq', at='@', d='gmail.com';
+            var addr=u+at+d;
+            var a=document.createElement('a');
+            a.className='chip';
+            a.href='mailto:'+addr;
+            a.textContent='✉️ Email';
+            a.rel='noopener noreferrer';
             a.setAttribute('aria-label','Email Anton');
             document.currentScript.replaceWith(a);
           })();
@@ -92,22 +112,22 @@
     </section>
 
     <!-- MINI APPS -->
-    <section class="card">
-      <p class="section-title">Mini Apps</p>
+    <section class="card" aria-labelledby="miniapps">
+      <p id="miniapps" class="section-title">Mini Apps</p>
       <div class="chips">
-        <a class="chip" href="snake.html">Play Snake</a>
-        <a class="chip" href="2048.html">Play 2048</a>
-        <a class="chip" href="minesweeper.html">Play Minesweeper</a>
+        <a class="chip" href="snake.html" aria-label="Play Snake">Play Snake</a>
+        <a class="chip" href="2048.html" aria-label="Play 2048">Play 2048</a>
+        <a class="chip" href="minesweeper.html" aria-label="Play Minesweeper">Play Minesweeper</a>
       </div>
     </section>
 
     <!-- NOW -->
-    <section class="card">
-      <p class="section-title">Now</p>
-      <div class="chips">
-        <span class="chip">📖 Reading "Play Nice (Blizzard)"</span>
-        <span class="chip">💻 Learning by building apps</span>
-        <span class="chip">🏐 Volleyball 2×/week</span>
+    <section class="card" aria-labelledby="now">
+      <p id="now" class="section-title">Now</p>
+      <div class="chips" aria-label="Current focuses">
+        <span class="chip" aria-label="Reading: Play Nice about Blizzard">📖 Reading “Play Nice (Blizzard)”</span>
+        <span class="chip" aria-label="Learning by building apps">💻 Learning by building apps</span>
+        <span class="chip" aria-label="Volleyball twice per week">🏐 Volleyball 2×/week</span>
       </div>
     </section>
 
