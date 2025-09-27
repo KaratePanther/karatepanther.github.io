@@ -223,18 +223,24 @@
 
   // ----- Shooting
   function shootFromDrag(){
-    const s = slingForTurn();
-    const dx = state.aim.curX - s.x;
-    const dy = state.aim.curY - s.y;
-    // Pull back opposite direction (slingshot): velocity is proportional to pull distance
-    const pull = Math.min(120, Math.hypot(dx,dy));
-    const ang = Math.atan2(dy, dx);
-    const power = pull*0.18; // tune power
-    const vx = -Math.cos(ang)*power*(state.turn==='A'?1:-1); // make aiming feel natural on both sides
-    const vy = -Math.sin(ang)*power;
+  const s = slingForTurn();
+  // vector from sling to pull point (opposite of shot direction)
+  let dx = s.x - state.aim.curX;
+  let dy = s.y - state.aim.curY;
 
-    state.projectile = {x:s.x, y:s.y, r:10, vx, vy, owner:state.turn, alive:true};
-  }
+  // clamp pull length so power is bounded
+  const pull = Math.min(120, Math.hypot(dx, dy));
+  
+  if (pull < 6) return; // don’t fire on micro drags
+  
+  const ang = Math.atan2(dy, dx);
+  const speed = pull * 0.18;
+
+  const vx = Math.cos(ang) * speed;
+  const vy = Math.sin(ang) * speed;
+
+  state.projectile = { x:s.x, y:s.y, r:10, vx, vy, owner:state.turn, alive:true };
+}
 
   function fireWithBar(){
     // Choose angle by default for each player; power from oscillating bar.
