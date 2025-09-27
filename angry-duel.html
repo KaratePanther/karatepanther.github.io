@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+<title>Angry Birds — 2P Duel (no libs)</title>
+<style>
+  :root{
+    --bg:#0b1020; --card:#121932; --ink:#e8ecff; --muted:#aab3d9; --accent:#6ea8fe; --ok:#22c55e; --warn:#f59e0b; --lose:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:linear-gradient(180deg,#0b1020,#0e1430);color:var(--ink);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:12px}
+  h1{margin:0 0 8px;font-size:20px}
+  .hud{
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;
+    background:var(--card);border:1px solid #233055;border-radius:14px;padding:8px 10px
+  }
+  .left, .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .btn{
+    appearance:none;border:1px solid #2b3a6b;background:#172046;color:#fff;border-radius:10px;padding:8px 12px;cursor:pointer
+  }
+  .btn:hover{filter:brightness(1.1)}
+  .tag{padding:6px 10px;border-radius:999px;border:1px solid #33406f;background:#141c39;color:#dfe7ff}
+  .tag.turnA{border-color:var(--ok)}
+  .tag.turnB{border-color:var(--warn)}
+  canvas{width:100%;height:auto;touch-action:none;display:block;background:linear-gradient(#79b0ff,#a1c8ff 40%, #83c77f 41%)}
+  .tips{color:var(--muted);font-size:13px;margin:8px 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Angry Duel — 2 Players</h1>
+  <div class="hud">
+    <div class="left">
+      <span id="turn" class="tag">Turn: A</span>
+      <span class="tag">A Score: <b id="scoreA">0</b></span>
+      <span class="tag">B Score: <b id="scoreB">0</b></span>
+      <span class="tag">Wind: <b id="windLbl">0</b></span>
+    </div>
+    <div class="right">
+      <button class="btn" id="btnRestart">Restart</button>
+      <button class="btn" id="btnWind">Toggle Wind</button>
+      <button class="btn" id="btnPower">Power Bar Shot</button>
+    </div>
+  </div>
+
+  <canvas id="game" width="980" height="520"></canvas>
+  <p class="tips">
+    Drag from a slingshot to aim & release to fire. Mobile supported. <br>
+    Player A shoots from the left; Player B from the right. Knock enemy blocks for points. Towers collapse if blocks take enough hits. Wind may push shots!
+  </p>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  // ----- UI refs
+  const $turn = document.getElementById('turn');
+  const $scoreA = document.getElementById('scoreA');
+  const $scoreB = document.getElementById('scoreB');
+  const $windLbl = document.getElementById('windLbl');
+  const $btnRestart = document.getElementById('btnRestart');
+  const $btnWind = document.getElementById('btnWind');
+  const $btnPower = document.getElementById('btnPower');
+
+  // ----- World constants
+  const W = canvas.width, H = canvas.height;
+  const G = 0.45;          // gravity
+  let WIND = 0;            // wind accel per frame on projectile
+  const GROUND_Y = H - 60; // grass line
+  const FPS = 60;
+
+  // ----- Game state
+  let state;
+  const randRange = (a,b)=>a+Math.random()*(b-a);
+
+  function makeLevel() {
+    const blocks = [];
+
+    // Player A slingshot position
+    const slingA = {x: 90, y: GROUND_Y-10, r: 18};
+    // Player B slingshot position
+    const slingB = {x: W-90, y: GROUND_Y-10, r: 18};
+
+    // Simple towers (rect blocks) — each block has hp; hitting reduces hp, destroyed gives score
+    // Tower A belongs to Player A (B should knock it), and vice versa
+    function tower(xStart, owner, cols=3, rows=4, bw=26, bh=22, gap=3){
+      const towerBlocks=[];
+      const baseY = GROUND_Y;
+      const left = xStart - ((cols*bw)+(cols-1)*gap)/2;
+      for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+          const x = left + c*(bw+gap);
+          const y = baseY - (r+1)*(bh+gap);
+          towerBlocks.push({
+            x,y,w:bw,h:bh,hp:2,owner,alive:true, vx:0, vy:0, grounded:false
+          });
+        }
+      }
+      return towerBlocks;
+    }
+
+    // Place towers near each side
+    blocks.push(...tower(260,'A'));
+    blocks.push(...tower(W-260,'B'));
+
+    return {blocks, slingA, slingB};
+  }
+
+  function reset(matchStart=false){
+    state = {
+      ...makeLevel(),
+      turn:'A',
+      scoreA: matchStart?0:state?.scoreA||0,
+      scoreB: matchStart?0:state?.scoreB||0,
+      projectile:null,
+      aim:{
+        dragging:false, startX:0,startY:0, curX:0,curY:0, power:0, angle:0,
+        mode:'drag' // or 'bar'
+      },
+      powerBar:{
+        active:false, dir:1, value:0.4
+      },
+      settledTimer:0,
+      windOn: !!WIND
+    };
+    updateHUD();
+  }
+
+  function updateHUD(){
+    $turn.textContent = `Turn: ${state.turn}`;
+    $turn.className = `tag ${state.turn==='A'?'turnA':'turnB'}`;
+    $scoreA.textContent = state.scoreA;
+    $scoreB.textContent = state.scoreB;
+    $windLbl.textContent = `${WIND.toFixed(2)}`;
+  }
+
+  // ----- Input (mouse + touch)
+  let pointerId = null;
+  const getPointerPos = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    if (ev.touches && ev.touches[0]) {
+      return {x: (ev.touches[0].clientX - rect.left) * (canvas.width/rect.width),
+              y: (ev.touches[0].clientY - rect.top)  * (canvas.height/rect.height)};
+    }
+    return {x: (ev.clientX - rect.left) * (canvas.width/rect.width),
+            y: (ev.clientY - rect.top)  * (canvas.height/rect.height)};
+  };
+
+  function slingForTurn(){
+    return state.turn==='A'? state.slingA : state.slingB;
+  }
+
+  function onDown(ev){
+    if (state.projectile) return; // can't aim while shot in air
+    const {x,y} = getPointerPos(ev);
+    // enable power bar shot if chosen
+    if (state.aim.mode==='bar'){
+      state.powerBar.active = true;
+      ev.preventDefault();
+      return;
+    }
+    // Drag-to-aim near your sling
+    const s = slingForTurn();
+    const dx = x - s.x, dy = y - s.y;
+    const dist2 = dx*dx+dy*dy;
+    if (dist2 <= 150*150) {
+      state.aim.dragging = true;
+      state.aim.startX = s.x;
+      state.aim.startY = s.y;
+      state.aim.curX = x; state.aim.curY = y;
+      pointerId = ev.pointerId ?? 1;
+      ev.preventDefault();
+    }
+  }
+  function onMove(ev){
+    if (!state.aim.dragging) return;
+    const {x,y} = getPointerPos(ev);
+    state.aim.curX = x; state.aim.curY = y;
+  }
+  function onUp(ev){
+    if (state.aim.mode==='bar'){
+      if (state.powerBar.active){
+        fireWithBar();
+        state.powerBar.active=false;
+      }
+      return;
+    }
+    if (!state.aim.dragging) return;
+    state.aim.dragging=false;
+    shootFromDrag();
+  }
+
+  // Keyboard alt controls: hold/space to fire bar shot, arrows to nudge angle isn’t necessary for now.
+  window.addEventListener('keydown', (e)=>{
+    if (e.code==='Space' && !state.projectile){
+      state.aim.mode='bar';
+      state.powerBar.active=true;
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', (e)=>{
+    if (e.code==='Space' && state.powerBar.active){
+      fireWithBar();
+      state.powerBar.active=false;
+    }
+  });
+
+  // Prevent page scroll/zoom wiggle on mobile
+  ['touchstart','touchmove','touchend','gesturestart'].forEach(evt=>{
+    canvas.addEventListener(evt, e=>{ e.preventDefault(); }, {passive:false});
+  });
+
+  canvas.addEventListener('mousedown', onDown);
+  canvas.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  canvas.addEventListener('touchstart', onDown, {passive:false});
+  canvas.addEventListener('touchmove', onMove, {passive:false});
+  window.addEventListener('touchend', onUp, {passive:false});
+
+  // ----- Shooting
+  function shootFromDrag(){
+    const s = slingForTurn();
+    const dx = state.aim.curX - s.x;
+    const dy = state.aim.curY - s.y;
+    // Pull back opposite direction (slingshot): velocity is proportional to pull distance
+    const pull = Math.min(120, Math.hypot(dx,dy));
+    const ang = Math.atan2(dy, dx);
+    const power = pull*0.18; // tune power
+    const vx = -Math.cos(ang)*power*(state.turn==='A'?1:-1); // make aiming feel natural on both sides
+    const vy = -Math.sin(ang)*power;
+
+    state.projectile = {x:s.x, y:s.y, r:10, vx, vy, owner:state.turn, alive:true};
+  }
+
+  function fireWithBar(){
+    // Choose angle by default for each player; power from oscillating bar.
+    const s = slingForTurn();
+    const angle = (state.turn==='A' ? Math.PI/4 : (Math.PI - Math.PI/4)); // 45° toward opponent
+    const base = 9; // min
+    const pow = base + state.powerBar.value*14; // scale 9..23-ish
+    const vx = Math.cos(angle) * pow * (state.turn==='A'?1:-1);
+    const vy = -Math.sin(angle) * pow;
+    state.projectile = {x:s.x, y:s.y, r:10, vx, vy, owner:state.turn, alive:true};
+  }
+
+  // ----- Physics & collisions
+  function aabbCircleHit(b, c){
+    // clamp circle center to rect
+    const cx = Math.max(b.x, Math.min(c.x, b.x+b.w));
+    const cy = Math.max(b.y, Math.min(c.y, b.y+b.h));
+    const dx = c.x - cx, dy = c.y - cy;
+    return (dx*dx + dy*dy) <= c.r*c.r;
+  }
+
+  function resolveBlockHit(b, proj){
+    // knock block: reduce hp, apply small impulse
+    b.hp -= 1;
+    if (b.hp<=0 && b.alive){
+      b.alive=false;
+      // score for the shooter if the block belongs to the other player
+      if (b.owner !== proj.owner){
+        if (proj.owner==='A') state.scoreA += 10; else state.scoreB += 10;
+        updateHUD();
+      }
+    } else {
+      // impulse
+      b.vx += (proj.vx*0.12);
+      b.vy += (proj.vy*0.12);
+    }
+    // damp projectile a touch
+    proj.vx *= 0.8; proj.vy *= 0.8;
+  }
+
+  function step(){
+    // Power bar oscillation
+    if (state.powerBar.active){
+      state.powerBar.value += state.powerBar.dir * 0.02;
+      if (state.powerBar.value>=1){ state.powerBar.value=1; state.powerBar.dir=-1; }
+      if (state.powerBar.value<=0){ state.powerBar.value=0; state.powerBar.dir=1; }
+    }
+
+    // Settle detection
+    if (!state.projectile){ state.settledTimer=0; }
+
+    // Projectile motion
+    if (state.projectile){
+      const p = state.projectile;
+      p.vy += G;
+      p.vx += WIND;
+
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // Ground collision
+      if (p.y + p.r > GROUND_Y){
+        p.y = GROUND_Y - p.r;
+        p.vy *= -0.45;
+        p.vx *= 0.75;
+        // stop if very slow
+        if (Math.abs(p.vx)<0.2 && Math.abs(p.vy)<0.5){
+          p.vx=0;p.vy=0;
+        }
+      }
+
+      // Block collisions
+      for (const b of state.blocks){
+        if (!b.alive) continue;
+        if (aabbCircleHit(b,p)){
+          resolveBlockHit(b,p);
+        }
+      }
+
+      // Stop condition: out of bounds or fully stopped for a bit
+      const stopped = Math.abs(p.vx)+Math.abs(p.vy) < 0.15 && p.y + p.r >= GROUND_Y-0.01;
+      if (stopped) state.settledTimer++;
+      if (p.x<-50 || p.x>W+50 || p.y>H+200 || state.settledTimer>45){
+        state.projectile=null;
+        state.settledTimer=0;
+        // swap turn
+        state.turn = state.turn==='A'?'B':'A';
+        updateHUD();
+      }
+    }
+
+    // Block physics (very light)
+    for (const b of state.blocks){
+      if (!b.alive) continue;
+      b.vy += G*0.6;
+      b.x += b.vx; b.y += b.vy;
+      // ground
+      if (b.y + b.h > GROUND_Y){
+        b.y = GROUND_Y - b.h;
+        b.vy *= -0.25;
+        b.vx *= 0.8;
+      }
+      // simple bounds
+      if (b.x<0){ b.x=0; b.vx*=-0.4; }
+      if (b.x+b.w>W){ b.x=W-b.w; b.vx*=-0.4; }
+    }
+  }
+
+  // ----- Rendering
+  function draw(){
+    // sky is canvas bg; draw ground
+    ctx.fillStyle = '#59a85a';
+    ctx.fillRect(0,GROUND_Y,W, H-GROUND_Y);
+    // dirt
+    ctx.fillStyle = '#5c4428';
+    ctx.fillRect(0,GROUND_Y+18,W, H-GROUND_Y-18);
+
+    // wind arrow
+    ctx.save();
+    ctx.translate(W/2, 34);
+    ctx.fillStyle = '#ffffffcc';
+    ctx.font = '12px system-ui';
+    const len = Math.min(80, Math.abs(WIND)*220);
+    ctx.fillRect(-len/2, -2, len, 4);
+    ctx.beginPath();
+    if (WIND>0){ // blowing to the right
+      ctx.moveTo(len/2+6,0); ctx.lineTo(len/2,-6); ctx.lineTo(len/2,6); ctx.closePath();
+    } else if (WIND<0){
+      ctx.moveTo(-len/2-6,0); ctx.lineTo(-len/2,6); ctx.lineTo(-len/2,-6); ctx.closePath();
+    }
+    ctx.fill();
+    ctx.restore();
+
+    // slings
+    drawSling(state.slingA, '#2e3f7d');
+    drawSling(state.slingB, '#7d3b2e');
+
+    // aiming line
+    if (state.aim.dragging){
+      const s = slingForTurn();
+      ctx.strokeStyle = '#ffffffaa';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(state.aim.curX, state.aim.curY);
+      ctx.stroke();
+    }
+    if (state.powerBar.active){
+      // show power widget near current sling
+      const s = slingForTurn();
+      const w = 120, h = 10;
+      ctx.fillStyle = '#00000066';
+      ctx.fillRect(s.x - w/2 -2, s.y - 70 -2, w+4, h+4);
+      ctx.fillStyle = '#e8ecff';
+      ctx.strokeStyle = '#ffffff55';
+      ctx.strokeRect(s.x - w/2, s.y - 70, w, h);
+      ctx.fillRect(s.x - w/2, s.y - 70, w*state.powerBar.value, h);
+    }
+
+    // blocks
+    for (const b of state.blocks){
+      if (!b.alive){
+        // debris shadow
+        ctx.fillStyle = '#3a3a3a55';
+        ctx.fillRect(b.x, b.y+b.h-3, b.w, 3);
+        continue;
+      }
+      ctx.fillStyle = (b.owner==='A') ? '#6ea8fe' : '#f59e0b';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      // hp pip
+      ctx.fillStyle = '#00000055';
+      ctx.fillRect(b.x, b.y-4, b.w, 3);
+      ctx.fillStyle = '#00ff99';
+      const pct = Math.max(0, b.hp/2);
+      ctx.fillRect(b.x, b.y-4, b.w*pct, 3);
+    }
+
+    // projectile
+    if (state.projectile){
+      const p = state.projectile;
+      ctx.fillStyle = state.turn==='A' ? '#9ae6b4' : '#ffd1a1';
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    }
+
+    // HUD turn glow near active sling
+    const s = slingForTurn();
+    ctx.strokeStyle = state.turn==='A' ? '#22c55e' : '#f59e0b';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(s.x, s.y, 26, 0, Math.PI*2); ctx.stroke();
+  }
+
+  function drawSling(s, color){
+    ctx.fillStyle = '#3b2a18';
+    // base
+    ctx.fillRect(s.x-8, GROUND_Y-10, 16, 18);
+    // posts
+    ctx.fillRect(s.x-14, s.y-40, 6, 40);
+    ctx.fillRect(s.x+8, s.y-40, 6, 40);
+    // band
+    ctx.strokeStyle = color; ctx.lineWidth=3;
+    ctx.beginPath();
+    const pullX = (state.aim.dragging && slingForTurn()===s) ? state.aim.curX : s.x;
+    const pullY = (state.aim.dragging && slingForTurn()===s) ? state.aim.curY : s.y;
+    ctx.moveTo(s.x-11, s.y-36);
+    ctx.lineTo(pullX, pullY);
+    ctx.lineTo(s.x+17, s.y-36);
+    ctx.stroke();
+    // cradle
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(pullX, pullY, 6, 0, Math.PI*2); ctx.fill();
+  }
+
+  // ----- Loop
+  function loop(){
+    step();
+    ctx.clearRect(0,0,W,H);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ----- Buttons
+  $btnRestart.addEventListener('click', ()=> reset(true));
+  $btnWind.addEventListener('click', ()=>{
+    if (WIND===0){ WIND = randRange(-0.05,0.05); }
+    else { WIND = 0; }
+    state.windOn = !!WIND;
+    updateHUD();
+  });
+  $btnPower.addEventListener('click', ()=>{
+    // toggle input mode quickly
+    state.aim.mode = state.aim.mode==='bar' ? 'drag' : 'bar';
+    $btnPower.textContent = (state.aim.mode==='bar') ? 'Drag Shot' : 'Power Bar Shot';
+  });
+
+  // Init
+  reset(true);
+  loop();
+})();
+</script>
+</body>
+</html>
