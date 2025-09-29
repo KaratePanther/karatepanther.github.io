@@ -128,3 +128,33 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
 @media (min-width: 769px){
   .site-nav .burger{display:none}
 }
+
+/* --- HERO & CTA mobile fixes --- */
+.cta{
+  margin-top:16px;
+  display:flex;            /* make buttons a flex row */
+  gap:10px;                /* space between buttons */
+  flex-wrap:wrap;          /* allow wrap on small widths */
+  align-items:stretch;
+}
+.btn{ line-height:1.2 }    /* avoid weird overlap in iOS Safari */
+
+/* Make hero stack nicely on small screens */
+@media (max-width: 560px){
+  .profile{
+    flex-direction:column;     /* avatar above text */
+    align-items:center;
+    text-align:center;
+  }
+  .avatar{
+    width:120px; height:120px; /* smaller avatar on phones */
+  }
+  .cta{
+    flex-direction:column;     /* stack buttons vertically */
+    align-items:stretch;
+  }
+  .btn, .btn.alt{
+    width:100%;                /* full-width tap targets */
+    text-align:center;
+  }
+}
