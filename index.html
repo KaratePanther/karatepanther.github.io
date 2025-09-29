@@ -2,159 +2,262 @@
 <html lang="en">
 <head>
   <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-LN5WKNMNR1');
-</script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-LN5WKNMNR1');
+  </script>
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Anton Ko — Product & Growth</title>
-  <meta name="description" content="Anton Ko — Product & Growth. Notes, projects, and small web experiments.">
+  <title>Anton Ko — Product Manager & Growth</title>
+  <meta name="description" content="Product Manager focused on growth experimentation, data-informed decisions, and shipping outcomes. Based in Italy, open to remote/hybrid EU roles.">
   <link rel="icon" href="favicon.ico">
+  <link rel="canonical" href="https://antonko.com/">
+  <!-- Open Graph / Twitter -->
+  <meta property="og:title" content="Anton Ko — Product Manager & Growth">
+  <meta property="og:description" content="I design experiments and ship outcomes. Case studies, experience, and contact.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://antonko.com/">
+  <meta property="og:image" content="https://antonko.com/anton-ko.jpeg">
+  <meta name="twitter:card" content="summary_large_image">
+
   <link rel="stylesheet" href="style.css">
+
+  <!-- Schema: Person -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Person",
+    "name":"Anton Ko",
+    "jobTitle":"Product Manager",
+    "image":"https://antonko.com/anton-ko.jpeg",
+    "url":"https://antonko.com/",
+    "sameAs":[
+      "https://www.linkedin.com/in/anton-korolev",
+      "https://github.com/KaratePanther",
+      "https://www.tiktok.com/@antonko.vlog"
+    ],
+    "address":{"@type":"PostalAddress","addressCountry":"IT","addressRegion":"Veneto"}
+  }
+  </script>
 </head>
 <body>
   <div id="nav"></div>
-<script>
-  (async () => {
-    const mount = document.getElementById("nav");
-    const html = await fetch("/nav.html").then(r => r.text());
-    mount.innerHTML = html;
+  <script>
+    (async () => {
+      const mount = document.getElementById("nav");
+      const html = await fetch("/nav.html").then(r => r.text());
+      mount.innerHTML = html;
 
-    // init hamburger + active link
-    const nav = mount.querySelector(".site-nav");
-    const btn = nav.querySelector(".burger");
-    const list = nav.querySelector("#nav-links");
-    const mq = window.matchMedia("(max-width: 768px)");
+      // init hamburger + active link
+      const nav = mount.querySelector(".site-nav");
+      const btn = nav.querySelector(".burger");
+      const list = nav.querySelector("#nav-links");
+      const mq = window.matchMedia("(max-width: 768px)");
 
-    // highlight current page
-    const here = location.pathname.replace(/index\.html$/, "/");
-    nav.querySelectorAll(".links a").forEach(a => {
-      const href = a.getAttribute("href");
-      if (href === here) a.classList.add("active");
-    });
+      const here = location.pathname.replace(/index\.html$/, "/");
+      nav.querySelectorAll(".links a").forEach(a => {
+        const href = a.getAttribute("href");
+        if (href === here) a.classList.add("active");
+      });
 
-    const setState = () => {
-      const mobile = mq.matches;
-      list.hidden = mobile;
-      btn?.setAttribute("aria-expanded", (!mobile).toString());
-    };
-    setState();
+      const setState = () => {
+        const mobile = mq.matches;
+        if (list) list.hidden = mobile;
+        if (btn) btn.setAttribute("aria-expanded", (!mobile).toString());
+      };
+      setState();
 
-    btn?.addEventListener("click", () => {
-      const expanded = btn.getAttribute("aria-expanded") === "true";
-      btn.setAttribute("aria-expanded", (!expanded).toString());
-      list.hidden = expanded;
-    });
+      btn?.addEventListener("click", () => {
+        const expanded = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", (!expanded).toString());
+        list.hidden = expanded;
+      });
 
-    list?.addEventListener("click", e => {
-      if (mq.matches && e.target.tagName === "A") {
-        btn.setAttribute("aria-expanded", "false");
-        list.hidden = true;
-      }
-    });
+      list?.addEventListener("click", e => {
+        if (mq.matches && e.target.tagName === "A") {
+          btn.setAttribute("aria-expanded", "false");
+          list.hidden = true;
+        }
+      });
 
-    mq.addEventListener("change", setState);
-  })();
-</script>
+      mq.addEventListener("change", setState);
+    })();
+  </script>
 
   <header class="site">
     <div class="container hero">
-  
       <div class="profile">
-        <img src="anton-ko.jpeg" alt="Anton Ko" class="avatar" width="108" height="108">
+        <img src="anton-ko.jpeg" alt="Portrait of Anton Ko" class="avatar" width="160" height="160" loading="eager" decoding="async">
         <div>
           <h1>Anton Ko</h1>
-          <p class="tagline">
-            Product Manager and Growth enthusiast.<br>
-            Designing experiments that drive impact.
-          </p>
-  
-          <!-- One clear CTA under the tagline -->
+          <p class="tagline">Product Manager focused on growth, experiments, and shipping outcomes.</p>
+          <p class="muted">Italy · Open to remote/hybrid across EU</p>
           <div class="cta">
-            <a class="btn" href="contact.html">Let's talk</a>
+            <a class="btn" href="contact.html" aria-label="Contact Anton">Let’s talk</a>
+            <a class="btn alt" href="Anton-Ko-CV.pdf" target="_blank" rel="noopener">Download CV</a>
           </div>
         </div>
       </div>
     </div>
   </header>
-  
 
   <main class="container">
-    <!-- Now section -->
-    <section class="card">
-      <h2>Now</h2>
+
+    <!-- Highlights -->
+    <section class="card" aria-labelledby="highlights">
+      <div class="flexhead">
+        <h2 id="highlights">Highlights</h2>
+        <span class="note">Data-informed, outcome-driven</span>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><strong>+XX%</strong><br><span class="muted">conversion lift from experiments</span></div>
+        <div class="kpi"><strong>€YYk</strong><br><span class="muted">incremental revenue unlocked</span></div>
+        <div class="kpi"><strong>ZZ</strong><br><span class="muted">experiments shipped in 12 months</span></div>
+      </div>
+    </section>
+
+    <!-- Case Studies -->
+    <section class="card" aria-labelledby="cases">
+      <div class="flexhead">
+        <h2 id="cases">Selected Case Studies</h2>
+        <a class="mini" href="cases.html">See all →</a>
+      </div>
+      <div class="grid case-grid">
+        <article class="case">
+          <h3>E-commerce relaunch for premium retail</h3>
+          <p class="muted">Context</p>
+          <p>Family-run premium retail needed online growth. I led backlog, vendor coordination, analytics, and an experiment cadence.</p>
+          <p class="muted">Outcome</p>
+          <ul class="bullets">
+            <li>Checkout drop-off ↓ <strong>XX%</strong></li>
+            <li>Time-to-ship features ↓ <strong>YY%</strong></li>
+            <li>Organic traffic ↑ <strong>ZZ%</strong> (baseline → 6 months)</li>
+          </ul>
+          <a class="link" href="case-ecommerce.html">Read case →</a>
+        </article>
+
+        <article class="case">
+          <h3>Zero-to-one KPI dashboard</h3>
+          <p class="muted">Context</p>
+          <p>Built a BI dashboard to align ops, marketing, and product on weekly decisions.</p>
+          <p class="muted">Outcome</p>
+          <ul class="bullets">
+            <li>Lead time ↓ <strong>XX%</strong></li>
+            <li>Ad spend ROI visibility across channels</li>
+            <li>Weekly experiment reviews adopted</li>
+          </ul>
+          <a class="link" href="case-bi-dashboard.html">Read case →</a>
+        </article>
+
+        <article class="case">
+          <h3>Acquisition → Retention flywheel</h3>
+          <p class="muted">Context</p>
+          <p>Designed onboarding & lifecycle messaging tests to improve early retention.</p>
+          <p class="muted">Outcome</p>
+          <ul class="bullets">
+            <li>D1 activation ↑ <strong>XX%</strong></li>
+            <li>First-purchase rate ↑ <strong>YY%</strong></li>
+          </ul>
+          <a class="link" href="case-flywheel.html">Read case →</a>
+        </article>
+      </div>
+    </section>
+
+    <!-- Professional Bio -->
+    <section class="card" aria-labelledby="bio">
+      <h2 id="bio">About</h2>
+      <p>I’m a Product Manager with a growth toolkit: quick discovery, lean experiments, and a bias to ship. I’ve led e-commerce and ops initiatives for a premium retail brand and build lightweight tools to speed decisions—dashboards, small automations, and mini web apps. Based in Northern Italy, I work comfortably with distributed teams and prioritize clear comms, clean metrics, and frequent iteration.</p>
+    </section>
+
+    <!-- Experience Snapshot -->
+    <section class="card" aria-labelledby="xp">
+      <div class="flexhead">
+        <h2 id="xp">Experience (Snapshot)</h2>
+        <a class="mini" href="Anton-Ko-CV.pdf" target="_blank" rel="noopener">Full CV →</a>
+      </div>
       <ul class="bullets">
-        <li>🎯 Exploring remote/hybrid Product Manager roles across EU</li>
-        <li>💻 Learning coding and tech by making small apps and games</li>
-        <li>🏐 Training hard at volleyball and enjoying life in Northern Italy</li>
+        <li><strong>Product / Growth — Di Murano</strong> · Led site relaunch; owned backlog, vendor mgmt, analytics; introduced weekly experiment reviews; improved funnel metrics (XX→YY).</li>
+        <li><strong>Ops & Marketing</strong> · Coordinated offline/online stock sync; set up basic attribution; launched targeted campaigns.</li>
+        <li><strong>Side builds</strong> · Prototyped internal tools and micro-apps to reduce manual work and validate ideas faster.</li>
       </ul>
     </section>
 
-    <!-- Projects -->
-    <section class="card">
-      <div class="flexhead">
-        <h2>Projects</h2>
-        <span class="note">Ship small, ship often</span>
+    <!-- Skills -->
+    <section class="card" aria-labelledby="skills">
+      <h2 id="skills">Skills & Tools</h2>
+      <p class="note">What I use most</p>
+      <div class="chips" aria-label="Product">
+        <span class="chip">Product discovery</span>
+        <span class="chip">Experiment design</span>
+        <span class="chip">Backlog & delivery</span>
       </div>
-      <div class="grid">
-        <article class="tile">
-          <h3>Snake 🐍</h3>
-          <p>A classic on HTML Canvas. Arrow keys/WASD to move.</p>
-          <a class="link" href="snake.html">Play →</a>
-        </article>
-        <article class="tile">
-          <h3>Multiply Game ✖️</h3>
-          <p>Quick math for kids: hearts, timer, and a prize emoji.</p>
-          <a class="link" href="multiply.html">Play →</a>
-        </article>
-        <article class="tile disabled">
-          <h3>Tic‑Tac‑Toe</h3>
-          <p>Coming soon — a simple JS logic exercise.</p>
-          <span class="pill">soon</span>
-        </article>
+      <div class="chips" aria-label="Growth">
+        <span class="chip">Funnel analytics</span>
+        <span class="chip">CRO</span>
+        <span class="chip">Lifecycle</span>
       </div>
-    </section>
-
-    <!-- Notes / Blog (future) -->
-    <section class="card">
-      <div class="flexhead">
-        <h2>Notes & Ideas</h2>
-        <a class="mini" href="#">See all notes →</a>
+      <div class="chips" aria-label="Data & Tech">
+        <span class="chip">GA4</span>
+        <span class="chip">Looker Studio</span>
+        <span class="chip">SQL (basics)</span>
+        <span class="chip">HTML/CSS/JS</span>
+        <span class="chip">GitHub Pages</span>
       </div>
-      <div class="grid notes">
-        <article class="note">
-          <h3>Goal Discovery > Goal Setting</h3>
-          <p>Why discovering goals you truly own beats forcing goals the world imposes.</p>
-        </article>
-        <article class="note">
-          <h3>2‑Minute Hack vs Procrastination</h3>
-          <p>Break the inertia with a ridiculously small first step.</p>
-        </article>
-        <article class="note">
-          <h3>Relieve Your Worries</h3>
-          <p>Simple prompts to reframe anxious loops in seconds.</p>
-        </article>
+      <div class="chips" aria-label="Collab">
+        <span class="chip">Jira</span>
+        <span class="chip">Asana</span>
+        <span class="chip">Trello</span>
+        <span class="chip">Notion / Obsidian</span>
       </div>
     </section>
 
-    <!-- Content / Socials -->
-    <section class="card">
-      <h2>Content & Socials</h2>
-      <p>I share practical product thinking and personal growth tactics:</p>
+    <!-- Profiles / Contact -->
+    <section class="card" aria-labelledby="profiles">
+      <div class="flexhead">
+        <h2 id="profiles">Profiles</h2>
+        <span class="note">Find me online</span>
+      </div>
       <div class="chips">
-        <a class="chip" href="https://www.tiktok.com/" target="_blank" rel="noopener">TikTok</a>
-        <a class="chip" href="https://www.linkedin.com/" target="_blank" rel="noopener">LinkedIn</a>
-        <a class="chip" href="https://www.threads.net/" target="_blank" rel="noopener">Threads</a>
+        <a class="chip" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener">LinkedIn</a>
         <a class="chip" href="https://github.com/KaratePanther" target="_blank" rel="noopener">GitHub</a>
+        <a class="chip" href="/socials">Socials & Labs</a>
       </div>
     </section>
+
+    <section class="card" aria-labelledby="contact">
+      <h2 id="contact">Contact</h2>
+      <p>Best way is via LinkedIn or email.</p>
+      <p>
+        <a class="btn" href="contact.html">Contact form</a>
+        <span class="pill">or</span>
+        <span id="e"></span>
+      </p>
+      <script>
+        // Light email obfuscation
+        (function(){
+          const u = "antonko.hq", d = "gmail.com";
+          const el = document.getElementById("e");
+          el.innerHTML = '<a href="mailto:'+u+'@'+d+'">'+u+'@'+d+'</a>';
+        })();
+      </script>
+    </section>
+
   </main>
-  
+
+  <footer class="container footer">
+    <div class="footwrap">
+      <small>© <span id="y"></span> Anton Ko · Northern Italy</small>
+      <nav class="footnav">
+        <a href="/about.html">About</a>
+        <a href="/cases.html">Case Studies</a>
+        <a href="/socials">Socials</a>
+      </nav>
+    </div>
+    <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+  </footer>
 </body>
 </html>
