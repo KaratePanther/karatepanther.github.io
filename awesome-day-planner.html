@@ -7,7 +7,6 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-LN5WKNMNR1');
 </script>
 
@@ -44,7 +43,7 @@
     font-weight:700;text-decoration:none;cursor:pointer}
   .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
   .btn.good{background:var(--ok);border-color:#45d07a;color:#062213}
-  .btn.warn{background:var(--warn);border-color:#f7b94e;color:#1d1202}
+  .btn.warn{background:var(--warn);border-color:#f59e0b;color:#1d1202}
   .progress{height:10px;background:#0b1330;border:1px solid var(--line);border-radius:999px;overflow:hidden}
   .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#b0d0ff)}
   .note{font-size:14px;color:var(--muted)}
@@ -55,6 +54,16 @@
   .finish{font-size:20px;text-align:center;padding:24px}
   .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;border:1px solid var(--line);
     background:#0c1228;border-radius:6px;padding:2px 6px}
+  /* Nice indent for the journaling textarea inside the list item */
+  .journal-box{margin:8px 0 0 0}
+  .journal-box textarea{
+    width:100%;
+    background:#0c1228;
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px;
+  }
 </style>
 </head>
 <body>
@@ -70,12 +79,11 @@
         <h1>Plan an Awesome Day</h1>
         <p style="margin-top:-4px;font-size:18px;font-weight:500;color:var(--muted)">
           A simple checklist to design a great day.
-        </p>        
+        </p>
         <p class="muted">
           Pick the steps you want to include, then press <em>Start</em>.<br>
           You’ll move through each section with gentle prompts.
         </p>
-        
       </div>
       <div class="steps" role="group" aria-label="Choose steps">
         <label class="step"><input type="checkbox" value="mood" checked> Mood Setup</label>
@@ -130,6 +138,8 @@ const QUESTIONS = [
   "🗓️ What would tomorrow-you want today-you to do?"
 ];
 
+const JOURNAL_TEXT = "📔 Journaling — Write a few words about your thoughts, problems, and ideas.";
+
 const CONTENT = {
   mood: {
     title: "Mood Setup",
@@ -138,8 +148,10 @@ const CONTENT = {
         "🎧 Quiet Focus — Headphones on, find a calm spot",
         "⏲️ Timer — 25–50 mins, with active breaks",
         "🧠 Good Mood — Relax, it’s all made up. What would an awesome-you do?",
-        "🗒️ Notebook — Prepare a simple way to write tasks"
+        "🗒️ Notebook — Prepare a simple way to write tasks",
+        JOURNAL_TEXT // single journaling item (no duplicate elsewhere)
       ]}
+      // No randomQ in Mood
     ]
   },
   core: {
@@ -149,11 +161,12 @@ const CONTENT = {
       type: "list",
       title: "Core Moves",
       items: [
-        "Zoom out: What do you want most in life? What's your strategy / context?",
-        "Notebook: Capture essential tasks, ask key questions to focus."
+        "🌍 Zoom out: What do you want most in life? What's your strategy / context?",
+        "🗒️ Notebook: Capture essential tasks, ask key questions to focus.",
+        "📅 Calendar: Make sure your tasks fit your time and energy, with some buffer space."
       ]
     },
-    { type: "randomQ" }
+    { type: "randomQ" } // Key Question stays here
   ]
 },
   bonus: {
@@ -193,7 +206,7 @@ $("#today").textContent = today;
 let flow = {
   order: [],
   index: 0,
-  notes: { mood: [], core: [], bonus: [] }, // what user ticks/inputs
+  notes: { mood: [], core: [], bonus: [] }, // user ticks/inputs
   skipped: new Set()
 };
 
@@ -224,62 +237,116 @@ function renderStep(){
       div.innerHTML = block.html;
       body.appendChild(div);
     }
+
     if(block.type === "list"){
       const box = document.createElement("div");
       const h = document.createElement("h3"); h.textContent = block.title; box.appendChild(h);
       const ul = document.createElement("ul"); ul.className = "list-check";
+
       block.items.forEach(item=>{
         const id = makeId();
         const li = document.createElement("li");
         li.style.margin = "6px 0";
-        li.innerHTML = `<label><input type="checkbox" id="${id}"> ${item}</label>`;
-        ul.appendChild(li);
-        // restore checked from notes
-        (flow.notes[key]||[]).forEach(saved=>{
-          if(saved.text===item && saved.done) li.querySelector("input").checked = true;
-        });
-        // handle change
-        ul.addEventListener("change", e=>{
-          if(e.target && e.target.type==="checkbox"){
-            const text = item;
-            const done = e.target.checked;
-            const arr = flow.notes[key]||[];
-            const idx = arr.findIndex(x=>x.text===text);
-            if(idx>-1){ arr[idx].done = done; }
-            else arr.push({ text, done });
-            flow.notes[key] = arr;
+
+        // Build label
+        const label = document.createElement("label");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = id;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(" " + item));
+        li.appendChild(label);
+
+        // For journaling: add textarea right under the label, always visible
+        let isJournal = (key === "mood" && item === JOURNAL_TEXT);
+        let journalTA = null;
+
+        if (isJournal) {
+          const journalWrap = document.createElement("div");
+          journalWrap.className = "journal-box";
+
+          journalTA = document.createElement("textarea");
+          journalTA.rows = 5;
+          journalTA.placeholder = "A few lines is enough…";
+
+          // Restore previously typed journal note (if any)
+          const existing = (flow.notes[key] || []).find(x => x.kind === "journal");
+          if (existing) journalTA.value = existing.text || "";
+
+          // Auto-check if content exists on load
+          if (journalTA.value && !checkbox.checked) {
+            checkbox.checked = true;
+            upsertChecklistNote(key, item, true);
           }
-        }, { once:false });
+
+          // Save journal input + auto-check when typing non-empty
+          journalTA.addEventListener("input", () => {
+            upsertJournalNote(key, journalTA.value);
+            if (journalTA.value && !checkbox.checked) {
+              checkbox.checked = true;
+              upsertChecklistNote(key, item, true);
+            }
+          });
+
+          journalWrap.appendChild(journalTA);
+          li.appendChild(journalWrap);
+        }
+
+        ul.appendChild(li);
+
+        // Restore checked from notes (for any checklist item)
+        const savedArr = flow.notes[key]||[];
+        const saved = savedArr.find(x=>x.text===item);
+        if(saved?.done){ checkbox.checked = true; }
+
+        // Handle change (manual tick/untick)
+        checkbox.addEventListener("change", () => {
+          upsertChecklistNote(key, item, checkbox.checked);
+        });
       });
+
       box.appendChild(ul);
       body.appendChild(box);
     }
-    if(block.type === "randomQ"){
-      const box = document.createElement("div");
-      const h = document.createElement("h3"); h.textContent = "Key Question";
-      const q = document.createElement("div"); q.className = "q"; q.textContent = "Press the button to draw a question.";
-      const row = document.createElement("div"); row.className = "btns";
-      const draw = document.createElement("button"); draw.className="btn"; draw.textContent = "Draw a random question";
-      draw.onclick = ()=>{
-        const pick = QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)];
-        q.textContent = pick;
-      };
-      const addNote = document.createElement("button"); addNote.className="btn ghost"; addNote.textContent = "Add a quick note";
-      const ta = document.createElement("textarea");
-      ta.rows = 3; ta.placeholder = "Optional: jot thoughts here…";
-      ta.style.width="100%"; ta.style.background="#0c1228"; ta.style.color="var(--ink)";
-      ta.style.border="1px solid var(--line)"; ta.style.borderRadius="10px"; ta.style.padding="10px"; ta.style.marginTop="8px";
-      ta.addEventListener("input", ()=>{
-        flow.notes[key] = (flow.notes[key]||[]).filter(x=>x.text || x.done); // keep checklist entries
-        flow.notes[key].push({ text: ta.value, done:false, kind:"note" });
-      });
-      addNote.onclick = ()=> ta.focus();
 
-      row.appendChild(draw);
-      row.appendChild(addNote);
-      box.appendChild(h); box.appendChild(q); box.appendChild(row); box.appendChild(ta);
-      body.appendChild(box);
-    }
+    if(block.type === "randomQ"){
+  const box = document.createElement("div");
+  const h = document.createElement("h3"); h.textContent = "Key Question";
+  const q = document.createElement("div"); q.className = "q"; q.textContent = "Press the button to draw a question.";
+  const row = document.createElement("div"); row.className = "btns";
+  const draw = document.createElement("button"); draw.className="btn"; draw.textContent = "Draw a random question";
+  draw.onclick = ()=>{
+    const pick = QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)];
+    q.textContent = pick;
+  };
+
+  const addNote = document.createElement("button"); addNote.className="btn ghost"; addNote.textContent = "Add a quick note";
+
+  const ta = document.createElement("textarea");
+  ta.rows = 3; ta.placeholder = "Optional: jot thoughts here…";
+  ta.style.width="100%"; ta.style.background="#0c1228"; ta.style.color="var(--ink)";
+  ta.style.border="1px solid var(--line)"; ta.style.borderRadius="10px"; ta.style.padding="10px"; ta.style.marginTop="8px";
+
+  // ✅ Restore previously typed note (if any)
+  const existingNote = (flow.notes[key] || []).find(x => x.kind === "note");
+  if (existingNote) ta.value = existingNote.text || "";
+
+  // ✅ Update-or-insert (no more pushing a new entry each keystroke)
+  ta.addEventListener("input", ()=>{
+    const arr = flow.notes[key] || [];
+    const i = arr.findIndex(x => x.kind === "note");
+    const entry = { text: ta.value, done:false, kind:"note" };
+    if (i > -1) arr[i] = entry; else arr.push(entry);
+    flow.notes[key] = arr;
+  });
+
+  addNote.onclick = ()=> ta.focus();
+
+  row.appendChild(draw);
+  row.appendChild(addNote);
+  box.appendChild(h); box.appendChild(q); box.appendChild(row); box.appendChild(ta);
+  body.appendChild(box);
+}
   });
 
   const host = $("#stepBody");
@@ -287,13 +354,29 @@ function renderStep(){
   host.appendChild(body);
 
   // buttons visibility + labels
-if(flow.index === 0){
-  $("#backBtn").textContent = "Restart";
-} else {
-  $("#backBtn").textContent = "Back";
+  if(flow.index === 0){
+    $("#backBtn").textContent = "Restart";
+  } else {
+    $("#backBtn").textContent = "Back";
+  }
+  $("#backBtn").disabled = false;
+  $("#nextBtn").textContent = (flow.index===flow.order.length-1) ? "Finish" : "Next";
 }
-$("#backBtn").disabled = false;
-$("#nextBtn").textContent = (flow.index===flow.order.length-1) ? "Finish" : "Next";
+
+/* -------- Small helpers to keep code tidy -------- */
+function upsertChecklistNote(key, text, done){
+  const arr = flow.notes[key] || [];
+  const idx = arr.findIndex(x=>x.text===text);
+  if(idx>-1){ arr[idx].done = done; }
+  else arr.push({ text, done });
+  flow.notes[key] = arr;
+}
+function upsertJournalNote(key, value){
+  const arr = flow.notes[key] || [];
+  const i = arr.findIndex(x => x.kind === "journal");
+  const entry = { kind: "journal", text: value, done: false };
+  if (i > -1) arr[i] = entry; else arr.push(entry);
+  flow.notes[key] = arr;
 }
 
 function makeSummary(){
@@ -306,7 +389,8 @@ function makeSummary(){
     const items = flow.notes[key]||[];
     if(items.length===0){ lines.push("• (no notes)"); }
     items.forEach(x=>{
-      if(x.kind==="note"){ lines.push(`📝 ${x.text}`); }
+      // textual notes (both "note" and "journal")
+      if(x.kind==="note" || x.kind==="journal"){ lines.push(`📝 ${x.text}`); }
       else { lines.push(`${x.done ? "✅" : "⬜️"} ${x.text}`); }
     });
     if(flow.skipped.has(key)) lines.push("⏭️ Step was skipped.");
@@ -392,5 +476,3 @@ document.addEventListener("keydown", (e)=>{
 
 </body>
 </html>
-
-
