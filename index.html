@@ -240,14 +240,17 @@
       <p>
         <a class="btn" href="contact.html">Contact form</a>
         <span class="pill">or</span>
-        <span id="e"></span>
+        <span id="email-slot"></span>
       </p>
       <script>
-        // Light email obfuscation
         (function(){
-          const u = "antonko.hq", d = "gmail.com";
-          const el = document.getElementById("e");
-          el.innerHTML = '<a href="mailto:'+u+'@'+d+'">'+u+'@'+d+'</a>';
+          var u='antonko.hq', d='gmail.com';
+          var addr = u + '@' + d;
+          var a = document.createElement('a');
+          a.href = 'mailto:' + addr;
+          a.textContent = addr;
+          a.rel = 'noopener noreferrer';
+          document.getElementById('email-slot').appendChild(a);
         })();
       </script>
     </section>
