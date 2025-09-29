@@ -24,36 +24,32 @@ a{color:inherit}
 }
 
 /* Site header */
-.site {
-  border-bottom: 1px solid var(--line);
-}
-
-.hero {
-  padding-top: 12px; /* was 26px, reduced for tighter look with topnav */
-  padding-bottom: 12px;
-}
+.site { border-bottom: 1px solid var(--line); }
+.hero { padding-top: 12px; padding-bottom: 12px; }
 
 h1{font-size:36px;line-height:1.1;margin:0 0 8px}
-.tagline{margin:0 0 14px;color:var(--muted)}
+h2{margin:0 0 8px}
+h3{margin:0 0 6px}
+.tagline{margin:0 0 6px;color:var(--muted)}
+.muted{color:var(--muted);}
 
 /* Profile with avatar next to name/tagline */
 .profile {
   display: flex;
-  align-items: flex-start; /* instead of center */
+  align-items: flex-start;
   gap: 12px;
 }
-
 .avatar {
   width: 160px;
   height: 160px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid var(--line);
-  margin-top: 0px; /* adjust until it feels right */
+  margin-top: 0px;
 }
 
 /* CTA */
-.cta{margin-top:24px}
+.cta{margin-top:16px}
 .btn{
   background:var(--accent);
   color:#fff;
@@ -62,12 +58,24 @@ h1{font-size:36px;line-height:1.1;margin:0 0 8px}
   border-radius:12px;
   text-decoration:none;
   font-weight:700;
+  display:inline-block;
 }
 .btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
+.pill{
+  display:inline-block;
+  background:#eef2f7;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:2px 8px;
+  font-size:12px;
+  color:#445;
+  margin:0 8px;
+}
 
 /* Cards */
 main .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);margin:16px 0}
 .bullets{padding-left:18px;margin:0}
+.bullets li{margin:4px 0}
 
 /* Flex heading row */
 .flexhead{display:flex;justify-content:space-between;align-items:center;gap:10px}
@@ -75,22 +83,48 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
 
 /* Grids */
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:8px}
-.tile,.note{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
-.tile h3{margin:0 0 4px}
-.tile p{margin:0 0 8px;color:var(--muted)}
-.tile .link{text-decoration:none;border-bottom:1px solid #d5dbe6;padding-bottom:2px}
-.tile.disabled{opacity:.6;position:relative}
-.tile.disabled .pill{position:absolute;top:10px;right:10px;background:#eef2f7;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:12px;color:#445}
-.grid.notes .note h3{margin:0 0 6px}
-.grid.notes .note p{margin:0;color:var(--muted)}
+
+/* Case studies */
+.case-grid .case{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.case-grid .case .link{text-decoration:none;border-bottom:1px solid #d5dbe6;padding-bottom:2px}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:8px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.kpi strong{font-size:20px}
 
 /* Chips */
-.chips{display:flex;gap:10px;flex-wrap:wrap}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
 .chip{display:inline-block;background:#fff;border:1px solid var(--line);padding:8px 12px;border-radius:999px;text-decoration:none}
 
 /* Footer */
-.footer{border-top:1px solid var(--line);margin-top:18px}
+.footer{border-top:1px solid var(--line);margin-top:18px;padding-top:10px;padding-bottom:20px}
 .footwrap{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .footnav a{text-decoration:none;opacity:.85;margin-right:12px}
 .footnav a:hover{opacity:1}
 .sig{font-family:'Brush Script MT','Comic Sans MS',cursive;opacity:.85}
+
+/* NAV (from nav.html <style>) */
+.site-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
+.site-nav .brand{font-weight:800;text-decoration:none}
+.site-nav .links{display:flex;gap:14px;list-style:none;margin:0;padding:0}
+.site-nav .links a{text-decoration:none}
+.site-nav .links a.active{font-weight:700; text-decoration:underline}
+
+/* Mobile nav */
+@media (max-width: 768px){
+  .site-nav{position:relative}
+  .site-nav .burger{display:inline-block;border:1px solid var(--line);background:transparent;border-radius:10px;padding:8px 10px;cursor:pointer;font-size:18px}
+  .site-nav .links{
+    position:absolute; top:100%; right:0; left:0;
+    display:block; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:10px; margin-top:8px;
+  }
+  .site-nav .links[hidden]{display:none}
+  .site-nav .links li{padding:6px 2px}
+}
+
+/* Desktop nav */
+@media (min-width: 769px){
+  .site-nav .burger{display:none}
+}
