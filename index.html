@@ -93,23 +93,6 @@
       mq.addEventListener("change", setState);
     })();
   </script>
-  
-  <script>
-    // Determine theme: manual override > system preference
-    (function(){
-      const saved = localStorage.getItem('theme');         // "light" | "dark" | null
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const theme = saved || (systemDark ? 'dark' : 'light');
-      document.documentElement.setAttribute('data-theme', theme);
-  
-      // Update when system theme changes (only if no manual override)
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)=>{
-        if (!localStorage.getItem('theme')) {
-          document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-        }
-      });
-    })();
-  </script>
 
   <header class="site">
     <div class="container hero">
