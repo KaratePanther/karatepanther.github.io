@@ -1,6 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light"> <!-- default; will be changed by the bootstrap -->
 <head>
+  <!-- Theme bootstrap: run FIRST so CSS sees the attribute -->
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem('theme');            // "light" | "dark" | null
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = saved || (systemDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+
+        // Track system changes only when there's no manual override
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+          if (!localStorage.getItem('theme')) {
+            document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+          }
+        });
+      } catch (_) {}
+    })();
+  </script>
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
   <script>
@@ -24,29 +43,12 @@
   <meta property="og:image" content="https://antonko.com/anton-ko.jpeg">
   <meta name="twitter:card" content="summary_large_image">
 
-  <link rel="stylesheet" href="style.css">
-
+  <!-- Tell the UA we support both; tint the URL bar -->
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
 
-  <!-- Schema: Person -->
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"Person",
-    "name":"Anton Ko",
-    "jobTitle":"Product Manager",
-    "image":"https://antonko.com/anton-ko.jpeg",
-    "url":"https://antonko.com/",
-    "sameAs":[
-      "https://www.linkedin.com/in/anton-korolev",
-      "https://github.com/KaratePanther",
-      "https://www.tiktok.com/@antonko.vlog"
-    ],
-    "address":{"@type":"PostalAddress","addressCountry":"IT","addressRegion":"Veneto"}
-  }
-  </script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="nav"></div>
