@@ -1,169 +1,11 @@
-/* Minimal, modern layout for Anton's homepage */
-:root {
-  --bg:#ffffff;
-  --ink:#0f172a;
-  --muted:#475569;
-  --card:#f7f9fc;
-  --line:#e6ebf2;
-  --accent:#111827;
-  --accent-2:#1f2937;
-  --radius:18px;
-  --pad:20px;
-  --maxw:980px;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.6}
-a{color:inherit}
+/* ===== THEME VARS =====
+   - Uses system theme by default (prefers-color-scheme)
+   - If <html data-theme="dark|light"> is set by your script, that wins
+-------------------------------------------------------------- */
 
-/* Container with fluid side padding */
-.container{
-  max-width:var(--maxw);
-  margin:0 auto;
-  padding-left:clamp(16px, 5vw, 32px);
-  padding-right:clamp(16px, 5vw, 32px);
-}
-
-/* Site header */
-.site { border-bottom: 1px solid var(--line); }
-.hero { padding-top: 12px; padding-bottom: 12px; }
-
-h1{font-size:36px;line-height:1.1;margin:0 0 8px}
-h2{margin:0 0 8px}
-h3{margin:0 0 6px}
-.tagline{margin:0 0 6px;color:var(--muted)}
-.muted{color:var(--muted);}
-
-/* Profile with avatar next to name/tagline */
-.profile {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.avatar {
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid var(--line);
-  margin-top: 0px;
-}
-
-/* CTA */
-.cta{margin-top:16px}
-.btn{
-  background:var(--accent);
-  color:#fff;
-  border:1px solid var(--accent-2);
-  padding:10px 14px;
-  border-radius:12px;
-  text-decoration:none;
-  font-weight:700;
-  display:inline-block;
-}
-.btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
-.pill{
-  display:inline-block;
-  background:#eef2f7;
-  border:1px solid var(--line);
-  border-radius:999px;
-  padding:2px 8px;
-  font-size:12px;
-  color:#445;
-  margin:0 8px;
-}
-
-/* Cards */
-main .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);margin:16px 0}
-.bullets{padding-left:18px;margin:0}
-.bullets li{margin:4px 0}
-
-/* Flex heading row */
-.flexhead{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.note{color:var(--muted);font-size:14px}
-
-/* Grids */
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:8px}
-
-/* Case studies */
-.case-grid .case{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
-.case-grid .case .link{text-decoration:none;border-bottom:1px solid #d5dbe6;padding-bottom:2px}
-
-/* KPIs */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:8px}
-.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
-.kpi strong{font-size:20px}
-
-/* Chips */
-.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
-.chip{display:inline-block;background:#fff;border:1px solid var(--line);padding:8px 12px;border-radius:999px;text-decoration:none}
-
-/* Footer */
-.footer{border-top:1px solid var(--line);margin-top:18px;padding-top:10px;padding-bottom:20px}
-.footwrap{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-.footnav a{text-decoration:none;opacity:.85;margin-right:12px}
-.footnav a:hover{opacity:1}
-.sig{font-family:'Brush Script MT','Comic Sans MS',cursive;opacity:.85}
-
-/* NAV (from nav.html <style>) */
-.site-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
-.site-nav .brand{font-weight:800;text-decoration:none}
-.site-nav .links{display:flex;gap:14px;list-style:none;margin:0;padding:0}
-.site-nav .links a{text-decoration:none}
-.site-nav .links a.active{font-weight:700; text-decoration:underline}
-
-/* Mobile nav */
-@media (max-width: 768px){
-  .site-nav{position:relative}
-  .site-nav .burger{display:inline-block;border:1px solid var(--line);background:transparent;border-radius:10px;padding:8px 10px;cursor:pointer;font-size:18px}
-  .site-nav .links{
-    position:absolute; top:100%; right:0; left:0;
-    display:block; background:var(--card); border:1px solid var(--line);
-    border-radius:12px; padding:10px; margin-top:8px;
-  }
-  .site-nav .links[hidden]{display:none}
-  .site-nav .links li{padding:6px 2px}
-}
-
-/* Desktop nav */
-@media (min-width: 769px){
-  .site-nav .burger{display:none}
-}
-
-/* --- HERO & CTA mobile fixes --- */
-.cta{
-  margin-top:16px;
-  display:flex;            /* make buttons a flex row */
-  gap:10px;                /* space between buttons */
-  flex-wrap:wrap;          /* allow wrap on small widths */
-  align-items:stretch;
-}
-.btn{ line-height:1.2 }    /* avoid weird overlap in iOS Safari */
-
-/* Make hero stack nicely on small screens */
-@media (max-width: 560px){
-  .profile{
-    flex-direction:column;     /* avatar above text */
-    align-items:center;
-    text-align:center;
-  }
-  .avatar{
-    width:120px; height:120px; /* smaller avatar on phones */
-  }
-  .cta{
-    flex-direction:column;     /* stack buttons vertically */
-    align-items:stretch;
-  }
-  .btn, .btn.alt{
-    width:100%;                /* full-width tap targets */
-    text-align:center;
-  }
-}
-
-/* Tell the browser we support both themes */
-:root { color-scheme: light dark; }
-
-/* LIGHT (existing) */
-:root {
+/* Light defaults */
+:root{
+  color-scheme: light dark;
   --bg:#ffffff;
   --ink:#0f172a;
   --muted:#475569;
@@ -176,20 +18,7 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
   --maxw:980px;
 }
 
-/* DARK palette (matches your /socials look) */
-:root[data-theme="dark"]{
-  --bg:#0b1020;
-  --ink:#e8ecff;
-  --muted:#aab3d9;
-  --card:#121932;
-  --line:#233055;
-  --accent:#6ea8fe;     /* primary on dark */
-  --accent-2:#90c2ff;
-}
-
-/* (Optional) If you want automatic dark when user prefers and no manual override is set,
-   keep this media block – it acts only when there is no data-theme attribute.
-   It's safe to keep; the bootstrap script will set data-theme and override it anyway. */
+/* Dark via system preference (only when no manual data-theme is set) */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme]){
     --bg:#0b1020;
@@ -202,15 +31,135 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
   }
 }
 
-/* Everything below already exists in your CSS and will pick up the new vars */
-html,body{background:var(--bg);color:var(--ink)}
-.tagline,.note,.muted{color:var(--muted)}
-main .card{background:var(--card);border:1px solid var(--line)}
-.avatar{border:2px solid var(--line)}
-.btn{background:var(--accent);border:1px solid var(--accent-2)}
-.btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
+/* Dark via explicit attribute (wins over media query) */
+:root[data-theme="dark"]{
+  --bg:#0b1020;
+  --ink:#e8ecff;
+  --muted:#aab3d9;
+  --card:#121932;
+  --line:#233055;
+  --accent:#6ea8fe;
+  --accent-2:#90c2ff;
+}
+
+/* ===== BASE ===== */
+*{box-sizing:border-box}
+html,body{
+  margin:0;padding:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  line-height:1.6
+}
+a{color:inherit}
+
+/* Container */
+.container{
+  max-width:var(--maxw);
+  margin:0 auto;
+  padding-left:clamp(16px, 5vw, 32px);
+  padding-right:clamp(16px, 5vw, 32px);
+}
+
+/* Header */
 .site { border-bottom: 1px solid var(--line); }
-.footer{border-top:1px solid var(--line)}
-.chip{background:#fff;border:1px solid var(--line)}        /* if you use .chip in nav */
+.hero { padding-top: 12px; padding-bottom: 12px; }
+h1{font-size:36px;line-height:1.1;margin:0 0 8px}
+h2{margin:0 0 8px}
+h3{margin:0 0 6px}
+.tagline{margin:0 0 6px;color:var(--muted)}
+.muted{color:var(--muted)}
+
+/* Profile */
+.profile { display:flex; align-items:flex-start; gap:12px }
+.avatar {
+  width:160px; height:160px; border-radius:50%;
+  object-fit:cover; border:2px solid var(--line); margin-top:0
+}
+
+/* CTA */
+.cta{ margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:stretch }
+.btn{
+  background:var(--accent); color:#fff; border:1px solid var(--accent-2);
+  padding:10px 14px; border-radius:12px; text-decoration:none; font-weight:700;
+  display:inline-block; line-height:1.2
+}
+.btn.alt{ background:#fff; color:#111; border:1px solid var(--line) }
+.pill{
+  display:inline-block; background:#eef2f7; border:1px solid var(--line);
+  border-radius:999px; padding:2px 8px; font-size:12px; color:#445; margin:0 8px
+}
+
+/* Cards */
+main .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:var(--pad); margin:16px 0 }
+.bullets{ padding-left:18px; margin:0 }
+.bullets li{ margin:4px 0 }
+
+/* Flex heading row */
+.flexhead{ display:flex; justify-content:space-between; align-items:center; gap:10px }
+.note{ color:var(--muted); font-size:14px }
+
+/* Grids */
+.grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-top:8px }
+
+/* Case studies */
+.case-grid .case{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px }
+.case-grid .case .link{ text-decoration:none; border-bottom:1px solid #d5dbe6; padding-bottom:2px }
+
+/* KPIs */
+.kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:8px }
+.kpi{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px }
+.kpi strong{ font-size:20px }
+
+/* Chips */
+.chips{ display:flex; gap:10px; flex-wrap:wrap; margin-top:8px }
+.chip{ display:inline-block; background:#fff; border:1px solid var(--line); padding:8px 12px; border-radius:999px; text-decoration:none }
+
+/* Footer */
+.footer{ border-top:1px solid var(--line); margin-top:18px; padding-top:10px; padding-bottom:20px }
+.footwrap{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap }
+.footnav a{ text-decoration:none; opacity:.85; margin-right:12px }
+.footnav a:hover{ opacity:1 }
+.sig{ font-family:'Brush Script MT','Comic Sans MS',cursive; opacity:.85 }
+
+/* NAV (from nav.html) */
+.site-nav{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0 }
+.site-nav .brand{ font-weight:800; text-decoration:none }
+.site-nav .links{ display:flex; gap:14px; list-style:none; margin:0; padding:0 }
+.site-nav .links a{ text-decoration:none }
+.site-nav .links a.active{ font-weight:700; text-decoration:underline }
+
+/* Mobile nav */
+@media (max-width: 768px){
+  .site-nav{ position:relative }
+  .site-nav .burger{ display:inline-block; border:1px solid var(--line); background:transparent; border-radius:10px; padding:8px 10px; cursor:pointer; font-size:18px }
+  .site-nav .links{
+    position:absolute; top:100%; right:0; left:0;
+    display:block; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:10px; margin-top:8px;
+  }
+  .site-nav .links[hidden]{ display:none }
+  .site-nav .links li{ padding:6px 2px }
+}
+
+/* Phone hero layout */
+@media (max-width: 560px){
+  .profile{ flex-direction:column; align-items:center; text-align:center }
+  .avatar{ width:120px; height:120px }
+  .cta{ flex-direction:column; align-items:stretch }
+  .btn, .btn.alt{ width:100%; text-align:center }
+}
+
+/* ===== DARK COMPONENT TWEAKS ===== */
 :root[data-theme="dark"] .btn.alt{ background:transparent; color:var(--ink); }
-:root[data-theme="dark"] .chip{ background:#0e1430; border-color:var(--line); }
+:root[data-theme="dark"] .chip,
+:root[data-theme="dark"] .kpi,
+:root[data-theme="dark"] .case-grid .case{ background:#0e1430; border-color:var(--line) }
+
+/* Also make chips/kpis/cases follow system dark when no data-theme attr */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]) .btn.alt{ background:transparent; color:var(--ink); }
+  :root:not([data-theme]) .chip,
+  :root:not([data-theme]) .kpi,
+  :root:not([data-theme]) .case-grid .case{ background:#0e1430; border-color:var(--line) }
+}
