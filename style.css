@@ -158,3 +158,59 @@ main .card{background:var(--card);border:1px solid var(--line);border-radius:var
     text-align:center;
   }
 }
+
+/* Tell the browser we support both themes */
+:root { color-scheme: light dark; }
+
+/* LIGHT (existing) */
+:root {
+  --bg:#ffffff;
+  --ink:#0f172a;
+  --muted:#475569;
+  --card:#f7f9fc;
+  --line:#e6ebf2;
+  --accent:#111827;
+  --accent-2:#1f2937;
+  --radius:18px;
+  --pad:20px;
+  --maxw:980px;
+}
+
+/* DARK palette (matches your /socials look) */
+:root[data-theme="dark"]{
+  --bg:#0b1020;
+  --ink:#e8ecff;
+  --muted:#aab3d9;
+  --card:#121932;
+  --line:#233055;
+  --accent:#6ea8fe;     /* primary on dark */
+  --accent-2:#90c2ff;
+}
+
+/* (Optional) If you want automatic dark when user prefers and no manual override is set,
+   keep this media block – it acts only when there is no data-theme attribute.
+   It's safe to keep; the bootstrap script will set data-theme and override it anyway. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]){
+    --bg:#0b1020;
+    --ink:#e8ecff;
+    --muted:#aab3d9;
+    --card:#121932;
+    --line:#233055;
+    --accent:#6ea8fe;
+    --accent-2:#90c2ff;
+  }
+}
+
+/* Everything below already exists in your CSS and will pick up the new vars */
+html,body{background:var(--bg);color:var(--ink)}
+.tagline,.note,.muted{color:var(--muted)}
+main .card{background:var(--card);border:1px solid var(--line)}
+.avatar{border:2px solid var(--line)}
+.btn{background:var(--accent);border:1px solid var(--accent-2)}
+.btn.alt{background:#fff;color:#111;border:1px solid var(--line)}
+.site { border-bottom: 1px solid var(--line); }
+.footer{border-top:1px solid var(--line)}
+.chip{background:#fff;border:1px solid var(--line)}        /* if you use .chip in nav */
+:root[data-theme="dark"] .btn.alt{ background:transparent; color:var(--ink); }
+:root[data-theme="dark"] .chip{ background:#0e1430; border-color:var(--line); }
