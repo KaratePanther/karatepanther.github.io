@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Cats Corched Earth 😼</title>
+<style>
+  :root{
+    --bg:#0b1020; --card:#121932; --ink:#e8ecff; --muted:#aab3d9;
+    --line:#233055; --accent:#6ea8fe; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+    --pad:12px; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:linear-gradient(180deg,#0b1020,#0e1430);color:var(--ink);
+    font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;height:100%}
+  .wrap{max-width:980px;margin:0 auto;padding:10px}
+  .hud{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-bottom:8px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad)}
+  .left .row,.right .row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+  .title{font-weight:700; letter-spacing:.3px}
+  .turn{font-weight:700}
+  .btn{appearance:none;border:1px solid var(--line);background:var(--accent);color:#081225;
+    font-weight:700;border-radius:12px;padding:10px 14px;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  input[type="range"]{width:100%}
+  canvas{display:block;width:100%;height:auto;border-radius:14px;border:1px solid var(--line);touch-action:none}
+  .meter{height:8px;background:#1a2346;border-radius:99px;overflow:hidden}
+  .bar{height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444)}
+  .small{color:var(--muted);font-size:12px}
+  .center{text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hud">
+    <div class="panel left">
+      <div class="title">Player 1 😼</div>
+      <div class="row">
+        <span>Angle</span><input id="angle" type="range" min="0" max="180" value="45"><span id="angleVal">45°</span>
+      </div>
+      <div class="row">
+        <span>Power</span><input id="power" type="range" min="10" max="100" value="60"><span id="powerVal">60</span>
+      </div>
+      <div class="row">
+        <span>Health</span>
+        <div class="meter"><div id="hp1" class="bar" style="width:100%"></div></div>
+        <span id="hp1v">100%</span>
+      </div>
+    </div>
+
+    <div class="panel center">
+      <div class="title">Cats Corched Earth</div>
+      <div class="small">Turn: <span id="turn" class="turn">P1</span></div>
+      <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button id="fire" class="btn">FIRE 🔥</button>
+        <button id="new" class="btn" style="background:#a78bfa">New Match</button>
+      </div>
+      <div class="small" style="margin-top:6px">Tips: ←/→ angle, ↑/↓ power, Space fire</div>
+    </div>
+
+    <div class="panel right">
+      <div class="title">Player 2 😺</div>
+      <div class="row">
+        <span>Wind</span>
+        <div class="meter" title="Wind affects shots a little"><div id="windbar" class="bar" style="width:50%"></div></div>
+        <span id="windVal" title="Negative = left, Positive = right">0</span>
+      </div>
+      <div class="row">
+        <span>Health</span>
+        <div class="meter"><div id="hp2" class="bar" style="width:100%"></div></div>
+        <span id="hp2v">100%</span>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="c" width="900" height="520"></canvas>
+</div>
+
+<script>
+(() => {
+  // ---------- Canvas & State ----------
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d');
+
+  const W = cvs.width, H = cvs.height;
+  const G = 0.20;                 // gravity
+  const WIND_MAX = 0.05;          // wind horizontal accel
+  const EXPLOSION_R = 34;         // crater radius in px
+  const PLAYER_R = 16;            // cat body radius
+  const SAFE_SPAWN_DIST = 220;    // keep players apart
+  const SKY = 0, SOLID = 1;
+
+  // Terrain as a bitmap mask (Uint8Array) and heightmap for quick queries
+  let terrainMask = new Uint8Array(W*H); // 0 sky, 1 solid
+  let heightmap = new Int16Array(W);     // ground y per x
+
+  // Offscreen canvas for carving & collision sampling
+  const terrCanvas = document.createElement('canvas');
+  terrCanvas.width = W; terrCanvas.height = H;
+  const terrCtx = terrCanvas.getContext('2d');
+
+  // Players
+  const players = [
+    { name:'P1', emoji:'😼', color:'#6ea8fe', x:0, y:0, hp:100, angle:45, power:60, facing:1 },
+    { name:'P2', emoji:'😺', color:'#90c2ff', x:0, y:0, hp:100, angle:135, power:60, facing:-1 }
+  ];
+  let turn = 0; // index 0 or 1
+  let wind = 0;
+
+  // Projectile
+  let shot = null; // {x,y,vx,vy,trail:[{x,y}]}
+
+  // UI elements
+  const angleEl = document.getElementById('angle');
+  const powerEl = document.getElementById('power');
+  const angleVal = document.getElementById('angleVal');
+  const powerVal = document.getElementById('powerVal');
+  const fireBtn = document.getElementById('fire');
+  const newBtn  = document.getElementById('new');
+  const turnEl  = document.getElementById('turn');
+  const hp1     = document.getElementById('hp1');
+  const hp2     = document.getElementById('hp2');
+  const hp1v    = document.getElementById('hp1v');
+  const hp2v    = document.getElementById('hp2v');
+  const windbar = document.getElementById('windbar');
+  const windVal = document.getElementById('windVal');
+
+  // Prevent page scroll while touching canvas (mobile)
+  ['touchstart','touchmove','touchend','gesturestart'].forEach(ev =>
+    cvs.addEventListener(ev, e => { e.preventDefault(); }, {passive:false})
+  );
+
+  // ---------- Terrain Generation ----------
+  function generateTerrain(){
+    // Clear
+    terrCtx.clearRect(0,0,W,H);
+    terrainMask.fill(SKY);
+    heightmap.fill(H);
+
+    // Simple fractal-ish 1D noise (random walk + smoothing)
+    const base = new Float32Array(W);
+    let y = H*0.55 + (Math.random()*80-40);
+    let dy = 0;
+    for(let x=0;x<W;x++){
+      dy += (Math.random()-0.5)*2;
+      dy *= 0.95;
+      y += dy;
+      base[x] = y;
+    }
+    // Smooth with moving average
+    const smooth = new Float32Array(W);
+    const K = 14;
+    let acc = 0;
+    for(let x=0;x<W+K;x++){
+      if(x<W) acc += base[x];
+      if(x>=K) acc -= base[x-K];
+      if(x>=K-1) smooth[x-(K-1)] = acc / Math.min(x+1, K, W);
+    }
+    // Add some cliffs / variation with sine
+    for(let x=0;x<W;x++){
+      let yy = smooth[x] + Math.sin(x*0.01)*14 + Math.sin(x*0.053)*8;
+      yy = Math.max(H*0.35, Math.min(H*0.85, yy));
+      heightmap[x] = Math.floor(yy);
+    }
+    // Draw solid below heightmap
+    const img = terrCtx.getImageData(0,0,W,H);
+    const d = img.data;
+    for(let x=0;x<W;x++){
+      for(let y=heightmap[x]|0;y<H;y++){
+        const idx = (y*W+x);
+        terrainMask[idx] = SOLID;
+        const p = idx*4;
+        d[p+0] = 24; d[p+1]=32; d[p+2]=58; d[p+3]=255; // deep blue rock
+      }
+    }
+    terrCtx.putImageData(img,0,0);
+
+    // Sprinkle a little grass line
+    terrCtx.strokeStyle = '#2ecc71';
+    terrCtx.lineWidth = 2;
+    terrCtx.beginPath();
+    for(let x=0;x<W;x++){
+      terrCtx.lineTo(x+0.5, heightmap[x]-1.5);
+    }
+    terrCtx.stroke();
+
+    // Place players
+    placePlayers();
+    // New wind
+    wind = (Math.random()*2-1) * WIND_MAX;
+    updateWindUI();
+  }
+
+  function placePlayers(){
+    function findSurfaceX(x0, x1){
+      // choose a random x within range that has enough flatness
+      for(let tries=0; tries<500; tries++){
+        const x = Math.floor(x0 + Math.random()*(x1-x0));
+        const y = heightmap[x]-PLAYER_R;
+        if (y>0 && y<H-PLAYER_R){
+          // surface normal approximate: ensure no overhang (check neighborhood)
+          const left = heightmap[Math.max(0,x-6)];
+          const right= heightmap[Math.min(W-1,x+6)];
+          if (Math.abs(left-right) < 20) return {x, y};
+        }
+      }
+      return {x:Math.floor((x0+x1)/2), y:heightmap[Math.floor((x0+x1)/2)]-PLAYER_R};
+    }
+    const a = findSurfaceX(40, W/2-80);
+    const b = findSurfaceX(W/2+80, W-40);
+    // Keep apart; if too close, push b to right edge area
+    if (Math.abs(b.x - a.x) < SAFE_SPAWN_DIST){
+      const c = findSurfaceX(W-200, W-40);
+      players[0].x = a.x; players[0].y = a.y;
+      players[1].x = c.x; players[1].y = c.y;
+    } else {
+      players[0].x = a.x; players[0].y = a.y;
+      players[1].x = b.x; players[1].y = b.y;
+    }
+    // Set facing
+    players[0].facing = +1;
+    players[1].facing = -1;
+    // Keep initial angles sensible
+    if (players[0].angle < 10 || players[0].angle > 170) players[0].angle = 45;
+    if (players[1].angle < 10 || players[1].angle > 170) players[1].angle = 135;
+  }
+
+  // ---------- Terrain Carving ----------
+  function carveCrater(cx, cy, r=EXPLOSION_R){
+    const minx = Math.max(0, Math.floor(cx-r));
+    const maxx = Math.min(W-1, Math.ceil(cx+r));
+    const miny = Math.max(0, Math.floor(cy-r));
+    const maxy = Math.min(H-1, Math.ceil(cy+r));
+
+    const img = terrCtx.getImageData(minx, miny, maxx-minx+1, maxy-miny+1);
+    const d = img.data;
+    const rr = r*r;
+    for(let y=miny; y<=maxy; y++){
+      for(let x=minx; x<=maxx; x++){
+        const dx = x - cx, dy = y - cy;
+        if (dx*dx + dy*dy <= rr){
+          const idx = (y*W + x);
+          terrainMask[idx] = SKY;
+          const p = ((y-miny)*(maxx-minx+1) + (x-minx))*4;
+          // turn to sky (transparent) — but we’ll draw background separately
+          d[p+3] = 0;
+        }
+      }
+    }
+    terrCtx.putImageData(img, minx, miny);
+
+    // Recompute heightmap for touched columns (simple scan from top)
+    for(let x=minx; x<=maxx; x++){
+      let y;
+      for(y=0; y<H; y++){
+        if (terrainMask[y*W + x] === SOLID){ break; }
+      }
+      heightmap[x] = (y===H) ? H : y;
+    }
+  }
+
+  // ---------- Physics & Damage ----------
+  function startShot(){
+    if (shot) return;
+    const p = players[turn];
+    const ang = (p.angle*Math.PI)/180;
+    const power = p.power/1; // tweakable scale
+    const muzzleX = p.x + Math.cos(ang)* (PLAYER_R+6);
+    const muzzleY = p.y - Math.sin(ang)* (PLAYER_R+6);
+    const v = power * 0.9;
+    const vx = Math.cos(ang)*v * (p.facing===1 ? 1 : -1);
+    const vy = -Math.sin(ang)*v;
+    shot = { x:muzzleX, y:muzzleY, vx, vy, trail:[] };
+    fireBtn.disabled = true;
+  }
+
+  function stepShot(){
+    if (!shot) return;
+    // integrate
+    shot.vx += wind;      // wind as constant acceleration
+    shot.vy += G;         // gravity
+    shot.x  += shot.vx;
+    shot.y  += shot.vy;
+
+    // trail
+    shot.trail.push({x:shot.x, y:shot.y});
+    if (shot.trail.length>200) shot.trail.shift();
+
+    // Out of bounds => end turn
+    if (shot.x<0 || shot.x>=W || shot.y>=H){
+      endShot(null);
+      return;
+    }
+    // Check hit player (direct hit)
+    const opp = players[1-turn];
+    const dx = shot.x - opp.x;
+    const dy = shot.y - opp.y;
+    if (dx*dx + dy*dy <= (PLAYER_R*PLAYER_R)*0.9){
+      // Direct hit = instant KO
+      applyDamage(1-turn, 999, true);
+      explode(shot.x, shot.y);
+      endShot(opp);
+      return;
+    }
+    // Check terrain collide
+    const ix = (shot.x|0), iy = (shot.y|0);
+    if (ix>=0 && ix<W && iy>=0 && iy<H){
+      if (terrainMask[iy*W + ix] === SOLID){
+        explode(shot.x, shot.y);
+        // Splash damage proportional to distance
+        applySplashDamage(shot.x, shot.y, EXPLOSION_R);
+        endShot({ terrain:true });
+      }
+    }
+  }
+
+  function explode(x,y){
+    carveCrater(x,y, EXPLOSION_R);
+    // Small screen shake effect
+    shake.t = 12;
+  }
+
+  function applyDamage(index, dmg, direct=false){
+    const pl = players[index];
+    pl.hp = Math.max(0, pl.hp - dmg);
+    updateHPUI();
+    if (pl.hp<=0){
+      announceWinner(1-index, direct ? 'direct hit!' : 'boom!');
+    }
+  }
+
+  function applySplashDamage(cx,cy,r){
+    for (let i=0;i<players.length;i++){
+      const pl = players[i];
+      const dx = pl.x - cx;
+      const dy = pl.y - cy;
+      const d2 = dx*dx + dy*dy;
+      const r2 = r*r;
+      if (d2 < r2){
+        const d = Math.sqrt(d2);
+        // 0..r -> 1..0 scale
+        const scale = Math.max(0, 1 - d/r);
+        const dmg = Math.round(scale * 60); // up to 60 splash
+        if (dmg>0) applyDamage(i, dmg, false);
+      }
+    }
+  }
+
+  function endShot(hitInfo){
+    shot = null;
+    // swap turn if game not over
+    if (players[0].hp>0 && players[1].hp>0){
+      turn = 1 - turn;
+      updateTurnUI();
+      fireBtn.disabled = false;
+      // Slightly change wind each turn
+      wind = Math.max(-WIND_MAX, Math.min(WIND_MAX, wind + (Math.random()*0.06 - 0.03)));
+      updateWindUI();
+      // Auto-load sliders with that player's last settings
+      const p = players[turn];
+      angleEl.value = p.angle|0;
+      powerEl.value = p.power|0;
+      angleVal.textContent = `${p.angle|0}°`;
+      powerVal.textContent = `${p.power|0}`;
+    }
+  }
+
+  // ---------- Drawing ----------
+  const shake = {t:0};
+  function draw(){
+    requestAnimationFrame(draw);
+
+    // shake transform
+    const sx = shake.t>0 ? (Math.random()*2-1)*shake.t*0.6 : 0;
+    const sy = shake.t>0 ? (Math.random()*2-1)*shake.t*0.6 : 0;
+    if (shake.t>0) shake.t--;
+
+    ctx.save();
+    ctx.clearRect(0,0,W,H);
+
+    // sky gradient
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0b1020');
+    g.addColorStop(1,'#0e1430');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    ctx.translate(sx,sy);
+
+    // draw terrain (offscreen with transparency for craters)
+    ctx.drawImage(terrCanvas,0,0);
+
+    // draw players
+    players.forEach((p,idx)=>{
+      // Draw a small platform shadow
+      ctx.fillStyle = 'rgba(0,0,0,.25)';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y+PLAYER_R-2, PLAYER_R*0.8, 5, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // Body
+      ctx.fillStyle = idx===0 ? '#6ea8fe' : '#90c2ff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, PLAYER_R, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.35)';
+      ctx.stroke();
+
+      // Cat face emoji label
+      ctx.font = '18px system-ui,emoji';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.emoji, p.x, p.y-1);
+
+      // Cannon direction (only current shooter)
+      if (idx===turn && !shot){
+        const ang = (p.angle*Math.PI)/180;
+        const dir = p.facing===1 ? 1 : -1;
+        const len = 22;
+        const x2 = p.x + Math.cos(ang)*len*dir;
+        const y2 = p.y - Math.sin(ang)*len;
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    });
+
+    // draw projectile
+    if (shot){
+      // Step sim a few times per frame for stability
+      for(let i=0;i<2;i++) stepShot();
+
+      // trail
+      ctx.strokeStyle = 'rgba(255,255,255,.5)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for(let i=0;i<shot.trail.length;i++){
+        const t = shot.trail[i];
+        if (i===0) ctx.moveTo(t.x,t.y); else ctx.lineTo(t.x,t.y);
+      }
+      ctx.stroke();
+
+      // shell
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(shot.x, shot.y, 3, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // ---------- UI & Controls ----------
+  function updateTurnUI(){
+    turnEl.textContent = turn===0 ? 'P1' : 'P2';
+    // Swap panel labels so left sliders show current player numbers
+    // (We actually keep one set of sliders; values are bound to current player)
+    const p = players[turn];
+    angleEl.value = p.angle|0;
+    powerEl.value = p.power|0;
+    angleVal.textContent = `${p.angle|0}°`;
+    powerVal.textContent = `${p.power|0}`;
+  }
+  function updateHPUI(){
+    hp1.style.width = players[0].hp+'%';
+    hp2.style.width = players[1].hp+'%';
+    hp1v.textContent = players[0].hp+'%';
+    hp2v.textContent = players[1].hp+'%';
+  }
+  function updateWindUI(){
+    const pct = (wind / (2*WIND_MAX) + 0.5)*100; // map [-WM, +WM] to [0..100]
+    windbar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    windVal.textContent = (wind>=0?'+':'') + wind.toFixed(2);
+  }
+
+  angleEl.addEventListener('input', e=>{
+    angleVal.textContent = `${e.target.value|0}°`;
+    players[turn].angle = e.target.value|0;
+  });
+  powerEl.addEventListener('input', e=>{
+    powerVal.textContent = `${e.target.value|0}`;
+    players[turn].power = e.target.value|0;
+  });
+  fireBtn.addEventListener('click', startShot);
+  newBtn.addEventListener('click', ()=>resetGame());
+
+  // Keyboard: arrows adjust, space fires
+  window.addEventListener('keydown', (e)=>{
+    if (e.repeat) return;
+    if (e.key==='ArrowLeft'){ players[turn].angle = Math.max(0, players[turn].angle-1); angleEl.value=players[turn].angle; angleVal.textContent=players[turn].angle+'°'; }
+    if (e.key==='ArrowRight'){ players[turn].angle = Math.min(180, players[turn].angle+1); angleEl.value=players[turn].angle; angleVal.textContent=players[turn].angle+'°'; }
+    if (e.key==='ArrowUp'){ players[turn].power = Math.min(100, players[turn].power+1); powerEl.value=players[turn].power; powerVal.textContent=players[turn].power; }
+    if (e.key==='ArrowDown'){ players[turn].power = Math.max(10, players[turn].power-1); powerEl.value=players[turn].power; powerVal.textContent=players[turn].power; }
+    if (e.key===' ' || e.key==='Spacebar'){ e.preventDefault(); startShot(); }
+  });
+
+  // Click-aim helper: tap/click to set angle/power quickly
+  cvs.addEventListener('pointerdown', (e)=>{
+    if (shot) return;
+    const rect = cvs.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (W/rect.width);
+    const py = (e.clientY - rect.top)  * (H/rect.height);
+    const p = players[turn];
+    const dx = px - p.x;
+    const dy = p.y - py;
+    let ang = Math.atan2(dy, Math.abs(dx)) * 180/Math.PI;
+    ang = Math.max(0, Math.min(180, ang));
+    p.angle = ang|0;
+    angleEl.value = p.angle; angleVal.textContent = p.angle+'°';
+    // crude power guess by distance
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    p.power = Math.max(10, Math.min(100, (dist/5)|0));
+    powerEl.value = p.power; powerVal.textContent = p.power;
+  });
+
+  function announceWinner(idx, reason){
+    fireBtn.disabled = true;
+    turnEl.textContent = `P${idx+1} wins 🎉 (${reason})`;
+  }
+
+  function resetGame(){
+    players[0].hp = 100; players[1].hp = 100;
+    players[0].angle = players[0].angle || 45;
+    players[1].angle = players[1].angle || 135;
+    players[0].power = players[0].power || 60;
+    players[1].power = players[1].power || 60;
+    updateHPUI();
+    shot = null; turn = 0; fireBtn.disabled = false;
+    updateTurnUI();
+    generateTerrain();
+  }
+
+  // ---------- Boot ----------
+  generateTerrain();
+  updateHPUI();
+  updateTurnUI();
+  draw();
+})();
+</script>
+</body>
+</html>
