@@ -296,7 +296,37 @@ function renderStep(){
       });
 
       box.appendChild(ul);
-      body.appendChild(box);
+
+// ✅ Add the same notes field to Step 3 (Bonus) right after the list
+if (key === "bonus") {
+  const ta = document.createElement("textarea");
+  ta.rows = 3;
+  ta.placeholder = "Optional: jot thoughts here…";
+  ta.style.width = "100%";
+  ta.style.background = "#0c1228";
+  ta.style.color = "var(--ink)";
+  ta.style.border = "1px solid var(--line)";
+  ta.style.borderRadius = "10px";
+  ta.style.padding = "10px";
+  ta.style.marginTop = "8px";
+
+  // Restore previously typed note (if any) for bonus
+  const existingNote = (flow.notes[key] || []).find(x => x.kind === "note");
+  if (existingNote) ta.value = existingNote.text || "";
+
+  // Update-or-insert note in flow.notes[bonus]
+  ta.addEventListener("input", () => {
+    const arr = flow.notes[key] || [];
+    const i = arr.findIndex(x => x.kind === "note");
+    const entry = { text: ta.value, done: false, kind: "note" };
+    if (i > -1) arr[i] = entry; else arr.push(entry);
+    flow.notes[key] = arr;
+  });
+
+  box.appendChild(ta);
+}
+
+body.appendChild(box);
     }
 
     if(block.type === "randomQ"){
@@ -466,5 +496,6 @@ document.addEventListener("keydown", (e)=>{
 
 </body>
 </html>
+
 
 
