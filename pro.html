@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Anton Ko — Professional Profile</title>
+  <meta name="description" content="Case studies, quantified highlights, experience, and skills.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="nav"></div>
+  <script>
+    (async () => {
+      const mount = document.getElementById("nav");
+      const html = await fetch("/nav.html").then(r => r.text());
+      mount.innerHTML = html;
+      const nav = mount.querySelector(".site-nav");
+      const here = location.pathname.replace(/index\.html$/, "/");
+      nav.querySelectorAll(".links a").forEach(a => { if (a.getAttribute("href") === here) a.classList.add("active"); });
+    })();
+  </script>
+
+  <header class="site">
+    <div class="container hero">
+      <div class="profile">
+        <img src="/anton-ko.jpeg" alt="Anton Ko" class="avatar" width="160" height="160" loading="eager">
+        <div>
+          <h1>Professional Profile</h1>
+          <p class="tagline">Growth-minded Product Manager — experiments, data, outcomes.</p>
+          <div class="cta">
+            <a class="btn" href="/contact.html">Contact</a>
+            <a class="btn alt" href="/Anton-Ko-CV.pdf" target="_blank" rel="noopener">Download CV</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Highlights -->
+    <section class="card" aria-labelledby="highlights">
+      <div class="flexhead">
+        <h2 id="highlights">Highlights</h2>
+        <span class="note">Data-informed, outcome-driven</span>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><strong>+XX%</strong><br><span class="muted">conversion lift from experiments</span></div>
+        <div class="kpi"><strong>€YYk</strong><br><span class="muted">incremental revenue unlocked</span></div>
+        <div class="kpi"><strong>ZZ</strong><br><span class="muted">experiments shipped / 12 mo</span></div>
+      </div>
+    </section>
+
+    <!-- Case studies -->
+    <section class="card" aria-labelledby="cases">
+      <div class="flexhead">
+        <h2 id="cases">Case Studies</h2>
+        <span class="note">Context → Actions → Outcome</span>
+      </div>
+
+      <div class="grid case-grid">
+        <article class="case" id="ecommerce">
+          <h3>E-commerce relaunch for premium retail</h3>
+          <p class="muted">Context</p>
+          <p>Family-run premium retail needed online growth. I led backlog, vendor coordination, analytics, and an experiment cadence.</p>
+          <p class="muted">Actions</p>
+          <ul class="bullets">
+            <li>Instrumented funnel; set weekly review ritual</li>
+            <li>Prioritized checkout/PLP experiments</li>
+            <li>Aligned stakeholders on BI dashboards</li>
+          </ul>
+          <p class="muted">Outcome</p>
+          <ul class="bullets">
+            <li>Checkout drop-off ↓ <strong>XX%</strong></li>
+            <li>Time-to-ship ↓ <strong>YY%</strong></li>
+            <li>Organic traffic ↑ <strong>ZZ%</strong> (6 months)</li>
+          </ul>
+        </article>
+
+        <article class="case" id="dashboard">
+          <h3>Zero-to-one KPI dashboard</h3>
+          <p class="muted">Context</p>
+          <p>Fragmented data slowed decisions across ops/marketing/product.</p>
+          <p class="muted">Actions</p>
+          <ul class="bullets">
+            <li>Unified source-of-truth; Looker Studio views</li>
+            <li>Defined weekly KPIs and owners</li>
+            <li>Automated data refresh + anomaly notes</li>
+          </ul>
+          <p class="muted">Outcome</p>
+          <ul class="bullets">
+            <li>Lead time ↓ <strong>XX%</strong></li>
+            <li>Spend/ROI visibility by channel</li>
+            <li>Weekly experiment cadence adopted</li>
+          </ul>
+        </article>
+
+        <article class="case" id="flywheel">
+          <h3>Acquisition → Retention flywheel</h3>
+          <p class="muted">Context</p>
+          <p>Early retention underperformed vs. benchmarks.</p>
+          <p class="muted">Actions</p>
+          <ul class="bullets">
+            <li>Onboarding messaging tests</li>
+            <li>Lifecycle nudges to first value</li>
+            <li>Offer/price experiments for 1st purchase</li>
+          </ul>
+          <p class="muted">Outcome</p>
+          <ul class="bullets">
+            <li>D1 activation ↑ <strong>XX%</strong></li>
+            <li>First-purchase rate ↑ <strong>YY%</strong></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- Experience -->
+    <section class="card" aria-labelledby="xp">
+      <div class="flexhead">
+        <h2 id="xp">Experience</h2>
+        <a class="mini" href="/Anton-Ko-CV.pdf" target="_blank" rel="noopener">Full CV →</a>
+      </div>
+      <ul class="bullets">
+        <li><strong>Product / Growth — Di Murano</strong> · Backlog, vendor mgmt, analytics, experiment cadence; funnel (XX→YY).</li>
+        <li><strong>Ops & Marketing</strong> · Stock sync, basic attribution, targeted campaigns.</li>
+        <li><strong>Side builds</strong> · Prototyped internal tools and micro-apps to reduce manual work.</li>
+      </ul>
+    </section>
+
+    <!-- Skills -->
+    <section class="card" aria-labelledby="skills">
+      <h2 id="skills">Skills & Tools</h2>
+      <div class="chips" aria-label="Product">
+        <span class="chip">Product discovery</span>
+        <span class="chip">Experiment design</span>
+        <span class="chip">Backlog & delivery</span>
+      </div>
+      <div class="chips" aria-label="Growth">
+        <span class="chip">Funnel analytics</span>
+        <span class="chip">CRO</span>
+        <span class="chip">Lifecycle</span>
+      </div>
+      <div class="chips" aria-label="Data & Tech">
+        <span class="chip">GA4</span>
+        <span class="chip">Looker Studio</span>
+        <span class="chip">SQL (basics)</span>
+        <span class="chip">HTML/CSS/JS</span>
+        <span class="chip">GitHub Pages</span>
+      </div>
+      <div class="chips" aria-label="Collab">
+        <span class="chip">Jira</span>
+        <span class="chip">Asana</span>
+        <span class="chip">Trello</span>
+        <span class="chip">Notion / Obsidian</span>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="container footer">
+    <div class="footwrap">
+      <small>© <span id="y"></span> Anton Ko · Northern Italy</small>
+      <nav class="footnav">
+        <a href="/about.html">About</a>
+        <a href="/pro.html">Pro</a>
+        <a href="/socials">Socials</a>
+      </nav>
+    </div>
+    <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+  </footer>
+</body>
+</html>
