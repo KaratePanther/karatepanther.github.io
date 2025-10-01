@@ -15,9 +15,41 @@
       const mount = document.getElementById("nav");
       const html = await fetch("/nav.html").then(r => r.text());
       mount.innerHTML = html;
+  
+      // init hamburger + active link
       const nav = mount.querySelector(".site-nav");
+      const btn = nav.querySelector(".burger");
+      const list = nav.querySelector("#nav-links");
+      const mq = window.matchMedia("(max-width: 768px)");
+  
+      // highlight current page
       const here = location.pathname.replace(/index\.html$/, "/");
-      nav.querySelectorAll(".links a").forEach(a => { if (a.getAttribute("href") === here) a.classList.add("active"); });
+      nav.querySelectorAll(".links a").forEach(a => {
+        const href = a.getAttribute("href");
+        if (href === here) a.classList.add("active");
+      });
+  
+      const setState = () => {
+        const mobile = mq.matches;
+        if (list) list.hidden = mobile;                       // collapse on mobile
+        if (btn)  btn.setAttribute("aria-expanded", (!mobile).toString());
+      };
+      setState();
+  
+      btn?.addEventListener("click", () => {
+        const expanded = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", (!expanded).toString());
+        if (list) list.hidden = expanded;
+      });
+  
+      list?.addEventListener("click", e => {
+        if (mq.matches && e.target.tagName === "A") {
+          btn.setAttribute("aria-expanded", "false");
+          list.hidden = true;
+        }
+      });
+  
+      mq.addEventListener("change", setState);
     })();
   </script>
 
