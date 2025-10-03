@@ -98,7 +98,7 @@
   const preventTouchScroll = (e) => { if (e.target === canvas) e.preventDefault(); };
   document.addEventListener('touchmove', preventTouchScroll, { passive:false });
 
-  // Simple sounds (bleep & goal) via WebAudio (optional)
+  // Simple sounds
   let audioCtx = null;
   function beep(freq=600, time=0.05, gain=0.05) {
     if (!soundT.checked) return;
@@ -109,34 +109,32 @@
       g.gain.value = gain;
       o.connect(g).connect(audioCtx.destination);
       const now = audioCtx.currentTime;
-      o.start(now);
-      o.stop(now + time);
+      o.start(now); o.stop(now + time);
     }catch{}
   }
   function goalSound() { beep(220,0.18,0.08); setTimeout(()=>beep(330,0.18,0.08),120); }
 
   const state = {
     w:0,h:0, portrait:false,
-    fieldPad: 16, // drawing margin (px @ CSS); scaled with dpr in code
+    fieldPad: 16,
     lineW: 4,
-    goalSize: 0.45, // fraction of side length for goal mouth
-    goalDepth: 20, // how "inside" the wall the goal line sits (px @ CSS)
+    goalSize: 0.45,
+    goalDepth: 20,
     targetScore: 7,
     running: true,
     lastTs: 0,
-    countdown: 0, // seconds
-    scorer: null, // 'A' or 'B'
     scoreA:0, scoreB:0,
-    puck: { x:0, y:0, r:12, vx:0, vy:0, max: 1200 },
-    A: { x:0, y:0, r:26, vx:0, vy:0, max: 1000, id:null }, // Player A (top/left half)
-    B: { x:0, y:0, r:26, vx:0, vy:0, max: 1000, id:null }, // Player B (bottom/right half)
-    friction: 0.997,
-    damp: 0.99, // on bounce
+    scorer: null,
+    puck: { x:0, y:0, r:12, vx:0, vy:0, max: 2400 }, // higher top speed
+    A: { x:0, y:0, r:26, vx:0, vy:0, max: 1600, id:null }, // px/sec
+    B: { x:0, y:0, r:26, vx:0, vy:0, max: 1600, id:null }, // px/sec
+    friction: 0.995,  // slightly lower friction = faster glide
+    damp: 0.985,      // a bit bouncy
   };
 
   function resize() {
     const cssW = window.innerWidth;
-    const cssH = Math.max(200, window.innerHeight - 56); // header height ~56
+    const cssH = Math.max(200, window.innerHeight - 56);
     canvas.style.width = cssW + 'px';
     canvas.style.height = cssH + 'px';
     canvas.width = Math.floor(cssW * dpr);
@@ -145,27 +143,23 @@
     state.h = canvas.height;
     state.portrait = state.h >= state.w;
 
-    // scale CSS -> device pixels
     state.pad = Math.round(state.fieldPad * dpr);
     state.lw = Math.max(2, Math.round(state.lineW * dpr));
     state.goalD = Math.round(state.goalDepth * dpr);
 
-    // Sizes scale with min dimension
     const base = Math.min(state.w, state.h);
     const puckR = Math.round(base * 0.015);
     const malletR = Math.round(base * 0.033);
     state.puck.r = Math.max(10, puckR);
     state.A.r = state.B.r = Math.max(20, malletR);
 
-    // Place objects safely on halves
     centerFaceoff(true);
   }
 
   function centerFaceoff(resetVelocity=false) {
-    const { w,h,puck,A,B,portrait,pad } = state;
+    const { w,h,puck,A,B,portrait } = state;
     puck.x = w/2; puck.y = h/2;
     if (resetVelocity) { puck.vx = 0; puck.vy = 0; }
-
     if (portrait) {
       A.x = w/2; A.y = h*0.2;
       B.x = w/2; B.y = h*0.8;
@@ -176,7 +170,7 @@
     A.vx = A.vy = B.vx = B.vy = 0;
   }
 
-  // Touch control: closest active touch per side controls the paddle
+  // Touch control: track target points; convert to vx/vy in px/sec
   const touches = new Map(); // id -> {x,y}
   canvas.addEventListener('touchstart', e=>{
     for (const t of e.changedTouches) {
@@ -210,14 +204,13 @@
     assignTouchToPlayers();
   });
 
-  // Mouse fallback (desktop)
+  // Mouse fallback
   let mouseDown = false;
   canvas.addEventListener('mousedown', e=>{ mouseDown = true; onMouse(e); });
   window.addEventListener('mousemove', e=>{ if (mouseDown) onMouse(e); });
   window.addEventListener('mouseup', ()=>{ mouseDown=false; state.A.id=null; state.B.id=null; });
   function onMouse(e){
     const p = clientToCanvas(e.clientX, e.clientY);
-    // Assign to whichever half the mouse is in
     if (state.portrait) {
       if (p.y < state.h/2) { state.A.id = 'mouse'; touches.set('mouse', p); }
       else { state.B.id = 'mouse'; touches.set('mouse', p); }
@@ -228,19 +221,16 @@
   }
 
   function assignTouchToPlayers() {
-    // Pick the nearest touch to each paddle within its half; ignore the rest
     const pool = [...touches.entries()];
     const { portrait, w, h, A, B } = state;
     const halfCheckA = portrait ? (p)=>p.y < h/2 : (p)=>p.x < w/2;
     const halfCheckB = portrait ? (p)=>p.y >= h/2 : (p)=>p.x >= w/2;
 
-    // Find best touch for A
     let bestA = null, bestAd = Infinity;
     for (const [id,p] of pool) if (halfCheckA(p)) {
       const d = (p.x-A.x)**2 + (p.y-A.y)**2;
       if (d < bestAd) { bestAd = d; bestA = id; }
     }
-    // Find best touch for B
     let bestB = null, bestBd = Infinity;
     for (const [id,p] of pool) if (halfCheckB(p)) {
       const d = (p.x-B.x)**2 + (p.y-B.y)**2;
@@ -268,7 +258,6 @@
     state.scoreA = state.scoreB = 0;
     updateScore();
     state.scorer = null;
-    state.countdown = 0;
     banner.classList.remove('show');
     centerFaceoff(true);
     if (!state.running) { state.running = true; pauseBtn.textContent = '⏸️ Pause'; requestAnimationFrame(loop); }
@@ -292,7 +281,7 @@
   // Game loop
   function loop(ts) {
     if (!state.running) return;
-    const dt = Math.min(32, ts - (state.lastTs || ts)) / 1000; // clamp to 32ms
+    const dt = Math.min(32, ts - (state.lastTs || ts)) / 1000; // seconds
     state.lastTs = ts;
 
     update(dt);
@@ -304,44 +293,41 @@
   function update(dt) {
     const { w,h,pad,lw,goalD,goalSize,portrait,puck,A,B } = state;
 
-    // Target mallet positions from touches
-    for (const p of [A,B]) {
-      if (p.id != null && touches.has(p.id)) {
-        const t = touches.get(p.id);
-        // Smoothly move toward touch (clamped by max speed)
-        const ax = (t.x - p.x);
-        const ay = (t.y - p.y);
-        const maxStep = p.max * dt;
+    // Convert touches -> mallet velocities (px/sec), then integrate
+    for (const m of [A,B]) {
+      if (m.id != null && touches.has(m.id)) {
+        const t = touches.get(m.id);
+        const ax = t.x - m.x;
+        const ay = t.y - m.y;
         const len = Math.hypot(ax, ay);
-        if (len > maxStep) {
-          p.vx = (ax / len) * maxStep;
-          p.vy = (ay / len) * maxStep;
-        } else {
-          p.vx = ax; p.vy = ay;
+        if (len > 0) {
+          const desiredVx = (ax / len) * m.max;
+          const desiredVy = (ay / len) * m.max;
+          // Smoothly approach target velocity
+          m.vx += (desiredVx - m.vx) * 0.35;
+          m.vy += (desiredVy - m.vy) * 0.35;
         }
       } else {
-        // No touch — slow to stop
-        p.vx *= 0.85; p.vy *= 0.85;
-        if (Math.hypot(p.vx, p.vy) < 2) { p.vx = p.vy = 0; }
+        // No touch — damp velocity
+        m.vx *= 0.85; m.vy *= 0.85;
+        if (Math.hypot(m.vx, m.vy) < 5) { m.vx = m.vy = 0; }
       }
-      p.x += p.vx; p.y += p.vy;
+      // Integrate motion using px/sec
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
     }
 
-    // Confine paddles to their halves & inside walls
+    // Confine paddles to halves & walls
     const minX = pad + A.r, maxX = w - pad - A.r;
     const minY = pad + A.r, maxY = h - pad - A.r;
     if (portrait) {
-      // A top half
       A.y = Math.min(Math.max(A.y, minY), h/2 - lw - A.r);
       A.x = Math.min(Math.max(A.x, minX), maxX);
-      // B bottom half
       B.y = Math.max(Math.min(B.y, maxY), h/2 + lw + B.r);
       B.x = Math.min(Math.max(B.x, minX), maxX);
     } else {
-      // A left half
       A.x = Math.min(Math.max(A.x, minX), w/2 - lw - A.r);
       A.y = Math.min(Math.max(A.y, minY), maxY);
-      // B right half
       B.x = Math.max(Math.min(B.x, maxX), w/2 + lw + B.r);
       B.y = Math.min(Math.max(B.y, minY), maxY);
     }
@@ -352,46 +338,34 @@
     puck.vx *= state.friction;
     puck.vy *= state.friction;
 
-    // Collide puck with mallets (circle-circle)
+    // Collisions
     collidePuckWithMallet(puck, A);
     collidePuckWithMallet(puck, B);
 
-    // Walls + goal detection
-    let scored = null; // 'A' or 'B' (who gets the point)
-    const gMouth = portrait
-      ? { // top/bottom goals
-          x1: w*(1-goalSize)/2 + pad, x2: w*(1+goalSize)/2 - pad, // horizontal mouth
-          top: pad + goalD, bottom: h - pad - goalD
-        }
-      : { // left/right goals
-          y1: h*(1-goalSize)/2 + pad, y2: h*(1+goalSize)/2 - pad, // vertical mouth
-          left: pad + goalD, right: w - pad - goalD
-        };
+    // Walls + goals
+    let scored = null;
+    const gMouth = state.portrait
+      ? { x1: w*(1-goalSize)/2 + pad, x2: w*(1+goalSize)/2 - pad, top: pad + goalD, bottom: h - pad - goalD }
+      : { y1: h*(1-goalSize)/2 + pad, y2: h*(1+goalSize)/2 - pad, left: pad + goalD, right: w - pad - goalD };
 
-    if (portrait) {
-      // Left/Right walls (no goals there)
+    if (state.portrait) {
       if (puck.x - puck.r < pad) { puck.x = pad + puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
       if (puck.x + puck.r > w - pad) { puck.x = w - pad - puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
-      // Top: goal if within mouth and crosses line
       if (puck.y - puck.r < pad) {
         if (puck.x > gMouth.x1 && puck.x < gMouth.x2) { scored = 'B'; }
         else { puck.y = pad + puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
       }
-      // Bottom
       if (puck.y + puck.r > h - pad) {
         if (puck.x > gMouth.x1 && puck.x < gMouth.x2) { scored = 'A'; }
         else { puck.y = h - pad - puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
       }
     } else {
-      // Top/Bottom walls (no goals there)
       if (puck.y - puck.r < pad) { puck.y = pad + puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
       if (puck.y + puck.r > h - pad) { puck.y = h - pad - puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
-      // Left: goal if within mouth and crosses line
       if (puck.x - puck.r < pad) {
         if (puck.y > gMouth.y1 && puck.y < gMouth.y2) { scored = 'B'; }
         else { puck.x = pad + puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
       }
-      // Right
       if (puck.x + puck.r > w - pad) {
         if (puck.y > gMouth.y1 && puck.y < gMouth.y2) { scored = 'A'; }
         else { puck.x = w - pad - puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
@@ -412,73 +386,65 @@
       puck.x += nx * overlap;
       puck.y += ny * overlap;
 
-      // Reflect puck velocity along normal; add a bit of mallet velocity
-      const relVx = puck.vx - m.vx, relVy = puck.vy - m.vy;
+      // Relative velocity (both px/sec) -> reflect
+      const relVx = puck.vx - m.vx;
+      const relVy = puck.vy - m.vy;
       const dot = relVx*nx + relVy*ny;
+
       if (dot < 0) {
         const rx = relVx - 2*dot*nx;
         const ry = relVy - 2*dot*ny;
-        puck.vx = (rx + m.vx) * 0.98;
-        puck.vy = (ry + m.vy) * 0.98;
+        // Add some of mallet velocity (impact feels snappier)
+        puck.vx = (rx + m.vx*0.6) * 0.99;
+        puck.vy = (ry + m.vy*0.6) * 0.99;
       } else {
-        // If moving away, just nudge with mallet motion
-        puck.vx += m.vx * 0.02;
-        puck.vy += m.vy * 0.02;
+        puck.vx += m.vx * 0.1;
+        puck.vy += m.vy * 0.1;
       }
+
       // Cap puck speed
       const sp = Math.hypot(puck.vx, puck.vy);
       const max = state.puck.max;
       if (sp > max) { puck.vx = puck.vx/sp*max; puck.vy = puck.vy/sp*max; }
-      beep(520,0.025,0.05);
+
+      beep(520,0.02,0.05);
     }
   }
 
   function registerGoal(by) {
-    // by = 'A' or 'B' -> who gets the point
     if (by === 'A') state.scoreA++; else state.scoreB++;
     updateScore();
     state.running = false;
-    state.countdown = 1.0;
-    state.scorer = by;
     bannerTitle.textContent = `Player ${by} scores!`;
     bannerSub.textContent = 'Next face-off in 1…';
     banner.classList.add('show');
     goalSound();
     if (vibeT.checked && 'vibrate' in navigator) navigator.vibrate([30, 30, 60]);
 
-    // Win check
     if (state.scoreA >= state.targetScore || state.scoreB >= state.targetScore) {
       bannerTitle.textContent = `Player ${state.scoreA > state.scoreB ? 'A' : 'B'} wins!`;
       bannerSub.textContent = `Final score ${state.scoreA} — ${state.scoreB}`;
-      return; // wait for user action
+      return;
     }
 
-    // Short countdown then faceoff with gentle push
-    let t = 1000;
-    const tick = () => {
-      t -= 250;
-      if (t <= 0) {
-        banner.classList.remove('show');
-        centerFaceoff(true);
-        const dir = state.portrait
-          ? (state.scorer === 'A' ? 1 : -1) // send puck toward opponent
-          : (state.scorer === 'A' ? 1 : -1);
-        if (state.portrait) {
-          state.puck.vx = (Math.random()*2-1) * 150;
-          state.puck.vy = dir * 260;
-        } else {
-          state.puck.vx = dir * 260;
-          state.puck.vy = (Math.random()*2-1) * 150;
-        }
-        state.running = true;
-        pauseBtn.textContent = '⏸️ Pause';
-        requestAnimationFrame(loop);
+    setTimeout(() => {
+      banner.classList.remove('show');
+      centerFaceoff(true);
+      // Faster face-off push
+      const fast = 520;
+      if (state.portrait) {
+        const dir = by === 'A' ? 1 : -1;
+        state.puck.vx = (Math.random()*2-1) * 220;
+        state.puck.vy = dir * fast;
       } else {
-        bannerSub.textContent = `Next face-off in ${Math.ceil(t/1000)}…`;
-        setTimeout(tick, 250);
+        const dir = by === 'A' ? 1 : -1;
+        state.puck.vx = dir * fast;
+        state.puck.vy = (Math.random()*2-1) * 220;
       }
-    };
-    setTimeout(tick, 250);
+      state.running = true;
+      pauseBtn.textContent = '⏸️ Pause';
+      requestAnimationFrame(loop);
+    }, 1000);
   }
 
   function updateScore() {
@@ -489,52 +455,38 @@
   // Drawing
   function draw() {
     const { w,h,pad,lw,portrait,goalSize,goalD,puck,A,B } = state;
-    // Field
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--field');
     ctx.fillRect(0,0,w,h);
 
-    // Rink outline
     ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--line');
     ctx.lineWidth = lw;
     ctx.strokeRect(pad, pad, w-2*pad, h-2*pad);
 
-    // Center line
     ctx.beginPath();
-    if (portrait) {
-      ctx.moveTo(pad, h/2); ctx.lineTo(w-pad, h/2);
-    } else {
-      ctx.moveTo(w/2, pad); ctx.lineTo(w/2, h-pad);
-    }
+    if (portrait) { ctx.moveTo(pad, h/2); ctx.lineTo(w-pad, h/2); }
+    else { ctx.moveTo(w/2, pad); ctx.lineTo(w/2, h-pad); }
     ctx.stroke();
 
-    // Faceoff dot
     ctx.beginPath();
     ctx.arc(w/2, h/2, Math.max(3, lw*1.2), 0, Math.PI*2);
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
     ctx.fill();
 
-    // Goal mouths (visual hint)
     ctx.strokeStyle = 'rgba(255,255,255,0.28)';
     ctx.lineWidth = lw;
     if (portrait) {
       const x1 = w*(1-goalSize)/2 + pad, x2 = w*(1+goalSize)/2 - pad;
-      // top
       ctx.beginPath(); ctx.moveTo(x1, pad+goalD); ctx.lineTo(x2, pad+goalD); ctx.stroke();
-      // bottom
       ctx.beginPath(); ctx.moveTo(x1, h-pad-goalD); ctx.lineTo(x2, h-pad-goalD); ctx.stroke();
     } else {
       const y1 = h*(1-goalSize)/2 + pad, y2 = h*(1+goalSize)/2 - pad;
-      // left
       ctx.beginPath(); ctx.moveTo(pad+goalD, y1); ctx.lineTo(pad+goalD, y2); ctx.stroke();
-      // right
       ctx.beginPath(); ctx.moveTo(w-pad-goalD, y1); ctx.lineTo(w-pad-goalD, y2); ctx.stroke();
     }
 
-    // Draw mallets
-    drawMallet(A, '#6ee7b7'); // green-ish
-    drawMallet(B, '#fca5a5'); // red-ish
+    drawMallet(A, '#6ee7b7');
+    drawMallet(B, '#fca5a5');
 
-    // Draw puck
     ctx.beginPath();
     ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2);
     ctx.fillStyle = '#e5e7eb';
@@ -557,11 +509,10 @@
     ctx.stroke();
   }
 
-  // Orientation / resize handling
+  // Orientation / resize
   window.addEventListener('resize', () => {
     const wasPortrait = state.portrait;
     resize();
-    // If orientation changed, pause briefly and recenter puck to avoid cheap goals
     const changed = wasPortrait !== state.portrait;
     if (changed) {
       state.running = false;
