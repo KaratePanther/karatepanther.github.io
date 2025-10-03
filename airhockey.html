@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>AirHockey — Touch 2-Player</title>
+<meta name="description" content="Two-player Air Hockey for phones & tablets. Touch paddles, goals, scoring, portrait & landscape." />
+<style>
+  :root{
+    --bg:#0b1020; --field:#0f1730; --line:#2a3a6a; --ink:#e8ecff;
+    --accent:#7fb3ff; --good:#22c55e; --warn:#f59e0b;
+    --danger:#ef4444; --muted:#aab3d9; --glass:rgba(255,255,255,.06);
+    --radius:14px;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
+  .wrap{position:fixed;inset:0;display:flex;flex-direction:column}
+  header{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px}
+  .score{
+    display:flex;gap:12px;align-items:center;justify-content:center;
+    padding:8px 12px;border-radius:var(--radius);
+    background:var(--glass);backdrop-filter:blur(8px);
+    font-weight:700;letter-spacing:.5px
+  }
+  .score .p1{color:var(--good)}
+  .score .p2{color:var(--danger)}
+  .btns{display:flex;gap:8px;align-items:center}
+  button{
+    appearance:none;border:1px solid var(--line);background:var(--glass);color:var(--ink);
+    padding:10px 14px;border-radius:12px;font-weight:600;font-size:14px;
+    touch-action:manipulation;
+  }
+  button:active{transform:translateY(1px)}
+  .tog{display:flex;gap:8px}
+  .tog label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+  canvas{width:100vw;height:calc(100vh - 56px);touch-action:none;display:block}
+  .banner{
+    position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.35);backdrop-filter:blur(2px)
+  }
+  .banner.show{display:grid}
+  .card{
+    background:#0d142b;border:1px solid var(--line);border-radius:18px;padding:18px;min-width:min(92vw,420px);
+    text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35)
+  }
+  .card h2{margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 14px}
+  .chiprow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .chiprow button{font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="score" id="score">
+      <span>Player <span class="p1">A</span> <strong id="sA">0</strong></span>
+      <span>—</span>
+      <span>Player <span class="p2">B</span> <strong id="sB">0</strong></span>
+    </div>
+    <div class="btns">
+      <button id="pauseBtn" aria-pressed="false">⏸️ Pause</button>
+      <button id="resetBtn">🔁 Restart</button>
+    </div>
+    <div class="tog">
+      <label><input type="checkbox" id="soundT" /> sound</label>
+      <label><input type="checkbox" id="vibeT" checked /> haptics</label>
+    </div>
+  </header>
+  <canvas id="game" aria-label="Air Hockey game area"></canvas>
+  <div class="banner" id="banner">
+    <div class="card">
+      <h2 id="bannerTitle">Player A scores!</h2>
+      <p class="sub" id="bannerSub">Next face-off in 1…</p>
+      <div class="chiprow">
+        <button id="resumeBtn">▶️ Resume</button>
+        <button id="playAgainBtn">🔁 Play again</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d', { alpha:false });
+  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const scoreAEl = document.getElementById('sA');
+  const scoreBEl = document.getElementById('sB');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const banner = document.getElementById('banner');
+  const bannerTitle = document.getElementById('bannerTitle');
+  const bannerSub = document.getElementById('bannerSub');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const playAgainBtn = document.getElementById('playAgainBtn');
+  const soundT = document.getElementById('soundT');
+  const vibeT = document.getElementById('vibeT');
+
+  // Prevent page scroll while playing
+  const preventTouchScroll = (e) => { if (e.target === canvas) e.preventDefault(); };
+  document.addEventListener('touchmove', preventTouchScroll, { passive:false });
+
+  // Simple sounds (bleep & goal) via WebAudio (optional)
+  let audioCtx = null;
+  function beep(freq=600, time=0.05, gain=0.05) {
+    if (!soundT.checked) return;
+    try{
+      audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = freq; o.type = 'square';
+      g.gain.value = gain;
+      o.connect(g).connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+      o.start(now);
+      o.stop(now + time);
+    }catch{}
+  }
+  function goalSound() { beep(220,0.18,0.08); setTimeout(()=>beep(330,0.18,0.08),120); }
+
+  const state = {
+    w:0,h:0, portrait:false,
+    fieldPad: 16, // drawing margin (px @ CSS); scaled with dpr in code
+    lineW: 4,
+    goalSize: 0.45, // fraction of side length for goal mouth
+    goalDepth: 20, // how "inside" the wall the goal line sits (px @ CSS)
+    targetScore: 7,
+    running: true,
+    lastTs: 0,
+    countdown: 0, // seconds
+    scorer: null, // 'A' or 'B'
+    scoreA:0, scoreB:0,
+    puck: { x:0, y:0, r:12, vx:0, vy:0, max: 1200 },
+    A: { x:0, y:0, r:26, vx:0, vy:0, max: 1000, id:null }, // Player A (top/left half)
+    B: { x:0, y:0, r:26, vx:0, vy:0, max: 1000, id:null }, // Player B (bottom/right half)
+    friction: 0.997,
+    damp: 0.99, // on bounce
+  };
+
+  function resize() {
+    const cssW = window.innerWidth;
+    const cssH = Math.max(200, window.innerHeight - 56); // header height ~56
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    state.w = canvas.width;
+    state.h = canvas.height;
+    state.portrait = state.h >= state.w;
+
+    // scale CSS -> device pixels
+    state.pad = Math.round(state.fieldPad * dpr);
+    state.lw = Math.max(2, Math.round(state.lineW * dpr));
+    state.goalD = Math.round(state.goalDepth * dpr);
+
+    // Sizes scale with min dimension
+    const base = Math.min(state.w, state.h);
+    const puckR = Math.round(base * 0.015);
+    const malletR = Math.round(base * 0.033);
+    state.puck.r = Math.max(10, puckR);
+    state.A.r = state.B.r = Math.max(20, malletR);
+
+    // Place objects safely on halves
+    centerFaceoff(true);
+  }
+
+  function centerFaceoff(resetVelocity=false) {
+    const { w,h,puck,A,B,portrait,pad } = state;
+    puck.x = w/2; puck.y = h/2;
+    if (resetVelocity) { puck.vx = 0; puck.vy = 0; }
+
+    if (portrait) {
+      A.x = w/2; A.y = h*0.2;
+      B.x = w/2; B.y = h*0.8;
+    } else {
+      A.x = w*0.2; A.y = h/2;
+      B.x = w*0.8; B.y = h/2;
+    }
+    A.vx = A.vy = B.vx = B.vy = 0;
+  }
+
+  // Touch control: closest active touch per side controls the paddle
+  const touches = new Map(); // id -> {x,y}
+  canvas.addEventListener('touchstart', e=>{
+    for (const t of e.changedTouches) {
+      const p = clientToCanvas(t.clientX, t.clientY);
+      touches.set(t.identifier, p);
+      assignTouchToPlayers();
+    }
+  }, {passive:false});
+  canvas.addEventListener('touchmove', e=>{
+    for (const t of e.changedTouches) {
+      if (touches.has(t.identifier)) {
+        touches.set(t.identifier, clientToCanvas(t.clientX, t.clientY));
+      }
+    }
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchend', e=>{
+    for (const t of e.changedTouches) {
+      touches.delete(t.identifier);
+      if (state.A.id === t.identifier) state.A.id = null;
+      if (state.B.id === t.identifier) state.B.id = null;
+    }
+    assignTouchToPlayers();
+  });
+  canvas.addEventListener('touchcancel', e=>{
+    for (const t of e.changedTouches) {
+      touches.delete(t.identifier);
+      if (state.A.id === t.identifier) state.A.id = null;
+      if (state.B.id === t.identifier) state.B.id = null;
+    }
+    assignTouchToPlayers();
+  });
+
+  // Mouse fallback (desktop)
+  let mouseDown = false;
+  canvas.addEventListener('mousedown', e=>{ mouseDown = true; onMouse(e); });
+  window.addEventListener('mousemove', e=>{ if (mouseDown) onMouse(e); });
+  window.addEventListener('mouseup', ()=>{ mouseDown=false; state.A.id=null; state.B.id=null; });
+  function onMouse(e){
+    const p = clientToCanvas(e.clientX, e.clientY);
+    // Assign to whichever half the mouse is in
+    if (state.portrait) {
+      if (p.y < state.h/2) { state.A.id = 'mouse'; touches.set('mouse', p); }
+      else { state.B.id = 'mouse'; touches.set('mouse', p); }
+    } else {
+      if (p.x < state.w/2) { state.A.id = 'mouse'; touches.set('mouse', p); }
+      else { state.B.id = 'mouse'; touches.set('mouse', p); }
+    }
+  }
+
+  function assignTouchToPlayers() {
+    // Pick the nearest touch to each paddle within its half; ignore the rest
+    const pool = [...touches.entries()];
+    const { portrait, w, h, A, B } = state;
+    const halfCheckA = portrait ? (p)=>p.y < h/2 : (p)=>p.x < w/2;
+    const halfCheckB = portrait ? (p)=>p.y >= h/2 : (p)=>p.x >= w/2;
+
+    // Find best touch for A
+    let bestA = null, bestAd = Infinity;
+    for (const [id,p] of pool) if (halfCheckA(p)) {
+      const d = (p.x-A.x)**2 + (p.y-A.y)**2;
+      if (d < bestAd) { bestAd = d; bestA = id; }
+    }
+    // Find best touch for B
+    let bestB = null, bestBd = Infinity;
+    for (const [id,p] of pool) if (halfCheckB(p)) {
+      const d = (p.x-B.x)**2 + (p.y-B.y)**2;
+      if (d < bestBd) { bestBd = d; bestB = id; }
+    }
+    state.A.id = bestA;
+    state.B.id = bestB;
+  }
+
+  function clientToCanvas(cx, cy) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (cx - rect.left) * dpr;
+    const y = (cy - rect.top) * dpr;
+    return { x, y };
+  }
+
+  // Buttons
+  pauseBtn.addEventListener('click', () => {
+    state.running = !state.running;
+    pauseBtn.textContent = state.running ? '⏸️ Pause' : '▶️ Resume';
+    pauseBtn.setAttribute('aria-pressed', state.running ? 'false' : 'true');
+    if (state.running) requestAnimationFrame(loop);
+  });
+  resetBtn.addEventListener('click', () => {
+    state.scoreA = state.scoreB = 0;
+    updateScore();
+    state.scorer = null;
+    state.countdown = 0;
+    banner.classList.remove('show');
+    centerFaceoff(true);
+    if (!state.running) { state.running = true; pauseBtn.textContent = '⏸️ Pause'; requestAnimationFrame(loop); }
+  });
+  resumeBtn.addEventListener('click', () => {
+    banner.classList.remove('show');
+    state.running = true;
+    pauseBtn.textContent = '⏸️ Pause';
+    requestAnimationFrame(loop);
+  });
+  playAgainBtn.addEventListener('click', () => {
+    state.scoreA = state.scoreB = 0;
+    updateScore();
+    banner.classList.remove('show');
+    state.running = true;
+    pauseBtn.textContent = '⏸️ Pause';
+    centerFaceoff(true);
+    requestAnimationFrame(loop);
+  });
+
+  // Game loop
+  function loop(ts) {
+    if (!state.running) return;
+    const dt = Math.min(32, ts - (state.lastTs || ts)) / 1000; // clamp to 32ms
+    state.lastTs = ts;
+
+    update(dt);
+    draw();
+
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt) {
+    const { w,h,pad,lw,goalD,goalSize,portrait,puck,A,B } = state;
+
+    // Target mallet positions from touches
+    for (const p of [A,B]) {
+      if (p.id != null && touches.has(p.id)) {
+        const t = touches.get(p.id);
+        // Smoothly move toward touch (clamped by max speed)
+        const ax = (t.x - p.x);
+        const ay = (t.y - p.y);
+        const maxStep = p.max * dt;
+        const len = Math.hypot(ax, ay);
+        if (len > maxStep) {
+          p.vx = (ax / len) * maxStep;
+          p.vy = (ay / len) * maxStep;
+        } else {
+          p.vx = ax; p.vy = ay;
+        }
+      } else {
+        // No touch — slow to stop
+        p.vx *= 0.85; p.vy *= 0.85;
+        if (Math.hypot(p.vx, p.vy) < 2) { p.vx = p.vy = 0; }
+      }
+      p.x += p.vx; p.y += p.vy;
+    }
+
+    // Confine paddles to their halves & inside walls
+    const minX = pad + A.r, maxX = w - pad - A.r;
+    const minY = pad + A.r, maxY = h - pad - A.r;
+    if (portrait) {
+      // A top half
+      A.y = Math.min(Math.max(A.y, minY), h/2 - lw - A.r);
+      A.x = Math.min(Math.max(A.x, minX), maxX);
+      // B bottom half
+      B.y = Math.max(Math.min(B.y, maxY), h/2 + lw + B.r);
+      B.x = Math.min(Math.max(B.x, minX), maxX);
+    } else {
+      // A left half
+      A.x = Math.min(Math.max(A.x, minX), w/2 - lw - A.r);
+      A.y = Math.min(Math.max(A.y, minY), maxY);
+      // B right half
+      B.x = Math.max(Math.min(B.x, maxX), w/2 + lw + B.r);
+      B.y = Math.min(Math.max(B.y, minY), maxY);
+    }
+
+    // Puck physics
+    puck.x += puck.vx * dt;
+    puck.y += puck.vy * dt;
+    puck.vx *= state.friction;
+    puck.vy *= state.friction;
+
+    // Collide puck with mallets (circle-circle)
+    collidePuckWithMallet(puck, A);
+    collidePuckWithMallet(puck, B);
+
+    // Walls + goal detection
+    let scored = null; // 'A' or 'B' (who gets the point)
+    const gMouth = portrait
+      ? { // top/bottom goals
+          x1: w*(1-goalSize)/2 + pad, x2: w*(1+goalSize)/2 - pad, // horizontal mouth
+          top: pad + goalD, bottom: h - pad - goalD
+        }
+      : { // left/right goals
+          y1: h*(1-goalSize)/2 + pad, y2: h*(1+goalSize)/2 - pad, // vertical mouth
+          left: pad + goalD, right: w - pad - goalD
+        };
+
+    if (portrait) {
+      // Left/Right walls (no goals there)
+      if (puck.x - puck.r < pad) { puck.x = pad + puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
+      if (puck.x + puck.r > w - pad) { puck.x = w - pad - puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
+      // Top: goal if within mouth and crosses line
+      if (puck.y - puck.r < pad) {
+        if (puck.x > gMouth.x1 && puck.x < gMouth.x2) { scored = 'B'; }
+        else { puck.y = pad + puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
+      }
+      // Bottom
+      if (puck.y + puck.r > h - pad) {
+        if (puck.x > gMouth.x1 && puck.x < gMouth.x2) { scored = 'A'; }
+        else { puck.y = h - pad - puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
+      }
+    } else {
+      // Top/Bottom walls (no goals there)
+      if (puck.y - puck.r < pad) { puck.y = pad + puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
+      if (puck.y + puck.r > h - pad) { puck.y = h - pad - puck.r; puck.vy = -puck.vy * state.damp; beep(700,0.03,0.04); }
+      // Left: goal if within mouth and crosses line
+      if (puck.x - puck.r < pad) {
+        if (puck.y > gMouth.y1 && puck.y < gMouth.y2) { scored = 'B'; }
+        else { puck.x = pad + puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
+      }
+      // Right
+      if (puck.x + puck.r > w - pad) {
+        if (puck.y > gMouth.y1 && puck.y < gMouth.y2) { scored = 'A'; }
+        else { puck.x = w - pad - puck.r; puck.vx = -puck.vx * state.damp; beep(700,0.03,0.04); }
+      }
+    }
+
+    if (scored) registerGoal(scored);
+  }
+
+  function collidePuckWithMallet(puck, m) {
+    const dx = puck.x - m.x, dy = puck.y - m.y;
+    const dist = Math.hypot(dx, dy);
+    const minDist = puck.r + m.r;
+    if (dist < minDist && dist > 0) {
+      // separate
+      const overlap = minDist - dist;
+      const nx = dx / dist, ny = dy / dist;
+      puck.x += nx * overlap;
+      puck.y += ny * overlap;
+
+      // Reflect puck velocity along normal; add a bit of mallet velocity
+      const relVx = puck.vx - m.vx, relVy = puck.vy - m.vy;
+      const dot = relVx*nx + relVy*ny;
+      if (dot < 0) {
+        const rx = relVx - 2*dot*nx;
+        const ry = relVy - 2*dot*ny;
+        puck.vx = (rx + m.vx) * 0.98;
+        puck.vy = (ry + m.vy) * 0.98;
+      } else {
+        // If moving away, just nudge with mallet motion
+        puck.vx += m.vx * 0.02;
+        puck.vy += m.vy * 0.02;
+      }
+      // Cap puck speed
+      const sp = Math.hypot(puck.vx, puck.vy);
+      const max = state.puck.max;
+      if (sp > max) { puck.vx = puck.vx/sp*max; puck.vy = puck.vy/sp*max; }
+      beep(520,0.025,0.05);
+    }
+  }
+
+  function registerGoal(by) {
+    // by = 'A' or 'B' -> who gets the point
+    if (by === 'A') state.scoreA++; else state.scoreB++;
+    updateScore();
+    state.running = false;
+    state.countdown = 1.0;
+    state.scorer = by;
+    bannerTitle.textContent = `Player ${by} scores!`;
+    bannerSub.textContent = 'Next face-off in 1…';
+    banner.classList.add('show');
+    goalSound();
+    if (vibeT.checked && 'vibrate' in navigator) navigator.vibrate([30, 30, 60]);
+
+    // Win check
+    if (state.scoreA >= state.targetScore || state.scoreB >= state.targetScore) {
+      bannerTitle.textContent = `Player ${state.scoreA > state.scoreB ? 'A' : 'B'} wins!`;
+      bannerSub.textContent = `Final score ${state.scoreA} — ${state.scoreB}`;
+      return; // wait for user action
+    }
+
+    // Short countdown then faceoff with gentle push
+    let t = 1000;
+    const tick = () => {
+      t -= 250;
+      if (t <= 0) {
+        banner.classList.remove('show');
+        centerFaceoff(true);
+        const dir = state.portrait
+          ? (state.scorer === 'A' ? 1 : -1) // send puck toward opponent
+          : (state.scorer === 'A' ? 1 : -1);
+        if (state.portrait) {
+          state.puck.vx = (Math.random()*2-1) * 150;
+          state.puck.vy = dir * 260;
+        } else {
+          state.puck.vx = dir * 260;
+          state.puck.vy = (Math.random()*2-1) * 150;
+        }
+        state.running = true;
+        pauseBtn.textContent = '⏸️ Pause';
+        requestAnimationFrame(loop);
+      } else {
+        bannerSub.textContent = `Next face-off in ${Math.ceil(t/1000)}…`;
+        setTimeout(tick, 250);
+      }
+    };
+    setTimeout(tick, 250);
+  }
+
+  function updateScore() {
+    scoreAEl.textContent = state.scoreA;
+    scoreBEl.textContent = state.scoreB;
+  }
+
+  // Drawing
+  function draw() {
+    const { w,h,pad,lw,portrait,goalSize,goalD,puck,A,B } = state;
+    // Field
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--field');
+    ctx.fillRect(0,0,w,h);
+
+    // Rink outline
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--line');
+    ctx.lineWidth = lw;
+    ctx.strokeRect(pad, pad, w-2*pad, h-2*pad);
+
+    // Center line
+    ctx.beginPath();
+    if (portrait) {
+      ctx.moveTo(pad, h/2); ctx.lineTo(w-pad, h/2);
+    } else {
+      ctx.moveTo(w/2, pad); ctx.lineTo(w/2, h-pad);
+    }
+    ctx.stroke();
+
+    // Faceoff dot
+    ctx.beginPath();
+    ctx.arc(w/2, h/2, Math.max(3, lw*1.2), 0, Math.PI*2);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+    ctx.fill();
+
+    // Goal mouths (visual hint)
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = lw;
+    if (portrait) {
+      const x1 = w*(1-goalSize)/2 + pad, x2 = w*(1+goalSize)/2 - pad;
+      // top
+      ctx.beginPath(); ctx.moveTo(x1, pad+goalD); ctx.lineTo(x2, pad+goalD); ctx.stroke();
+      // bottom
+      ctx.beginPath(); ctx.moveTo(x1, h-pad-goalD); ctx.lineTo(x2, h-pad-goalD); ctx.stroke();
+    } else {
+      const y1 = h*(1-goalSize)/2 + pad, y2 = h*(1+goalSize)/2 - pad;
+      // left
+      ctx.beginPath(); ctx.moveTo(pad+goalD, y1); ctx.lineTo(pad+goalD, y2); ctx.stroke();
+      // right
+      ctx.beginPath(); ctx.moveTo(w-pad-goalD, y1); ctx.lineTo(w-pad-goalD, y2); ctx.stroke();
+    }
+
+    // Draw mallets
+    drawMallet(A, '#6ee7b7'); // green-ish
+    drawMallet(B, '#fca5a5'); // red-ish
+
+    // Draw puck
+    ctx.beginPath();
+    ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2);
+    ctx.fillStyle = '#e5e7eb';
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, lw);
+    ctx.strokeStyle = '#9ca3af';
+    ctx.stroke();
+  }
+
+  function drawMallet(m, color) {
+    const g = ctx.createRadialGradient(m.x - m.r*0.4, m.y - m.r*0.4, m.r*0.2, m.x, m.y, m.r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(1, color);
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, state.lw);
+    ctx.strokeStyle = 'rgba(0,0,0,.35)';
+    ctx.stroke();
+  }
+
+  // Orientation / resize handling
+  window.addEventListener('resize', () => {
+    const wasPortrait = state.portrait;
+    resize();
+    // If orientation changed, pause briefly and recenter puck to avoid cheap goals
+    const changed = wasPortrait !== state.portrait;
+    if (changed) {
+      state.running = false;
+      centerFaceoff(true);
+      bannerTitle.textContent = 'Orientation changed';
+      bannerSub.textContent = 'Tap Resume to continue';
+      banner.classList.add('show');
+    }
+  });
+
+  // Init
+  resize();
+  centerFaceoff(true);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
