@@ -26,6 +26,18 @@
   canvas{display:block;width:100%;height:auto;border-radius:14px;border:1px solid var(--line);touch-action:none}
   .meter{height:8px;background:#1a2346;border-radius:99px;overflow:hidden}
   .bar{height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444)}
+  .meter.dir{ position:relative; }
+  .meter.dir .left,
+  .meter.dir .right{
+    position:absolute; top:0; height:100%;
+  }
+  .meter.dir .left{ right:50%; background:#6ea8fe; }   /* left = blue */
+  .meter.dir .right{ left:50%;  background:#ef4444; }  /* right = red */
+  .meter.dir .mid{
+    position:absolute; left:50%; top:-2px; bottom:-2px;
+    width:2px; background:#27335f; border-radius:99px;
+    transform:translateX(-1px);
+  }
   .small{color:var(--muted);font-size:12px}
   .center{text-align:center}
 </style>
@@ -62,8 +74,12 @@
       <div class="title">Player 2 😺</div>
       <div class="row">
         <span>Wind</span>
-        <div class="meter" title="Wind affects shots a little"><div id="windbar" class="bar" style="width:50%"></div></div>
-        <span id="windVal" title="Negative = left, Positive = right">0</span>
+        <div class="meter dir" title="Wind: left ⟵ 0 ⟶ right">
+          <div id="windL" class="bar left"></div>
+          <div id="windR" class="bar right"></div>
+          <div class="mid"></div>
+        </div>
+        <span id="windVal" title="Arrow shows direction">→ 0</span>
       </div>
       <div class="row">
         <span>Health</span>
@@ -122,7 +138,8 @@
   const hp2     = document.getElementById('hp2');
   const hp1v    = document.getElementById('hp1v');
   const hp2v    = document.getElementById('hp2v');
-  const windbar = document.getElementById('windbar');
+  const windL   = document.getElementById('windL');
+  const windR   = document.getElementById('windR');
   const windVal = document.getElementById('windVal');
 
   // Prevent page scroll while touching canvas (mobile)
@@ -471,10 +488,18 @@
     hp2v.textContent = players[1].hp+'%';
   }
   function updateWindUI(){
-    const pct = (wind / (2*WIND_MAX) + 0.5)*100; // map [-WM, +WM] to [0..100]
-    windbar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-    windVal.textContent = (wind>=0?'+':'') + wind.toFixed(2);
-  }
+  // magnitude relative to max
+  const mag = Math.min(1, Math.abs(wind) / WIND_MAX);   // 0..1
+  const side = (mag * 50).toFixed(1);                   // percent of half-bar (0..50)
+
+  // fill only the side that matches the sign
+  windL.style.width = (wind < 0 ? side : 0) + '%';
+  windR.style.width = (wind > 0 ? side : 0) + '%';
+
+  // nicer readout: arrow + scaled strength (0..100)
+  const arrow = wind > 0 ? '→ ' : wind < 0 ? '← ' : '· ';
+  windVal.textContent = arrow + Math.round(mag * 100);
+}
 
   angleEl.addEventListener('input', e=>{
     angleVal.textContent = `${e.target.value|0}°`;
