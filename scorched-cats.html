@@ -16,51 +16,41 @@
   .wrap{position:relative;max-width:980px;margin:0 auto}
   canvas{display:block;width:100%;height:auto;border-radius:14px;border:1px solid var(--line);touch-action:none}
 
-  /* Floating HUD overlay */
+  /* Floating HUD overlay (top panels) */
   .hud{
     position:absolute;
     inset:0;
     z-index:10;             /* keep HUD above canvas */
     pointer-events:none;    /* ignore clicks by default */
   }
-  /* allow interaction inside panels and their children */
   .hud .panel,
-  .hud .panel * {
-    pointer-events:auto;
-  }
+  .hud .panel * { pointer-events:auto; }
+
   .panel{
     position:absolute; background:rgba(18,25,50,.85); backdrop-filter: blur(6px);
-    border:1px solid var(--line); border-radius:var(--radius); padding:10px; pointer-events:auto;
+    border:1px solid var(--line); border-radius:var(--radius); padding:10px;
   }
   .panel h3{margin:0 0 8px;font-size:14px;letter-spacing:.3px}
   .small{color:var(--muted);font-size:12px}
+  .title{font-weight:700; letter-spacing:.3px}
+  .turn{font-weight:700}
 
-  /* Left (P1 controls) */
+  /* Top-left: Player 1 health only (angle slider removed) */
   .panel.left{left:10px; top:10px; width:min(280px,45vw)}
-  .row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
-  input[type="range"]{width:100%}
+  .hpBar{height:8px;background:#1a2346;border-radius:99px;overflow:hidden}
+  .hpFill{height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);width:100%}
+
+  /* Top-center: title + New Match */
+  .panel.center{left:50%; transform:translateX(-50%); top:10px; min-width:220px; text-align:center}
   .btn{appearance:none;border:1px solid var(--line);background:var(--accent);color:#081225;
     font-weight:700;border-radius:12px;padding:10px 14px;cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
-
-  /* Fire button with charge overlay */
-  .fireWrap{position:relative}
-  .chargeBar{
-    position:absolute;left:0;bottom:0;height:3px;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);
-    width:0%;border-radius:0 0 12px 12px;transition:width .06s linear
-  }
-
-  /* Center panel (turn & zoom) */
-  .panel.center{left:50%; transform:translateX(-50%); top:10px; min-width:220px; text-align:center}
   .btnRow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 
-  /* Right panel (wind & P2 health) */
+  /* Top-right: wind + Player 2 health */
   .panel.right{right:10px; top:10px; width:min(280px,45vw)}
-
   .meter{height:8px;background:#1a2346;border-radius:99px;overflow:hidden;position:relative}
-  .meter.dir .left, .meter.dir .right{
-    position:absolute; top:0; height:100%;
-  }
+  .meter.dir .left, .meter.dir .right{ position:absolute; top:0; height:100%; }
   .meter.dir .left{ right:50%; background:#6ea8fe;}
   .meter.dir .right{ left:50%;  background:#ef4444;}
   .meter.dir .mid{
@@ -69,21 +59,44 @@
   }
   .bar{height:100%}
 
-  .hpBar{height:8px;background:#1a2346;border-radius:99px;overflow:hidden}
-  .hpFill{height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);width:100%}
+  /* Bottom dock overlay */
+  .dock{
+    position:absolute; left:10px; right:10px; bottom:10px;
+    display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center;
+    background:rgba(18,25,50,.85); backdrop-filter: blur(6px);
+    border:1px solid var(--line); border-radius:16px; padding:10px;
+    pointer-events:auto;
+  }
+  .weaponBadge{
+    border:1px solid var(--line); background:#0f1633; color:var(--ink);
+    padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none;
+    display:flex; align-items:center; gap:8px;
+  }
+  .weaponMenu{
+    position:absolute; bottom:58px; left:10px;
+    background:rgba(18,25,50,.95); border:1px solid var(--line); border-radius:12px; padding:6px;
+    display:none; flex-direction:column; gap:6px; z-index:20;
+  }
+  .weaponMenu .opt{
+    padding:8px 10px; border-radius:8px; cursor:pointer;
+    border:1px solid transparent;
+  }
+  .weaponMenu .opt:hover{ background:#0f1633; border-color:#2a3560; }
+  .weaponMenu .opt.active{ background:#a78bfa; color:#081225; border-color:#a78bfa; }
 
-  .title{font-weight:700; letter-spacing:.3px}
-  .turn{font-weight:700}
+  .fireWrap{position:relative; display:flex; align-items:center; justify-content:center}
+  .fireBtn{ width:100%; min-height:44px; }
+  .chargeBar{
+    position:absolute; left:10px; right:10px; bottom:6px; height:3px;
+    background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);
+    width:0%; border-radius:99px; transition:width .06s linear; pointer-events:none;
+  }
 
-  /* On-canvas HUD bits (weapon pills etc.) */
-  .pillRow{display:flex;gap:6px;flex-wrap:wrap}
-  .pill{border:1px solid var(--line);background:#0f1633;color:var(--ink);padding:6px 10px;border-radius:999px;cursor:pointer}
-  .pill.active{background:#a78bfa;color:#081225;border-color:#a78bfa}
+  .zoomRow{display:flex; gap:8px}
+  .zoomRow .btn{min-width:44px}
 
   @media (max-width:700px){
-    .panel.left{width:calc(100% - 20px)}
-    .row{grid-template-columns:1fr auto}
-    .row > span:first-child{grid-column:1 / -1}
+    .panel.left,.panel.right{width:calc(100% - 20px)}
   }
 </style>
 </head>
@@ -95,29 +108,8 @@
   <div class="hud">
     <div class="panel left">
       <h3>Player 1 😼</h3>
+      <div class="small" style="margin-bottom:6px">Aim: drag on the canvas</div>
       <div class="row">
-        <span>Angle</span>
-        <input id="angle" type="range" min="0" max="180" value="45">
-        <span id="angleVal">45°</span>
-      </div>
-
-      <div class="row" style="margin-top:8px">
-        <span>Weapon</span>
-        <div class="pillRow" id="weapons">
-          <button class="pill active" data-w="normal">Normal</button>
-          <button class="pill" data-w="bouncy">Bouncy</button>
-          <button class="pill" data-w="shotgun">Shotgun</button>
-        </div>
-        <span></span>
-      </div>
-
-      <div style="margin-top:10px;text-align:center" class="fireWrap">
-        <button id="fire" class="btn" style="min-width:170px">HOLD to FIRE 🔥</button>
-        <div id="chargeBar" class="chargeBar"></div>
-        <div class="small" id="powerRead">Power: 60</div>
-      </div>
-
-      <div class="row" style="margin-top:10px">
         <span>Health</span>
         <div class="hpBar"><div id="hp1" class="hpFill"></div></div>
         <span id="hp1v">100%</span>
@@ -128,16 +120,14 @@
       <div class="title">Scorched Cats</div>
       <div class="small">Turn: <span id="turn" class="turn">P1</span></div>
       <div class="btnRow" style="margin-top:8px">
-        <button id="zoomIn" class="btn" title="Zoom In">＋</button>
-        <button id="zoomOut" class="btn" title="Zoom Out">－</button>
         <button id="new" class="btn" style="background:#a78bfa">New Match</button>
       </div>
-      <div class="small" style="margin-top:6px">Tips: drag on canvas to aim; double-tap to reset zoom</div>
+      <div class="small" style="margin-top:6px">Double-tap canvas to reset zoom</div>
     </div>
 
     <div class="panel right">
       <h3>Player 2 😺</h3>
-      <div class="row">
+      <div class="row" style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center">
         <span>Wind</span>
         <div class="meter dir" title="Wind: left ⟵ 0 ⟶ right">
           <div id="windL" class="bar left"></div>
@@ -146,10 +136,34 @@
         </div>
         <span id="windVal" title="Arrow shows direction">→ 0</span>
       </div>
-      <div class="row" style="margin-top:10px">
+      <div class="row" style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin-top:10px">
         <span>Health</span>
         <div class="hpBar"><div id="hp2" class="hpFill"></div></div>
         <span id="hp2v">100%</span>
+      </div>
+    </div>
+
+    <!-- Bottom Dock -->
+    <div class="dock">
+      <div style="position:relative">
+        <div id="weaponBadge" class="weaponBadge" aria-haspopup="true" aria-expanded="false">
+          <span id="weaponName">Normal</span><span>⌄</span>
+        </div>
+        <div id="weaponMenu" class="weaponMenu" role="menu" aria-label="Select weapon">
+          <div class="opt active" data-w="normal">Normal</div>
+          <div class="opt" data-w="bouncy">Bouncy</div>
+          <div class="opt" data-w="shotgun">Shotgun</div>
+        </div>
+      </div>
+
+      <div class="fireWrap">
+        <button id="fire" class="btn fireBtn">HOLD TO FIRE 🔥</button>
+        <div id="chargeBar" class="chargeBar"></div>
+      </div>
+
+      <div class="zoomRow">
+        <button id="zoomIn" class="btn" title="Zoom In">＋</button>
+        <button id="zoomOut" class="btn" title="Zoom Out">－</button>
       </div>
     </div>
   </div>
@@ -201,12 +215,7 @@
   let particles = []; // debris & smoke
   let rings = []; // shockwave rings
 
-  // UI elements
-  const angleEl = document.getElementById('angle');
-  const angleVal = document.getElementById('angleVal');
-  const fireBtn = document.getElementById('fire');
-  const chargeBar = document.getElementById('chargeBar');
-  const powerRead = document.getElementById('powerRead');
+  // UI elements (top)
   const newBtn  = document.getElementById('new');
   const turnEl  = document.getElementById('turn');
   const hp1     = document.getElementById('hp1');
@@ -216,9 +225,15 @@
   const windL   = document.getElementById('windL');
   const windR   = document.getElementById('windR');
   const windVal = document.getElementById('windVal');
+
+  // Bottom dock
+  const fireBtn = document.getElementById('fire');
+  const chargeBar = document.getElementById('chargeBar');
   const zoomIn  = document.getElementById('zoomIn');
   const zoomOut = document.getElementById('zoomOut');
-  const weaponPills = document.getElementById('weapons');
+  const weaponBadge = document.getElementById('weaponBadge');
+  const weaponMenu  = document.getElementById('weaponMenu');
+  const weaponName  = document.getElementById('weaponName');
 
   // Prevent page scroll on canvas touches
   ['touchstart','touchmove','touchend','gesturestart'].forEach(ev =>
@@ -226,7 +241,7 @@
   );
 
   // ======= Audio: lightweight WebAudio arcade bleeps =======
-  let audioCtx = null;
+  let audioCtx = null, chargeOsc=null, chargeGain=null;
   function audio(){
     if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     return audioCtx;
@@ -272,6 +287,32 @@
     o.start(t); o.stop(t+0.18);
   }
   function haptics(pattern=[50]){ if (navigator.vibrate) navigator.vibrate(pattern); }
+
+  // Charging sound start/stop (rising pitch)
+  function startChargeSound(){
+    const ctx = audio();
+    chargeOsc = ctx.createOscillator();
+    chargeGain = ctx.createGain();
+    chargeOsc.type = 'sawtooth';
+    chargeOsc.frequency.setValueAtTime(220, ctx.currentTime); // start low
+    chargeGain.gain.setValueAtTime(0.08, ctx.currentTime);
+    chargeOsc.connect(chargeGain); chargeGain.connect(ctx.destination);
+    chargeOsc.start();
+  }
+  function updateChargeSound(pct){ // pct 0..1
+    if (!chargeOsc) return;
+    const ctx = audio();
+    const f = 220 + pct*520; // 220 -> 740 Hz
+    chargeOsc.frequency.linearRampToValueAtTime(f, ctx.currentTime + 0.05);
+  }
+  function stopChargeSound(){
+    if (!chargeOsc) return;
+    const ctx = audio();
+    const o=chargeOsc, g=chargeGain;
+    chargeOsc=null; chargeGain=null;
+    if (g) g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.08);
+    if (o) o.stop(ctx.currentTime+0.1);
+  }
 
   // ======= Terrain generation =======
   function generateTerrain(){
@@ -403,7 +444,7 @@
     taDa(); meowBlip(); haptics([60,60,60]);
   }
 
-  // ======= Weapons =======
+  // ======= Weapons & shots =======
   function launchShot(power){
     const p = players[turn];
     const ang = (p.angle*Math.PI)/180;
@@ -557,9 +598,6 @@
   // ======= UI & controls =======
   function updateTurnUI(){
     turnEl.textContent = turn===0 ? 'P1' : 'P2';
-    const p = players[turn];
-    angleEl.value = p.angle|0;
-    angleVal.textContent = `${p.angle|0}°`;
   }
   function updateHPUI(){
     hp1.style.width = players[0].hp+'%';
@@ -576,53 +614,69 @@
     windVal.textContent = arrow + Math.round(mag*100);
   }
 
-  angleEl.addEventListener('input', e=>{
-    players[turn].angle = e.target.value|0;
-    angleVal.textContent = `${players[turn].angle}°`;
+  // Weapon badge menu
+  function openWeaponMenu(open){
+    weaponMenu.style.display = open ? 'flex' : 'none';
+    weaponBadge.setAttribute('aria-expanded', open?'true':'false');
+  }
+  weaponBadge.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    openWeaponMenu(weaponMenu.style.display!=='flex');
   });
-
-  // Weapon pills
-  weaponPills.addEventListener('click', e=>{
+  document.addEventListener('click', ()=>{
+    openWeaponMenu(false);
+  });
+  weaponMenu.addEventListener('click', (e)=>{
     if (!(e.target instanceof HTMLElement)) return;
     const w = e.target.dataset.w;
     if (!w) return;
     weapon = w;
-    Array.from(weaponPills.querySelectorAll('.pill')).forEach(p=>p.classList.toggle('active', p.dataset.w===w));
+    weaponName.textContent = w.charAt(0).toUpperCase()+w.slice(1);
+    Array.from(weaponMenu.querySelectorAll('.opt')).forEach(o=>o.classList.toggle('active', o.dataset.w===w));
+    openWeaponMenu(false);
   });
 
-  // Hold-to-charge fire
-  let charging=false, chargePower=60, chargeInterval=null;
+  // Hold-to-charge fire (with rising pitch); Shotgun fires instantly
+  let charging=false, chargePower=1, chargeInterval=null;
   function startCharge(){
     if (shot) return;
+    if (weapon===Weapons.SHOTGUN){
+      // instant fire for shotgun
+      buzz(420,0.05,'triangle',0.1);
+      launchShot(60); // fixed reasonable power
+      return;
+    }
     charging=true;
-    buzz(420,0.05,'triangle',0.08);
+    chargePower = 1; // start at 1
+    startChargeSound();
+    chargeBar.style.width = '0%';
     chargeInterval = setInterval(()=>{
       chargePower = Math.min(100, chargePower + 1.8);
-      chargeBar.style.width = (chargePower)+'%';
-      powerRead.textContent = 'Power: ' + Math.round(chargePower);
+      const pct = Math.max(0, Math.min(100, chargePower));
+      chargeBar.style.width = pct + '%';
+      updateChargeSound(pct/100);
     }, 60);
   }
   function endChargeAndFire(){
+    if (weapon===Weapons.SHOTGUN) return; // already fired instantly
     if (!charging) return;
     clearInterval(chargeInterval); chargeInterval=null;
+    stopChargeSound();
     charging=false;
-    if (chargePower<1) chargePower=1;
     launchShot(chargePower);
     chargePower=1; // reset ready for next charge
     chargeBar.style.width='0%';
-    powerRead.textContent='Power: ' + Math.round(players[turn].power||60);
   }
-  // Mouse/touch
+
+  // Mouse/touch just for the FIRE button (to not suppress other clicks)
   fireBtn.addEventListener('mousedown', startCharge);
-  fireBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); startCharge(); }, {passive:false});
-  
-  // END charge (attach only to the FIRE button, not the whole window)
   fireBtn.addEventListener('mouseup', endChargeAndFire);
   fireBtn.addEventListener('mouseleave', endChargeAndFire);
+  fireBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); startCharge(); }, {passive:false});
   fireBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
   fireBtn.addEventListener('touchcancel', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
-  
-  // Aim helper: drag sets angle
+
+  // Aim helper: drag sets angle (vertical relative to current cat)
   cvs.addEventListener('pointerdown', onPointer);
   cvs.addEventListener('pointermove', onPointer);
   function onPointer(e){
@@ -636,7 +690,6 @@
     let ang = Math.atan2(dy, Math.abs(dx)) * 180/Math.PI;
     ang = Math.max(0, Math.min(180, ang));
     p.angle = ang|0;
-    angleEl.value = p.angle; angleVal.textContent = p.angle+'°';
   }
 
   newBtn.addEventListener('click', ()=>resetGame());
@@ -719,20 +772,18 @@
     // Ghost arc + crosshair (short preview)
     if (!shot){
       const p=players[turn]; const ang=(p.angle*Math.PI)/180; const dir=(p.facing===1?1:-1);
-      const baseV = Math.max(1, Math.max(1, parseFloat(chargeBar.style.width)||60)*0.9); // approx
+      const baseV = 0.9 * Math.max(1, (parseFloat(chargeBar.style.width)||0)); // approx by current charge bar %
       let x = p.x + Math.cos(ang)*(PLAYER_R+6)*dir;
       let y = p.y - Math.sin(ang)*(PLAYER_R+6);
-      let vx = Math.cos(ang)*baseV*dir, vy = -Math.sin(ang)*baseV;
+      let vx = Math.cos(ang)*Math.max(1,baseV)*dir, vy = -Math.sin(ang)*Math.max(1,baseV);
       ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.5;
       ctx.setLineDash([3,6]); ctx.beginPath(); ctx.moveTo(x,y);
-      let last={x,y};
       let hitX=x, hitY=y;
       for(let i=0;i<18;i++){
         vx += wind; vy += G; x += vx; y += vy;
-        // stop if into ground
         const ix=x|0, iy=y|0;
         if (ix<0||ix>=W||iy<0||iy>=H || (iy>=0 && terrainMask[iy*W+ix]===SOLID)){ hitX=x; hitY=y; break; }
-        ctx.lineTo(x,y); last={x,y}; hitX=x; hitY=y;
+        ctx.lineTo(x,y); hitX=x; hitY=y;
       }
       ctx.stroke(); ctx.setLineDash([]);
       // crosshair at end
@@ -818,11 +869,18 @@
     players[turn].emote='😼'; players[turn].emoteT=80;
   }
 
+  function updateAll(){ updateHPUI(); updateTurnUI(); updateWindUI(); }
+
+  // Terrain, UI boot
   generateTerrain();
-  updateHPUI();
-  updateTurnUI();
+  updateAll();
   players[turn].emote='😼'; players[turn].emoteT=80;
   draw();
+
+  // New match
+  newBtn.addEventListener('click', resetGame);
+
+  // ======= Shot stepping end =======
 })();
 </script>
 </body>
