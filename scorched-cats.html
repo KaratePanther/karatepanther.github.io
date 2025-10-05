@@ -614,10 +614,14 @@
   }
   // Mouse/touch
   fireBtn.addEventListener('mousedown', startCharge);
-  window.addEventListener('mouseup', endChargeAndFire);
   fireBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); startCharge(); }, {passive:false});
-  window.addEventListener('touchend', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
-
+  
+  // END charge (attach only to the FIRE button, not the whole window)
+  fireBtn.addEventListener('mouseup', endChargeAndFire);
+  fireBtn.addEventListener('mouseleave', endChargeAndFire);
+  fireBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
+  fireBtn.addEventListener('touchcancel', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
+  
   // Aim helper: drag sets angle
   cvs.addEventListener('pointerdown', onPointer);
   cvs.addEventListener('pointermove', onPointer);
