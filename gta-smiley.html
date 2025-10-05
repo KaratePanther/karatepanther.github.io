@@ -3,289 +3,462 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Smiley Joystick</title>
-<meta name="description" content="Move a smiley smoothly with a virtual joystick. iOS-friendly." />
+<title>Smiley Duo Arcade — 3 Modes</title>
+<meta name="description" content="Two-player virtual joysticks with Dodgeballs, Collect the Dots, and Sumo Arena." />
 <style>
   :root{
-    --bg:#0b1020; --card:#121932; --ink:#e8ecff; --muted:#aab3d9;
-    --line:#233055; --accent:#6ea8fe; --accent2:#90c2ff; --accent3:#f59e0b;
+    --bg:#0b1020; --card:#121932; --ink:#e8ecff; --muted:#aab3d9; --line:#233055;
+    --p1:#6ea8fe; --p2:#f59e0b; --good:#22c55e; --warn:#f59e0b; --danger:#ef4444;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
-  html, body {
+  html, body{
     height:100%; margin:0; background:var(--bg); color:var(--ink);
-    -webkit-user-select:none; user-select:none; overscroll-behavior:none;
-    touch-action:none; /* critical: enable multi-touch without scrolling */
+    -webkit-user-select:none; user-select:none; overscroll-behavior:none; touch-action:none;
+    font:500 14px/1.3 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
   }
-  #ui {
-    position:fixed; inset:auto 0 0 0; padding:10px calc(10px) calc(10px + var(--safe-bottom)) 10px;
-    display:flex; justify-content:space-between; align-items:flex-end; pointer-events:none;
-    gap:10px;
+  #stage{position:fixed; inset:0; width:100vw; height:100vh; display:block; background:var(--bg);}
+  #hudTop{
+    position:fixed; top:8px; left:50%; transform:translateX(-50%);
+    display:flex; gap:8px; padding:6px; background:rgba(18,25,50,.7);
+    border:1px solid var(--line); border-radius:12px; backdrop-filter: blur(6px);
+    align-items:center; z-index:2; pointer-events:auto;
   }
-  /* Canvas fills the screen behind UI */
-  #stage { position:fixed; inset:0; display:block; width:100vw; height:100vh; background:var(--bg); }
-
-  /* Joystick */
-  .stick {
+  select, button{
+    background:var(--card); color:var(--ink); border:1px solid var(--line);
+    border-radius:10px; padding:8px 10px; font-weight:600;
+  }
+  .score{
+    padding:6px 10px; border-radius:10px; border:1px solid var(--line); background:rgba(18,25,50,.7);
+  }
+  .p1{ color:var(--p1) } .p2{ color:var(--p2) }
+  #uiBottom{
+    position:fixed; inset:auto 0 0 0; padding:10px 10px calc(10px + var(--safe-bottom)) 10px;
+    display:flex; justify-content:space-between; align-items:flex-end; gap:10px; z-index:2;
+  }
+  .stick{
     position:relative; width:140px; height:140px; border-radius:50%;
-    background:radial-gradient(80px 80px at 50% 50%, rgba(110,168,254,.15), rgba(110,168,254,.05));
-    border:2px solid var(--line);
-    box-shadow:0 0 0 2px rgba(110,168,254,.1) inset, 0 10px 30px rgba(0,0,0,.35);
-    pointer-events:auto; /* accept input */
+    background:radial-gradient(80px 80px at 50% 50%, rgba(255,255,255,.08), rgba(255,255,255,.02));
+    border:2px solid var(--line); box-shadow:0 10px 30px rgba(0,0,0,.35) inset;
     touch-action:none;
   }
-  .stick::after {
-    content:''; position:absolute; inset:8px; border-radius:50%;
-    border:1px dashed rgba(144,194,255,.25);
-  }
-  .thumb {
-    --x: 50%; --y: 50%;
-    position:absolute; width:56px; height:56px; border-radius:50%;
+  .stick::after{ content:''; position:absolute; inset:8px; border-radius:50%; border:1px dashed rgba(255,255,255,.18); }
+  .thumb{
+    --x:50%; --y:50%; position:absolute; width:56px; height:56px; border-radius:50%;
     left:calc(var(--x) - 28px); top:calc(var(--y) - 28px);
-    background:radial-gradient(circle at 30% 30%, var(--accent2), var(--accent));
     border:2px solid rgba(255,255,255,.35);
-    box-shadow:0 6px 18px rgba(0,0,0,.4), 0 0 0 6px rgba(110,168,254,.15);
-    transition: left .08s ease-out, top .08s ease-out;
+    box-shadow:0 6px 18px rgba(0,0,0,.4), 0 0 0 6px rgba(255,255,255,.12);
+    transition:left .08s ease-out, top .08s ease-out;
   }
-
-  /* Buttons (pause/reset) */
-  .btns { display:flex; gap:8px; pointer-events:auto; }
-  button {
-    background:var(--card); color:var(--ink); border:1px solid var(--line);
-    padding:10px 14px; border-radius:12px; font:600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  }
-  button:active { transform:translateY(1px); }
-  .hint {
-    position:fixed; top:10px; left:50%; transform:translateX(-50%);
-    padding:8px 12px; background:rgba(18,25,50,.7); border:1px solid var(--line); border-radius:10px;
-    font:500 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--muted);
+  #stickL .thumb{ background:radial-gradient(circle at 30% 30%, #90c2ff, var(--p1)); }
+  #stickR .thumb{ background:radial-gradient(circle at 30% 30%, #ffd18a, var(--p2)); }
+  .btns{ display:flex; gap:8px; }
+  #msg{
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    padding:14px 18px; border-radius:14px; background:rgba(18,25,50,.85); border:1px solid var(--line);
+    font-size:18px; display:none; z-index:3;
   }
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
 
-<div class="hint">Drag the joystick to move 😊 — Works on iPhone/iPad and desktop (mouse).</div>
-
-<div id="ui">
-  <div class="stick" id="stick">
-    <div class="thumb" id="thumb"></div>
-  </div>
-  <div class="btns">
-    <button id="pauseBtn" aria-pressed="false">⏸️ Pause</button>
-    <button id="resetBtn">🔄 Reset</button>
-  </div>
+<div id="hudTop">
+  <label for="mode">Mode:</label>
+  <select id="mode" aria-label="Game mode">
+    <option value="dodge">Dodgeballs</option>
+    <option value="collect">Collect the Dots</option>
+    <option value="sumo">Sumo Arena</option>
+  </select>
+  <span class="score"><span class="p1">P1</span>: <span id="p1Score">0</span></span>
+  <span class="score"><span class="p2">P2</span>: <span id="p2Score">0</span></span>
+  <button id="resetBtn">Reset</button>
+  <button id="pauseBtn" aria-pressed="false">⏸️ Pause</button>
 </div>
+
+<div id="uiBottom">
+  <div class="stick" id="stickL" aria-label="Left joystick"><div class="thumb" id="thumbL"></div></div>
+  <div class="stick" id="stickR" aria-label="Right joystick"><div class="thumb" id="thumbR"></div></div>
+</div>
+
+<div id="msg"></div>
 
 <script>
 (() => {
-  // ---------- Canvas setup ----------
+  // ===== Canvas setup =====
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d');
-  function fitCanvas() {
+  function fit() {
     const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    canvas.width  = Math.floor(window.innerWidth * dpr);
-    canvas.height = Math.floor(window.innerHeight * dpr);
-    canvas.style.width  = window.innerWidth + 'px';
-    canvas.style.height = window.innerHeight + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    canvas.width = Math.floor(innerWidth * dpr);
+    canvas.height = Math.floor(innerHeight * dpr);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
   }
-  fitCanvas();
-  addEventListener('resize', fitCanvas);
+  fit(); addEventListener('resize', fit);
 
-  // ---------- Game state ----------
-  const state = {
-    pos: { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 },
-    vel: { x: 0, y: 0 },
-    radius: 28, // smiley radius (px)
-    maxSpeed: 380, // px/sec at full deflection
-    accel: 10.0,   // how fast velocity approaches target (larger = snappier)
-    friction: 0.96, // applied when no input
-    target: { x: 0, y: 0 }, // desired velocity from stick
-    paused: false
+  // ===== Helpers =====
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+  const dist2 = (a,b) => { const dx=a.x-b.x, dy=a.y-b.y; return dx*dx+dy*dy; };
+  const rnd = (a,b) => a + Math.random()*(b-a);
+
+  // ===== Game state =====
+  const MODE = { DODGE:'dodge', COLLECT:'collect', SUMO:'sumo' };
+  const ui = {
+    modeSel: document.getElementById('mode'),
+    p1Score: document.getElementById('p1Score'),
+    p2Score: document.getElementById('p2Score'),
+    resetBtn: document.getElementById('resetBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    msg: document.getElementById('msg'),
   };
 
-  // ---------- Joystick logic ----------
-  const stick = document.getElementById('stick');
-  const thumb = document.getElementById('thumb');
-  const STICK_R = 70; // px, outer circle radius (matches CSS ~140x140)
-  const center = { x: 0, y: 0 };
-  let activePointerId = null;
+  const world = {
+    paused: false,
+    width: () => innerWidth,
+    height: () => innerHeight,
+    mode: MODE.DODGE,
+    roundOver: false,
+  };
 
-  function setThumb(nx, ny) {
-    // nx, ny in [-1,1] relative to center
-    const px = 50 + nx * 40; // visual range (percent in the 8px inset ring)
-    const py = 50 + ny * 40;
-    thumb.style.setProperty('--x', px + '%');
-    thumb.style.setProperty('--y', py + '%');
+  function basePlayer(x,y,color) {
+    return {
+      x, y, vx:0, vy:0, r:28, color, maxSpeed:380, accel:10, friction:0.96,
+      targetX:0, targetY:0, score:0,
+      // dodge
+      hp:3, fireCd:0, fireRate:0.35,
+      // sumo
+      alive:true,
+    };
   }
-  function resetThumb() { setThumb(0, 0); }
+  const p1 = basePlayer(innerWidth*0.3, innerHeight*0.6, '#6ea8fe');
+  const p2 = basePlayer(innerWidth*0.7, innerHeight*0.6, '#f59e0b');
 
-  function pointerPosInStick(ev) {
-    const rect = stick.getBoundingClientRect();
-    const x = ev.clientX - rect.left;
-    const y = ev.clientY - rect.top;
-    // Convert to centered coords
-    center.x = rect.width / 2;
-    center.y = rect.height / 2;
-    return { x, y, rect };
-  }
+  let dots = [];      // collect mode items
+  let bullets = [];   // dodgeballs bullets
+  let arena = { x: innerWidth/2, y: innerHeight/2, r: Math.min(innerWidth,innerHeight)*0.38 };
 
-  function handleStart(ev) {
-    if (activePointerId !== null) return; // ignore additional touches
-    activePointerId = ev.pointerId;
-    stick.setPointerCapture?.(ev.pointerId);
-    updateFromEvent(ev);
+  function resetCommonPositions() {
+    p1.x = innerWidth*0.25; p1.y = innerHeight*0.6; p1.vx = p1.vy = 0; p1.alive = true;
+    p2.x = innerWidth*0.75; p2.y = innerHeight*0.6; p2.vx = p2.vy = 0; p2.alive = true;
   }
 
-  function handleMove(ev) {
-    if (ev.pointerId !== activePointerId) return;
-    updateFromEvent(ev);
+  function resetMode(mode) {
+    world.mode = mode;
+    world.roundOver = false;
+    bullets = []; dots = [];
+    p1.hp = 3; p2.hp = 3;
+    if (mode === MODE.SUMO) {
+      arena.r = Math.min(innerWidth, innerHeight) * 0.38;
+    }
+    if (mode === MODE.COLLECT) {
+      // spawn initial dots
+      for (let i=0;i<10;i++) spawnDot();
+    }
+    resetCommonPositions();
+    ui.msg.style.display = 'none';
+    renderScores();
   }
 
-  function handleEnd(ev) {
-    if (ev.pointerId !== activePointerId) return;
-    activePointerId = null;
-    stick.releasePointerCapture?.(ev.pointerId);
-    state.target.x = 0; state.target.y = 0;
-    resetThumb();
+  function renderScores() {
+    ui.p1Score.textContent = world.mode === MODE.DODGE ? '❤'.repeat(p1.hp) : p1.score;
+    ui.p2Score.textContent = world.mode === MODE.DODGE ? '❤'.repeat(p2.hp) : p2.score;
   }
 
-  function updateFromEvent(ev) {
-    const { x, y } = pointerPosInStick(ev);
-    let dx = x - center.x;
-    let dy = y - center.y;
-    const dist = Math.hypot(dx, dy);
-    const max = STICK_R - 10; // visual clamp inside border
-    const clamped = dist > max ? max : dist;
-    const scale = (clamped === 0) ? 0 : (clamped / max);
-    // Normalized direction (avoid NaN)
-    if (dist > 0) { dx /= dist; dy /= dist; } else { dx = 0; dy = 0; }
-    // Visual thumb position
-    setThumb(dx * scale, dy * scale);
-    // Convert to desired velocity (invert Y because screen coords)
-    state.target.x = dx * scale * state.maxSpeed;
-    state.target.y = dy * scale * state.maxSpeed;
+  // ===== Joysticks (pointer events) =====
+  function makeStick(rootEl, thumbEl) {
+    const STICK_R = 70;
+    let activeId = null;
+    let target = { x:0, y:0 };
+    const setThumb = (nx,ny) => {
+      const px = 50 + nx*40, py = 50 + ny*40;
+      thumbEl.style.setProperty('--x', px+'%');
+      thumbEl.style.setProperty('--y', py+'%');
+    };
+    const resetThumb = () => setThumb(0,0);
+
+    function centered(ev) {
+      const rect = rootEl.getBoundingClientRect();
+      const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+      const cx = rect.width/2, cy = rect.height/2;
+      return { x, y, cx, cy, max: STICK_R - 10 };
+    }
+    function start(ev){ if(activeId!==null) return; activeId = ev.pointerId; rootEl.setPointerCapture?.(ev.pointerId); move(ev); }
+    function end(ev){ if(ev.pointerId!==activeId) return; activeId = null; rootEl.releasePointerCapture?.(ev.pointerId); target.x=0; target.y=0; resetThumb(); }
+    function move(ev){
+      if(ev.pointerId!==activeId) return;
+      const {x,y,cx,cy,max} = centered(ev);
+      let dx = x-cx, dy = y-cy;
+      const d = Math.hypot(dx,dy);
+      const clamped = Math.min(d, max);
+      const scale = max? clamped/max : 0;
+      if (d>0){ dx/=d; dy/=d; } else { dx=0; dy=0; }
+      setThumb(dx*scale, dy*scale);
+      target.x = dx*scale; target.y = dy*scale; // [-1..1]
+    }
+    ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']
+      .forEach(t=>rootEl.addEventListener(t, (ev)=>{
+        if(t==='pointerdown') start(ev);
+        else if(t==='pointermove') move(ev);
+        else end(ev);
+      }, {passive:false}));
+
+    return target;
   }
 
-  // Use Pointer Events (covers touch + mouse). Ensure element accepts them.
-  ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']
-    .forEach(type => stick.addEventListener(type, (ev) => {
-      if (type === 'pointerdown') handleStart(ev);
-      else if (type === 'pointermove') handleMove(ev);
-      else handleEnd(ev);
-    }, { passive:false }));
+  const stickL = makeStick(document.getElementById('stickL'), document.getElementById('thumbL'));
+  const stickR = makeStick(document.getElementById('stickR'), document.getElementById('thumbR'));
 
-  // Desktop fallback: allow holding mouse anywhere on stick
-  // (already covered by pointer events above)
+  // ===== Input -> velocity targets =====
+  function updateTargets() {
+    p1.targetX = stickL.x * p1.maxSpeed;
+    p1.targetY = stickL.y * p1.maxSpeed;
+    p2.targetX = stickR.x * p2.maxSpeed;
+    p2.targetY = stickR.y * p2.maxSpeed;
+  }
 
-  // ---------- Buttons ----------
-  const pauseBtn = document.getElementById('pauseBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  pauseBtn.addEventListener('click', () => {
-    state.paused = !state.paused;
-    pauseBtn.textContent = state.paused ? '▶️ Resume' : '⏸️ Pause';
-    pauseBtn.setAttribute('aria-pressed', String(state.paused));
-  });
-  resetBtn.addEventListener('click', () => {
-    state.pos.x = window.innerWidth * 0.5;
-    state.pos.y = window.innerHeight * 0.5;
-    state.vel.x = state.vel.y = 0;
-  });
+  // ===== Mode logic =====
+  // Dodgeballs: players can fire in their movement direction (auto-aim from velocity/target)
+  function tryFire(player) {
+    if (player.fireCd > 0) return;
+    const ax = player.targetX, ay = player.targetY;
+    const sp = Math.hypot(ax, ay);
+    if (sp < 40) return; // require a little intent
+    const dirx = ax/sp, diry = ay/sp;
+    bullets.push({
+      x: player.x + dirx * (player.r + 6),
+      y: player.y + diry * (player.r + 6),
+      vx: dirx * 560,
+      vy: diry * 560,
+      r: 6,
+      owner: player
+    });
+    player.fireCd = player.fireRate;
+  }
 
-  // ---------- Game loop ----------
-  let last = performance.now();
-  function loop(now) {
-    const dt = Math.min(0.035, (now - last) / 1000); // cap dt (35ms) for stability
-    last = now;
+  function updateBullets(dt) {
+    for (const b of bullets) {
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+    }
+    // cull off-screen
+    bullets = bullets.filter(b => b.x>-20 && b.x<innerWidth+20 && b.y>-20 && b.y<innerHeight+20);
+  }
 
-    if (!state.paused) {
-      // Ease current velocity toward target velocity
-      const ax = (state.target.x - state.vel.x) * state.accel * dt;
-      const ay = (state.target.y - state.vel.y) * state.accel * dt;
-      state.vel.x += ax;
-      state.vel.y += ay;
-
-      // Apply friction when no input
-      if (activePointerId === null) {
-        state.vel.x *= state.friction;
-        state.vel.y *= state.friction;
+  function checkBulletHits() {
+    for (const b of bullets) {
+      const target = (b.owner === p1) ? p2 : p1;
+      const r2 = (b.r + target.r) ** 2;
+      if (dist2(b, target) <= r2) {
+        // hit!
+        target.hp = Math.max(0, target.hp - 1);
+        b.x = -9999; // mark for removal
+        if (target.hp === 0 && !world.roundOver) {
+          world.roundOver = true;
+          const winner = (target === p1) ? 'P2' : 'P1';
+          (target === p1 ? p2 : p1).score += 1;
+          renderScores();
+          showMsg(`${winner} wins the round!`);
+        }
       }
+    }
+    bullets = bullets.filter(b => b.x !== -9999);
+  }
 
-      // Integrate position
-      state.pos.x += state.vel.x * dt;
-      state.pos.y += state.vel.y * dt;
+  // Collect: spawn dots; first to 10 by default
+  const GOAL_COLLECT = 10;
+  function spawnDot() {
+    const margin = 40;
+    dots.push({
+      x: rnd(margin, innerWidth - margin),
+      y: rnd(margin, innerHeight - margin),
+      r: 10,
+      color: Math.random() < .5 ? '#7dd3fc' : '#a7f3d0'
+    });
+  }
+  function updateCollect() {
+    // occasionally spawn a new one to keep it lively
+    if (dots.length < 12 && Math.random() < 0.02) spawnDot();
+    [p1, p2].forEach(p=>{
+      for (const d of dots) {
+        const r2 = (p.r + d.r) ** 2;
+        if (dist2(p, d) <= r2) {
+          d.x = -9999;
+          p.score += 1;
+          renderScores();
+          if (p.score >= GOAL_COLLECT && !world.roundOver) {
+            world.roundOver = true; showMsg(`${p===p1?'P1':'P2'} collected ${GOAL_COLLECT}!`);
+          }
+        }
+      }
+    });
+    dots = dots.filter(d => d.x !== -9999);
+  }
 
-      // Collide with canvas bounds (hard walls)
-      const r = state.radius;
-      const maxX = window.innerWidth - r;
-      const maxY = window.innerHeight - r;
-      if (state.pos.x < r) { state.pos.x = r; if (state.vel.x < 0) state.vel.x = 0; }
-      if (state.pos.y < r) { state.pos.y = r; if (state.vel.y < 0) state.vel.y = 0; }
-      if (state.pos.x > maxX) { state.pos.x = maxX; if (state.vel.x > 0) state.vel.x = 0; }
-      if (state.pos.y > maxY) { state.pos.y = maxY; if (state.vel.y > 0) state.vel.y = 0; }
+  // Sumo: circular arena; out = lose round, other +1
+  function updateSumo() {
+    // bounce inside circle; if center is outside, you lose
+    [p1,p2].forEach(p=>{
+      const dx = p.x - arena.x, dy = p.y - arena.y;
+      const d = Math.hypot(dx,dy);
+      const limit = arena.r - p.r;
+      if (d > limit) {
+        // push back toward center
+        const nx = dx / d, ny = dy / d;
+        p.x = arena.x + nx * limit;
+        p.y = arena.y + ny * limit;
+        // if you *really* go out (allow a little margin), mark loss
+        if (d > arena.r + p.r*0.25 && !world.roundOver) {
+          world.roundOver = true;
+          const winner = (p===p1) ? 'P2' : 'P1';
+          (p===p1 ? p2 : p1).score += 1;
+          renderScores();
+          showMsg(`${winner} wins the push!`);
+        }
+      }
+    });
+    // player-player collision (push effect)
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const d = Math.hypot(dx,dy);
+    const minDist = p1.r + p2.r;
+    if (d > 0 && d < minDist) {
+      const overlap = (minDist - d) / 2;
+      const nx = dx / d, ny = dy / d;
+      p1.x -= nx * overlap; p1.y -= ny * overlap;
+      p2.x += nx * overlap; p2.y += ny * overlap;
+      // add shove using velocities
+      p1.vx -= nx * 40; p1.vy -= ny * 40;
+      p2.vx += nx * 40; p2.vy += ny * 40;
+    }
+  }
+
+  // ===== Physics & update =====
+  function updatePlayer(p, dt) {
+    // accelerate toward target velocity
+    const ax = (p.targetX - p.vx) * p.accel * dt;
+    const ay = (p.targetY - p.vy) * p.accel * dt;
+    p.vx += ax; p.vy += ay;
+
+    // friction if no input
+    if (Math.abs(p.targetX)+Math.abs(p.targetY) < 1) { p.vx *= p.friction; p.vy *= p.friction; }
+
+    p.x += p.vx * dt; p.y += p.vy * dt;
+
+    // walls (not for sumo)
+    if (world.mode !== MODE.SUMO) {
+      const r = p.r;
+      const maxX = innerWidth - r, maxY = innerHeight - r;
+      if (p.x < r){ p.x=r; if(p.vx<0) p.vx=0; }
+      if (p.y < r){ p.y=r; if(p.vy<0) p.vy=0; }
+      if (p.x > maxX){ p.x=maxX; if(p.vx>0) p.vx=0; }
+      if (p.y > maxY){ p.y=maxY; if(p.vy>0) p.vy=0; }
     }
 
-    // Render
-    draw();
-    requestAnimationFrame(loop);
+    // cooldowns
+    p.fireCd = Math.max(0, p.fireCd - dt);
   }
 
-  function draw() {
-    // Clear with subtle grid background
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    drawGrid();
-
-    // Smiley
-    const { x, y } = state.pos;
-    const r = state.radius;
-
-    // body
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+  // ===== Rendering =====
+  function drawGrid() {
+    const s = 40; ctx.save(); ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
+    for (let x=0;x<innerWidth;x+=s){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,innerHeight); ctx.stroke(); }
+    for (let y=0;y<innerHeight;y+=s){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(innerWidth,y); ctx.stroke(); }
+    ctx.restore();
+  }
+  function drawSmiley(p) {
+    const r = p.r, x = p.x, y = p.y;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
     const grd = ctx.createRadialGradient(x - r*0.4, y - r*0.4, r*0.2, x, y, r);
-    grd.addColorStop(0, '#ffe58a');
-    grd.addColorStop(1, '#f59e0b');
-    ctx.fillStyle = grd;
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(0,0,0,.25)';
-    ctx.stroke();
-
+    if (p===p1){ grd.addColorStop(0, '#bfe0ff'); grd.addColorStop(1, '#6ea8fe'); }
+    else { grd.addColorStop(0, '#ffd7a3'); grd.addColorStop(1, '#f59e0b'); }
+    ctx.fillStyle = grd; ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.stroke();
     // eyes
-    ctx.fillStyle = '#1a1a1a';
+    ctx.fillStyle='#1a1a1a';
     ctx.beginPath(); ctx.arc(x - r*0.35, y - r*0.2, r*0.12, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(x + r*0.35, y - r*0.2, r*0.12, 0, Math.PI*2); ctx.fill();
-
-    // mouth (slight tilt per velocity)
-    const spd = Math.hypot(state.vel.x, state.vel.y);
-    const smile = Math.min(0.7, 0.2 + spd / state.maxSpeed * 0.5); // curve by speed
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
+    // mouth
+    const spd = Math.hypot(p.vx, p.vy);
+    const smile = Math.min(0.7, 0.2 + spd / p.maxSpeed * 0.5);
+    ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=3; ctx.beginPath();
     const mW = r*0.9, mH = r*smile*0.6;
     ctx.moveTo(x - mW/2, y + r*0.2);
     ctx.quadraticCurveTo(x, y + r*0.2 + mH, x + mW/2, y + r*0.2);
     ctx.stroke();
   }
-
-  function drawGrid() {
-    const s = 40; // spacing
+  function drawBullets() {
+    ctx.save(); ctx.fillStyle='#e8ecff';
+    for (const b of bullets) { ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawDots() {
+    for (const d of dots) {
+      ctx.fillStyle = d.color; ctx.beginPath(); ctx.arc(d.x,d.y,d.r,0,Math.PI*2); ctx.fill();
+    }
+  }
+  function drawArena() {
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.05)';
-    ctx.lineWidth = 1;
-    const w = window.innerWidth, h = window.innerHeight;
-    for (let gx = 0; gx < w; gx += s) {
-      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
-    }
-    for (let gy = 0; gy < h; gy += s) {
-      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
-    }
+    ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=6;
+    ctx.beginPath(); ctx.arc(arena.x, arena.y, arena.r, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
   }
 
-  resetThumb();
-  requestAnimationFrame(loop);
+  function showMsg(text) {
+    ui.msg.textContent = text + ' — Tap Reset';
+    ui.msg.style.display = 'block';
+  }
+
+  // ===== Main loop =====
+  let last = performance.now();
+  function frame(now){
+    const dt = Math.min(0.035, (now-last)/1000); last = now;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawGrid();
+
+    if (!world.paused && !world.roundOver) {
+      updateTargets();
+      updatePlayer(p1, dt);
+      updatePlayer(p2, dt);
+
+      if (world.mode === MODE.DODGE) {
+        // auto-fire when pushing the stick
+        tryFire(p1); tryFire(p2);
+        updateBullets(dt);
+        checkBulletHits();
+      } else if (world.mode === MODE.COLLECT) {
+        updateCollect();
+      } else if (world.mode === MODE.SUMO) {
+        drawArena(); // draw below players but before physics resolution next frame
+        updateSumo();
+      }
+    } else if (world.mode === MODE.SUMO) {
+      drawArena();
+    }
+
+    // Render entities (order: arena -> dots -> bullets -> players)
+    if (world.mode === MODE.SUMO) drawArena();
+    if (world.mode === MODE.COLLECT) drawDots();
+    if (world.mode === MODE.DODGE) drawBullets();
+    drawSmiley(p1); drawSmiley(p2);
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ===== UI events =====
+  ui.modeSel.addEventListener('change', (e)=>{
+    // keep cumulative score for collect/sumo; hearts for dodge show as hearts
+    resetMode(e.target.value);
+  });
+  ui.resetBtn.addEventListener('click', ()=> resetMode(world.mode));
+  ui.pauseBtn.addEventListener('click', ()=>{
+    world.paused = !world.paused;
+    ui.pauseBtn.textContent = world.paused ? '▶️ Resume' : '⏸️ Pause';
+    ui.pauseBtn.setAttribute('aria-pressed', String(world.paused));
+  });
+
+  // initial
+  resetMode(MODE.DODGE);
 })();
 </script>
 </body>
