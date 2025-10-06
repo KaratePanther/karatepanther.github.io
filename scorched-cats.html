@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Scorched Cats 😼 — Arcade+</title>
+<title>Arcade+ — Scorched Cats</title>
 <style>
   :root{
     --bg:#0b1020; --bg2:#0e1430; --card:#121932; --ink:#e8ecff; --muted:#aab3d9;
@@ -11,44 +11,45 @@
     --pad:12px; --radius:16px;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--ink);
-    font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;height:100%;overscroll-behavior:none}
-  .wrap{position:relative;max-width:980px;margin:0 auto;padding:10px}
-  /* Responsive canvas container with fixed internal res (900x520) */
-  .stage{position:relative;border-radius:14px;border:1px solid var(--line);overflow:hidden;background:#0b1020}
-  canvas{display:block;width:100%;height:auto;touch-action:manipulation}
-
-  /* Floating HUD overlay */
-  .hud{position:absolute;inset:0;pointer-events:none}
-  .hud .panel,.hud .panel *,.dock,.menuTab{pointer-events:auto}
-
-  .panel{
-    position:absolute; background:rgba(18,25,50,.85); backdrop-filter: blur(6px);
-    border:1px solid var(--line); border-radius:var(--radius); padding:10px; color:var(--ink)
+  html,body{
+    margin:0;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--ink);
+    font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;height:100%;
+    overscroll-behavior:none; overflow:hidden;
   }
-  .panel h3{margin:0 0 8px;font-size:14px;letter-spacing:.3px}
+
+  /* Fullscreen stage that letterboxes to fit without scrolling */
+  .stage-wrap{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  }
+  .stage{
+    position:relative; border-radius:14px; border:1px solid var(--line);
+    overflow:hidden; background:#0b1020; 
+    /* the canvas inside will be sized by JS to preserve aspect ratio */
+  }
+  canvas{display:block; touch-action:manipulation}
+
+  /* HUD root */
+  .hud{position:absolute; inset:0; pointer-events:none}
+  .hud *{pointer-events:auto}
+
+  /* Top bar (Menu • Turn • Wind) */
+  .topbar{
+    position:absolute; left:10px; right:10px; top:10px;
+    display:flex; gap:10px; align-items:center; justify-content:space-between;
+    background:rgba(18,25,50,.85); backdrop-filter: blur(6px);
+    border:1px solid var(--line); border-radius:999px; padding:6px 10px; z-index:35;
+    font-size:14px;
+  }
+  .topbar .left, .topbar .mid, .topbar .right{display:flex; align-items:center; gap:10px}
+  .chip{padding:4px 10px; border:1px solid var(--line); border-radius:999px; background:#0f1633}
   .small{color:var(--muted);font-size:12px}
-  .title{font-weight:700; letter-spacing:.3px}
-  .turn{font-weight:700}
 
-  .panel.left{left:10px; top:10px; width:min(280px,45vw)}
-  .panel.right{right:10px; top:10px; width:min(280px,45vw)}
-  .panel.center{left:50%; transform:translateX(-50%); top:10px; min-width:220px; text-align:center; z-index:20}
-
-  /* HP bars */
-  .hpBar{height:8px;background:#1a2346;border-radius:99px;overflow:hidden}
-  .hpFill{height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);width:100%}
-
-  /* Wind bar under title */
-  .windWrap{margin-top:6px}
-  .meter{height:8px;background:#1a2346;border-radius:99px;overflow:hidden;position:relative}
-  .meter.dir .left, .meter.dir .right{ position:absolute; top:0; height:100%; }
-  .meter.dir .left{ right:50%; background:#6ea8fe;}
-  .meter.dir .right{ left:50%;  background:#ef4444;}
-  .meter.dir .mid{
-    position:absolute; left:50%; top:-2px; bottom:-2px; width:2px; background:#27335f; border-radius:99px;
-    transform:translateX(-1px);
-  }
+  /* Wind meter (tiny inline) */
+  .meter{position:relative; width:120px; height:8px; background:#1a2346; border-radius:99px; overflow:hidden}
+  .meter .left,.meter .right{position:absolute; top:0; height:100%}
+  .meter .left{right:50%; background:#6ea8fe;}
+  .meter .right{left:50%; background:#ef4444;}
+  .meter .mid{position:absolute; left:50%; top:-2px; bottom:-2px; width:2px; background:#27335f; transform:translateX(-1px); border-radius:99px}
 
   /* Bottom dock */
   .dock{
@@ -63,12 +64,12 @@
   .weaponBadge{
     border:1px solid var(--line); background:#0f1633; color:var(--ink);
     padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none;
-    display:flex; align-items:center; gap:8px; min-width:130px
+    display:flex; align-items:center; gap:8px; min-width:150px
   }
   .weaponMenu{
     position:absolute; bottom:58px; left:10px;
     background:rgba(18,25,50,.95); border:1px solid var(--line); border-radius:12px; padding:6px;
-    display:none; flex-direction:column; gap:6px; z-index:20; min-width:180px
+    display:none; flex-direction:column; gap:6px; z-index:40; min-width:190px
   }
   .weaponMenu .opt{
     padding:8px 10px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
@@ -90,22 +91,11 @@
   .zoomRow{display:flex; gap:8px}
   .zoomRow .btn{min-width:44px}
 
-  /* Foldable menu tab + panel */
-  .menuTab{
-    position:absolute; top:10px; left:50%; transform:translateX(-50%);
-    background:rgba(18,25,50,.85); border:1px solid var(--line); border-radius:999px; padding:6px 12px;
-    font-weight:700; cursor:pointer; user-select:none; z-index:35;
-    box-shadow: 0 2px 10px rgba(0,0,0,.35);
-    outline: 1px solid rgba(110,168,254,.25);
-  }
+  /* Foldable menu */
   .menuPanel{
-    position:absolute; top:52px; left:50%; transform:translateX(-50%);
-    width:min(92%,760px); background:rgba(10,14,30,.92); border:1px solid var(--line); border-radius:16px; padding:14px; display:none; z-index:30;
+    position:absolute; top:60px; left:50%; transform:translateX(-50%);
+    width:min(92%,760px); background:rgba(10,14,30,.92); border:1px solid var(--line); border-radius:16px; padding:14px; display:none; z-index:50;
   }
-  /* FIX: make menu clickable */
-  .menuPanel, .menuPanel * { pointer-events: auto; }
-  /* FIX: winner banner clickable */
-  .banner, .banner * { pointer-events: auto; }
   .menuGrid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
   .menuRow{display:flex; align-items:center; justify-content:space-between; gap:10px}
   .menuRow > * {font-size:14px}
@@ -118,7 +108,7 @@
 
   /* Winner banner */
   .banner{
-    position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:40;
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:60;
     background:rgba(0,0,0,.35); backdrop-filter:blur(4px)
   }
   .card{
@@ -127,109 +117,56 @@
   .stats{color:var(--muted); font-size:13px; margin:8px 0 12px}
   .card .btn{margin:0 6px}
 
-  /* Nameplates over players */
+  /* Nameplates over players (HP only now) */
   .nameplate{position:absolute; transform:translate(-50%, -100%); background:rgba(18,25,50,.9); border:1px solid var(--line);
     padding:2px 8px; border-radius:999px; font-size:12px; pointer-events:none}
 
+  /* Rotate overlay when device is vertical */
+  .rotate{
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:linear-gradient(180deg,var(--bg),var(--bg2)); z-index:1000;
+    text-align:center; padding:24px;
+  }
+  .rotate .box{
+    background:rgba(18,25,50,.93); border:1px solid var(--line); border-radius:14px; padding:16px 18px; max-width:360px;
+  }
+
+  @media (orientation:portrait){
+    .rotate{display:flex}
+  }
   @media (max-width:700px){
-    .panel.left,.panel.right{width:calc(100% - 20px)}
     .menuGrid{grid-template-columns:1fr}
   }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="stage" id="stage" style="aspect-ratio:900/520">
+<div class="rotate"><div class="box">
+  <div style="font-weight:700; margin-bottom:6px">Please rotate your device</div>
+  <div class="small">This game is best experienced in landscape.</div>
+</div></div>
+
+<div class="stage-wrap">
+  <div class="stage" id="stage">
     <canvas id="c" width="900" height="520"></canvas>
 
     <!-- HUD -->
     <div class="hud" id="hud">
-      <!-- Menu tab -->
-      <div class="menuTab" id="menuTab">Menu ⌄</div>
-      <div class="menuPanel" id="menuPanel">
-        <div class="menuGrid">
-          <div>
-            <div class="menuRow"><span>Mode</span>
-              <select id="modeSel" class="sel">
-                <option value="pvp">🧍‍♂️ Player vs Player</option>
-                <option value="pvc">🤖 Player vs Computer</option>
-              </select>
-            </div>
-            <div class="menuRow"><span>Difficulty</span>
-              <select id="diffSel" class="sel">
-                <option>Easy</option><option selected>Medium</option><option>Hard</option>
-              </select>
-            </div>
-            <div class="menuRow"><span>Wind</span>
-              <select id="windSel" class="sel">
-                <option>Off</option><option>Low</option><option selected>Normal</option><option>High</option>
-              </select>
-            </div>
-            <div class="menuRow"><span>Fall damage</span>
-              <label><input id="fallChk" class="chk" type="checkbox" checked> On</label>
-            </div>
-            <div class="menuRow"><span>Ammo limits</span>
-              <label><input id="ammoChk" class="chk" type="checkbox" checked> On</label>
-            </div>
-            <div class="menuRow"><span>Weapons</span>
-              <div>
-                <label style="margin-right:8px"><input id="wShotgun" class="chk" type="checkbox" checked> 🔫</label>
-                <label style="margin-right:8px"><input id="wGrenade" class="chk" type="checkbox" checked> 💣</label>
-                <label><input id="wTeleport" class="chk" type="checkbox" checked> 🌀</label>
-              </div>
-            </div>
-            <div class="menuRow"><span>Map seed</span>
-              <input id="seedTxt" class="txt" placeholder="random" maxlength="12" />
-            </div>
-          </div>
-          <div>
-            <div class="small">Map preview</div>
-            <div class="miniPreview">
-              <canvas id="mini" width="160" height="92"></canvas>
-            </div>
-            <div class="miniBar">
-              <button id="reroll" class="miniBtn">Reroll</button>
-              <span class="small">Tip: long-press preview for custom seed</span>
-            </div>
-          </div>
+      <!-- Top bar: Menu • Turn • Wind -->
+      <div class="topbar">
+        <div class="left">
+          <button id="menuBtn" class="btn" style="padding:6px 12px; font-weight:700">Menu</button>
         </div>
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px">
-          <button id="startBtn" class="btn">▶ Start Match</button>
-          <button id="newMapBtn" class="btn" style="background:#a78bfa">🔁 New Map</button>
-          <button id="closeMenu" class="btn" style="background:#141c3a;color:var(--ink)">Close</button>
+        <div class="mid">
+          <span class="chip">Turn: <strong id="turn">P1</strong></span>
         </div>
-      </div>
-
-      <!-- Top left / right panels (HP only now) -->
-      <div class="panel left">
-        <h3>Player 1 😼</h3>
-        <div class="small" style="margin-bottom:6px">Aim: drag on the canvas</div>
-        <div class="row">
-          <span>Health</span>
-          <div class="hpBar"><div id="hp1" class="hpFill"></div></div>
-          <span id="hp1v">100%</span>
-        </div>
-      </div>
-
-      <div class="panel center">
-        <div class="title">Scorched Cats</div>
-        <div class="small">Turn: <span id="turn" class="turn">P1</span></div>
-        <div class="windWrap">
-          <div class="small">Wind <span id="windVal">→ 0</span></div>
-          <div class="meter dir" title="Wind: left ⟵ 0 ⟶ right">
-            <div id="windL" class="bar left"></div>
-            <div id="windR" class="bar right"></div>
+        <div class="right">
+          <div class="small" id="windLabel">Wind</div>
+          <div class="meter" title="Wind: left ⟵ 0 ⟶ right">
+            <div id="windL" class="left"></div>
+            <div id="windR" class="right"></div>
             <div class="mid"></div>
           </div>
-        </div>
-      </div>
-
-      <div class="panel right">
-        <h3>Player 2 😺</h3>
-        <div class="row" style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center">
-          <span>Health</span>
-          <div class="hpBar"><div id="hp2" class="hpFill"></div></div>
-          <span id="hp2v">100%</span>
+          <div class="small" id="windVal">→ 0</div>
         </div>
       </div>
 
@@ -237,11 +174,11 @@
       <div class="dock">
         <div style="position:relative">
           <div id="weaponBadge" class="weaponBadge" aria-haspopup="true" aria-expanded="false">
-            <span id="weaponEmoji">🚀</span><span id="weaponName">Normal</span>
+            <span id="weaponEmoji">🚀</span><span id="weaponName">Bazooka</span>
             <span id="weaponMeta" class="small"></span><span>⌄</span>
           </div>
           <div id="weaponMenu" class="weaponMenu" role="menu" aria-label="Select weapon">
-            <div class="opt active" data-w="normal"><span>🚀 Normal</span><span class="ammoPips" id="pipNormal">∞</span></div>
+            <div class="opt active" data-w="normal"><span>🚀 Bazooka</span><span class="ammoPips" id="pipNormal">∞</span></div>
             <div class="opt" data-w="grenade"><span>💣 Grenade <span id="fuseMini" class="small">⏱3s</span></span><span class="ammoPips" id="pipGrenade">x5</span></div>
             <div class="opt" data-w="shotgun"><span>🔫 Shotgun</span><span class="ammoPips" id="pipShotgun">x5</span></div>
             <div class="opt" data-w="teleport"><span>🌀 Teleport</span><span class="ammoPips" id="pipTeleport">x1</span></div>
@@ -257,6 +194,59 @@
           <button id="zoomIn" class="btn" title="Zoom In">＋</button>
           <button id="zoomOut" class="btn" title="Zoom Out">－</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Menu Panel -->
+    <div class="menuPanel" id="menuPanel">
+      <div class="menuGrid">
+        <div>
+          <div class="menuRow"><span>Mode</span>
+            <select id="modeSel" class="sel">
+              <option value="pvp">🧍‍♂️ Player vs Player</option>
+              <option value="pvc">🤖 Player vs Computer</option>
+            </select>
+          </div>
+          <div class="menuRow"><span>Difficulty</span>
+            <select id="diffSel" class="sel">
+              <option>Easy</option><option selected>Medium</option><option>Hard</option>
+            </select>
+          </div>
+          <div class="menuRow"><span>Wind</span>
+            <select id="windSel" class="sel">
+              <option>Off</option><option>Low</option><option selected>Normal</option><option>High</option>
+            </select>
+          </div>
+          <div class="menuRow"><span>Fall damage</span>
+            <label><input id="fallChk" class="chk" type="checkbox" checked> On</label>
+          </div>
+          <div class="menuRow"><span>Ammo limits</span>
+            <label><input id="ammoChk" class="chk" type="checkbox" checked> On</label>
+          </div>
+          <div class="menuRow"><span>Weapons</span>
+            <div>
+              <label style="margin-right:8px"><input id="wShotgun" class="chk" type="checkbox" checked> 🔫</label>
+              <label style="margin-right:8px"><input id="wGrenade" class="chk" type="checkbox" checked> 💣</label>
+              <label><input id="wTeleport" class="chk" type="checkbox" checked> 🌀</label>
+            </div>
+          </div>
+          <div class="menuRow"><span>Map seed</span>
+            <input id="seedTxt" class="txt" placeholder="random" maxlength="12" />
+          </div>
+        </div>
+        <div>
+          <div class="small">Map preview</div>
+          <div class="miniPreview"><canvas id="mini" width="160" height="92"></canvas></div>
+          <div class="miniBar">
+            <button id="reroll" class="miniBtn">Reroll</button>
+            <span class="small">Tip: long-press preview for custom seed</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px">
+        <button id="startBtn" class="btn">▶ Start Match</button>
+        <button id="newMapBtn" class="btn" style="background:#a78bfa">🔁 New Map</button>
+        <button id="closeMenu" class="btn" style="background:#141c3a;color:var(--ink)">Close</button>
       </div>
     </div>
 
@@ -281,11 +271,10 @@
 
 <script>
 (()=> {
-  // ======= Core & responsive =======
+  // ======= Canvas constants =======
   const cvs = document.getElementById('c');
   const ctx = cvs.getContext('2d');
   const stage = document.getElementById('stage');
-  const hud = document.getElementById('hud');
 
   const W = cvs.width, H = cvs.height;
   const G = 0.20;
@@ -296,34 +285,31 @@
   const SKY = 0, SOLID = 1;
   const FALL_NO_DMG = 60; // px drop threshold
 
-  // Camera
-  let cam = { scale: 1, targetScale: 1, min:0.8, max:1.8 };
+  // Fit canvas to viewport without scrolling (letterbox)
+  function fitCanvas(){
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const scale = Math.min(vw / W, vh / H);
+    const cssW = Math.round(W * scale), cssH = Math.round(H * scale);
+    cvs.style.width = cssW + 'px';
+    cvs.style.height = cssH + 'px';
+    // center the stage to the size of canvas
+    stage.style.width = cssW + 'px';
+    stage.style.height = cssH + 'px';
+  }
+  window.addEventListener('resize', fitCanvas);
+  window.addEventListener('orientationchange', fitCanvas);
+  fitCanvas();
 
-  // Terrain
-  let terrainMask = new Uint8Array(W*H);
-  let heightmap = new Int16Array(W);
-  const terrCanvas = document.createElement('canvas');
-  terrCanvas.width = W; terrCanvas.height = H;
-  const terrCtx = terrCanvas.getContext('2d');
+  // Prevent page scroll on the game area (iOS Safari included)
+  stage.addEventListener('touchmove', (e)=>{ e.preventDefault(); }, {passive:false});
+  document.addEventListener('dblclick', e => { if (stage.contains(e.target)) e.preventDefault(); }, {passive:false});
 
-  // FX layers
-  const decalCanvas = document.createElement('canvas'); // scorch marks
-  decalCanvas.width=W; decalCanvas.height=H;
-  const decalCtx = decalCanvas.getContext('2d');
-
-  // Minimap
-  const mini = document.getElementById('mini');
-  const miniCtx = mini.getContext('2d');
-
-  // UI refs
+  // ======= HUD refs =======
   const turnEl  = document.getElementById('turn');
-  const hp1     = document.getElementById('hp1');
-  const hp2     = document.getElementById('hp2');
-  const hp1v    = document.getElementById('hp1v');
-  const hp2v    = document.getElementById('hp2v');
   const windL   = document.getElementById('windL');
   const windR   = document.getElementById('windR');
   const windVal = document.getElementById('windVal');
+
   const weaponBadge = document.getElementById('weaponBadge');
   const weaponMenu  = document.getElementById('weaponMenu');
   const weaponName  = document.getElementById('weaponName');
@@ -334,6 +320,7 @@
   const pipTeleport = document.getElementById('pipTeleport');
   const pipNormal   = document.getElementById('pipNormal');
   const fuseMini    = document.getElementById('fuseMini');
+
   const fireBtn = document.getElementById('fire');
   const chargeBar = document.getElementById('chargeBar');
   const zoomIn  = document.getElementById('zoomIn');
@@ -348,7 +335,7 @@
   const np2 = document.getElementById('np2');
 
   // Menu
-  const menuTab = document.getElementById('menuTab');
+  const menuBtn = document.getElementById('menuBtn');
   const menuPanel = document.getElementById('menuPanel');
   const modeSel = document.getElementById('modeSel');
   const diffSel = document.getElementById('diffSel');
@@ -363,13 +350,10 @@
   const startBtn = document.getElementById('startBtn');
   const newMapBtn = document.getElementById('newMapBtn');
   const closeMenu = document.getElementById('closeMenu');
+  const mini = document.getElementById('mini');
+  const miniCtx = mini.getContext('2d');
 
-  // Prevent page zoom on rapid taps (double-tap)
-  document.addEventListener('dblclick', e => {
-    if (stage.contains(e.target)) e.preventDefault();
-  }, {passive:false});
-
-  // ======= Audio =======
+  // ======= Audio (unchanged core) =======
   let audioCtx = null, chargeOsc=null, chargeGain=null;
   function audio(){ if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
   function tone(freq=200, dur=0.1, type='square', gain=0.18){
@@ -411,7 +395,6 @@
     o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.18);
   }
   function haptics(p=[40]){ if (navigator.vibrate) navigator.vibrate(p); }
-
   function startChargeSound(){
     const ctx = audio();
     chargeOsc = ctx.createOscillator(); chargeGain = ctx.createGain();
@@ -429,17 +412,22 @@
     if (o) o.stop(ctx.currentTime+0.1);
   }
 
-  // ======= RNG with seed (for map preview and generation) =======
+  // ======= RNG & terrain buffers =======
   let seed = Math.random().toString(36).slice(2,8);
   function srand(s){ seed = s || Math.random().toString(36).slice(2,8); }
-  function rand(){ // xorshift-ish
-    let x = 0; for (let i=0;i<seed.length;i++) x = (x*31 + seed.charCodeAt(i))>>>0;
-    x ^= x<<13; x ^= x>>>17; x ^= x<<5; x>>>=0;
-    seed = (x>>>0).toString(36).slice(0,6);
-    return (x%1e9)/1e9;
-  }
+  function rand(){ let x = 0; for (let i=0;i<seed.length;i++) x = (x*31 + seed.charCodeAt(i))>>>0;
+    x ^= x<<13; x ^= x>>>17; x ^= x<<5; x>>>=0; seed = (x>>>0).toString(36).slice(0,6); return (x%1e9)/1e9; }
 
-  // ======= Players, shots, particles =======
+  let cam = { scale: 1, targetScale: 1, min:0.85, max:1.8 };
+  const terrCanvas = document.createElement('canvas');
+  terrCanvas.width = W; terrCanvas.height = H;
+  const terrCtx = terrCanvas.getContext('2d');
+  const decalCanvas = document.createElement('canvas'); decalCanvas.width=W; decalCanvas.height=H;
+  const decalCtx = decalCanvas.getContext('2d');
+  let terrainMask = new Uint8Array(W*H);
+  let heightmap = new Int16Array(W);
+
+  // ======= Players, weapons, shots =======
   const Weapons = { NORMAL:'normal', GRENADE:'grenade', SHOTGUN:'shotgun', TELEPORT:'teleport' };
   const EMOJI = { normal:'🚀', grenade:'💣', shotgun:'🔫', teleport:'🌀' };
 
@@ -453,20 +441,17 @@
   ];
   let turn = 0;
   let wind = 0;
-  let weapon = Weapons.NORMAL; // current selection
+  let weapon = Weapons.NORMAL;
   let aiEnabled = false;
 
   // Shots & FX
   let shot = null;
-  let particles = []; // debris & smoke & confetti & misc
+  let particles = [];
   let rings = [];
-  let dmgNums = []; // {x,y,val,life}
-
-  // Stats
+  let dmgNums = [];
   const stats = { shots:[0,0], hits:[0,0], bestHit:[0,0] };
-
-  // ======= UI state =======
-  let placingTeleport = false; // teleport tap-to-place mode
+  let placingTeleport = false;
+  let grenadeFuse = 3;
 
   // ======= Terrain generation =======
   function generateTerrain(){
@@ -496,7 +481,6 @@
       }
     }
     terrCtx.putImageData(img,0,0);
-    // Grass rim
     terrCtx.strokeStyle = '#2ecc71'; terrCtx.lineWidth=2; terrCtx.beginPath();
     for(let x=0;x<W;x++) terrCtx.lineTo(x+0.5, heightmap[x]-1.5);
     terrCtx.stroke();
@@ -527,42 +511,12 @@
     Object.assign(players[1], {x:placeB.x, y:placeB.y, vx:0, vy:0, facing:-1, angle:135});
   }
 
-  // ======= Terrain carving & decals =======
-  function carveCrater(cx,cy,r=EXPLOSION_R){
-    const minx=Math.max(0,Math.floor(cx-r)), maxx=Math.min(W-1,Math.ceil(cx+r));
-    const miny=Math.max(0,Math.floor(cy-r)), maxy=Math.min(H-1,Math.ceil(cy+r));
-    const img = terrCtx.getImageData(minx,miny,maxx-minx+1,maxy-miny+1);
-    const d = img.data, rr=r*r;
-    for(let y=miny;y<=maxy;y++){
-      for(let x=minx;x<=maxx;x++){
-        const dx=x-cx, dy=y-cy;
-        if (dx*dx+dy*dy<=rr){
-          const idx=y*W+x; terrainMask[idx]=SKY;
-          const p=((y-miny)*(maxx-minx+1)+(x-minx))*4; d[p+3]=0;
-        }
-      }
-    }
-    terrCtx.putImageData(img,minx,miny);
-    for(let x=minx;x<=maxx;x++){
-      let y; for(y=0;y<H;y++){ if (terrainMask[y*W+x]===SOLID) break; }
-      heightmap[x]=(y===H)?H:y;
-    }
-
-    // Scorch decal
-    const g=decalCtx.createRadialGradient(cx,cy,2,cx,cy,r);
-    g.addColorStop(0,'rgba(0,0,0,0.28)');
-    g.addColorStop(1,'rgba(0,0,0,0)');
-    decalCtx.fillStyle=g; decalCtx.beginPath(); decalCtx.arc(cx,cy,r,0,Math.PI*2); decalCtx.fill();
-  }
-
-  // ======= Damage & victory =======
-  function floatDmg(x,y,val){
-    dmgNums.push({x,y,val,life:40});
-  }
+  // ======= Damage etc. =======
+  function floatDmg(x,y,val){ dmgNums.push({x,y,val,life:40}); }
   function applyDamage(index, dmg, direct=false){
     const pl = players[index];
     pl.hp = Math.max(0, pl.hp - dmg);
-    updateHPUI();
+    updateHPPlates();
     if (pl.hp<=0){ announceWinner(1-index, direct ? 'direct hit!' : 'boom!'); }
   }
   function applySplashDamage(cx,cy,r){
@@ -573,7 +527,6 @@
         const d=Math.sqrt(d2), scale=Math.max(0,1-d/r);
         const dmg=Math.round(scale*60);
         if (dmg>0){ applyDamage(i,dmg,false); floatDmg(pl.x, pl.y-PLAYER_R-8, -dmg); stats.bestHit[turn]=Math.max(stats.bestHit[turn], dmg); stats.hits[turn]++; }
-        // Knockback impulse from blast
         const k = 3.4*scale;
         const nx = (pl.x - cx) / Math.max(1, d);
         const ny = (pl.y - cy) / Math.max(1, d);
@@ -583,7 +536,7 @@
   }
   function announceWinner(idx, reason){
     fireBtn.disabled=true; placingTeleport=false;
-    turnEl.textContent=`P${idx+1} wins 🎉 (${reason})`;
+    turnEl.textContent=`P${idx+1} wins 🎉`;
     players[idx].emote='😼✨'; players[idx].emoteT=120;
     players[1-idx].emote='💀'; players[1-idx].emoteT=120;
     taDa(); haptics([60,60,60]);
@@ -591,18 +544,17 @@
     confettiBurst();
   }
 
-  // ======= Weapons & shots =======
-  let grenadeFuse = 3; // default per selection, per-player stored too
+  // ======= Weapons =======
+  function displayName(w){ return w==='normal' ? 'Bazooka' : (w.charAt(0).toUpperCase()+w.slice(1)); }
 
   function updateBadge(){
-    weaponEmoji.textContent = EMOJI[weapon];
-    weaponName.textContent = weapon.charAt(0).toUpperCase()+weapon.slice(1);
-    // Meta: fuse or ammo
     const p = players[turn];
+    weaponEmoji.textContent = EMOJI[weapon];
+    weaponName.textContent = displayName(weapon);
     let meta = '';
-    if (weapon===Weapons.GRENADE) meta += ` ⏱${p.fuse||grenadeFuse}s`;
+    if (weapon==='grenade') meta += ` ⏱${p.fuse||grenadeFuse}s`;
     const am = p.ammo;
-    const left = (weapon===Weapons.SHOTGUN)?am.shotgun : weapon===Weapons.GRENADE?am.grenade : weapon===Weapons.TELEPORT?am.teleport : Infinity;
+    const left = (weapon==='shotgun')?am.shotgun : weapon==='grenade'?am.grenade : weapon==='teleport'?am.teleport : Infinity;
     if (left!==Infinity) meta += ` (${left>0?'x'+left:'empty'})`;
     weaponMeta.textContent = meta;
     fuseMini.textContent = `⏱${p.fuse||grenadeFuse}s`;
@@ -610,27 +562,29 @@
     pipGrenade.textContent = 'x'+ am.grenade;
     pipShotgun.textContent = 'x'+ am.shotgun;
     pipTeleport.textContent = 'x'+ am.teleport;
-    // menu active class
+
+    // menu active highlight
     [...weaponMenu.querySelectorAll('.opt')].forEach(o=>o.classList.toggle('active', o.dataset.w===weapon));
   }
 
   function ensureAmmoOrSwitch(){
     const p=players[turn], am=p.ammo;
-    if (weapon===Weapons.SHOTGUN && am.shotgun<=0) weapon=Weapons.NORMAL;
-    if (weapon===Weapons.GRENADE && am.grenade<=0) weapon=Weapons.NORMAL;
-    if (weapon===Weapons.TELEPORT && am.teleport<=0) weapon=Weapons.NORMAL;
+    if (weapon==='shotgun' && am.shotgun<=0) weapon='normal';
+    if (weapon==='grenade' && am.grenade<=0) weapon='normal';
+    if (weapon==='teleport' && am.teleport<=0) weapon='normal';
+    players[turn].lastWeapon = weapon; // persist per player
     updateBadge();
   }
 
   function spendAmmo(){
     const p=players[turn], am=p.ammo;
-    if (weapon===Weapons.SHOTGUN) am.shotgun--;
-    if (weapon===Weapons.GRENADE) am.grenade--;
-    if (weapon===Weapons.TELEPORT) am.teleport--;
-    if ((weapon!==Weapons.NORMAL) && ((weapon===Weapons.SHOTGUN&&am.shotgun<=0) || (weapon===Weapons.GRENADE&&am.grenade<=0) || (weapon===Weapons.TELEPORT&&am.teleport<=0))){
-      // Auto switch
-      toast('Out of ammo — switched to Normal');
-      weapon=Weapons.NORMAL;
+    if (weapon==='shotgun') am.shotgun--;
+    if (weapon==='grenade') am.grenade--;
+    if (weapon==='teleport') am.teleport--;
+    if ((weapon!=='normal') && ((weapon==='shotgun'&&am.shotgun<=0) || (weapon==='grenade'&&am.grenade<=0) || (weapon==='teleport'&&am.teleport<=0))){
+      toast('Out of ammo — switched to Bazooka');
+      weapon='normal';
+      players[turn].lastWeapon = weapon;
     }
   }
 
@@ -641,22 +595,21 @@
     const muzzleY = p.y - Math.sin(ang)*(PLAYER_R+6);
     const v = Math.max(1, power)*0.9;
 
-    if (weapon===Weapons.NORMAL){
+    if (weapon==='normal'){
       const vx = Math.cos(ang)*v * (p.facing===1?1:-1);
       const vy = -Math.sin(ang)*v;
       shot = { kind:'normal', x:muzzleX, y:muzzleY, vx, vy, trail:[] };
       tone(320,0.06,'square',0.18);
       spendAmmo();
-    } else if (weapon===Weapons.GRENADE){
+    } else if (weapon==='grenade'){
       const vx = Math.cos(ang)*v * (p.facing===1?1:-1);
       const vy = -Math.sin(ang)*v;
       const fuse = (players[turn].fuse||grenadeFuse);
-      shot = { kind:'grenade', x:muzzleX, y:muzzleY, vx, vy, trail:[], t: fuse*60 /*frames*/ };
+      shot = { kind:'grenade', x:muzzleX, y:muzzleY, vx, vy, trail:[], t: fuse*60 };
       tone(260,0.06,'triangle',0.12);
       spendAmmo();
-    } else if (weapon===Weapons.SHOTGUN){
-      const pellets=[];
-      const spread = Math.PI/28; const n=7;
+    } else if (weapon==='shotgun'){
+      const pellets=[]; const spread = Math.PI/28; const n=7;
       for(let i=0;i<n;i++){
         const offset = (i-(n-1)/2)/(n-1) * spread;
         const a = (p.facing===1?ang:-ang) + (p.facing===1?0:Math.PI) + offset;
@@ -667,30 +620,25 @@
       tone(480,0.05,'square',0.12); setTimeout(()=>tone(420,0.05,'square',0.11),40); setTimeout(()=>tone(360,0.05,'square',0.1),80);
       spendAmmo();
     }
-    // Feedback
     haptics([25]); fireBtn.disabled=true;
   }
 
   function spawnExplosion(x,y,r=EXPLOSION_R){
     carveCrater(x,y,r);
     applySplashDamage(x,y,r);
-    // debris
     const count = 28;
     for(let i=0;i<count;i++){
       const a=Math.random()*Math.PI*2, sp = 1.5+Math.random()*3.5;
       const vx=Math.cos(a)*sp, vy=Math.sin(a)*sp-2.0;
       particles.push({x,y,vx,vy,life:50,smoke:false});
     }
-    // smoke
     for(let i=0;i<16;i++){
       const a=(Math.random()*Math.PI) - Math.PI/2;
       const sp = .5+Math.random()*1.3;
       const vx=Math.cos(a)*sp*0.6, vy=Math.sin(a)*sp-0.8;
       particles.push({x,y,vx,vy,life:70,smoke:true, alpha:0.5});
     }
-    // shockwave ring
     rings.push({x,y,r:8,alpha:0.35});
-    // audio
     noiseBoom(0.35,0.35); haptics([40,60,40]);
   }
 
@@ -704,14 +652,12 @@
 
       if (s.x<0 || s.x>=W || s.y>=H){ endShot(null); return; }
 
-      // direct hit
       const opp = players[1-turn];
       const dx=s.x-opp.x, dy=s.y-opp.y;
       if (dx*dx + dy*dy <= (PLAYER_R*PLAYER_R)*0.9){
         applyDamage(1-turn,999,true); floatDmg(opp.x, opp.y-PLAYER_R-8, 'KO');
         spawnExplosion(s.x,s.y,EXPLOSION_R); endShot(opp); return;
       }
-      // terrain hit
       const ix=s.x|0, iy=s.y|0;
       if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID){
         spawnExplosion(s.x,s.y,EXPLOSION_R); endShot({terrain:true}); return;
@@ -720,30 +666,26 @@
 
     if (shot.kind==='grenade'){
       const s=shot;
-      // ignores wind
-      s.vy += G; s.x += s.vx; s.y += s.vy;
+      s.vy += G; s.x += s.vx; s.y += s.vy; // ignores wind
       s.trail.push({x:s.x,y:s.y}); if (s.trail.length>140) s.trail.shift();
       s.t--; if (s.t<=0){ spawnExplosion(s.x,s.y,EXPLOSION_R*1.05); endShot({terrain:true}); return; }
 
       if (s.x<0 || s.x>=W || s.y>=H){ endShot(null); return; }
 
-      // bump players softly
       for (let i=0;i<2;i++){
         const pl=players[i]; const dx=s.x-pl.x, dy=s.y-pl.y;
         const d2=dx*dx+dy*dy;
         if (d2 <= (PLAYER_R*PLAYER_R)*0.8){
           const d=Math.max(1,Math.sqrt(d2)); const nx=dx/d, ny=dy/d;
           pl.vx += nx*0.8; pl.vy += ny*0.5-0.2;
-          // bounce off player
           s.vx = -nx*Math.abs(s.vx)*0.8; s.vy = -ny*Math.abs(s.vy)*0.6;
         }
       }
 
       const ix=s.x|0, iy=s.y|0;
       if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID){
-        // infinite bounces with damping
         const gx = (heightmap[Math.min(W-1,ix+1)] - heightmap[Math.max(0,ix-1)])*0.5;
-        let nx = -gx; let ny = 2; // crude up normal
+        let nx = -gx; let ny = 2;
         const len = Math.max(1, Math.hypot(nx,ny)); nx/=len; ny/=len;
         const dot = s.vx*nx + s.vy*ny;
         s.vx = (s.vx - 2*dot*nx) * 0.92;
@@ -761,7 +703,6 @@
         p.trail.push({x:p.x,y:p.y}); if (p.trail.length>80) p.trail.shift();
         if (p.x<0 || p.x>=W || p.y>=H){ pellets.splice(k,1); continue; }
         const ix=p.x|0, iy=p.y|0;
-        // Player graze: small direct damage
         const opp = players[1-turn];
         const dx=p.x-opp.x, dy=p.y-opp.y;
         if (dx*dx+dy*dy <= (PLAYER_R*PLAYER_R)*0.85){
@@ -788,6 +729,12 @@
     shot=null;
     if (players[0].hp>0 && players[1].hp>0){
       turn = 1-turn;
+      // Avoid zoom drift: normalize/clamp every turn
+      cam.targetScale = Math.max(cam.min, Math.min(cam.max, cam.targetScale));
+      cam.scale = Math.max(cam.min, Math.min(cam.max, cam.scale));
+
+      // restore the new player's last weapon
+      weapon = players[turn].lastWeapon || 'normal';
       updateTurnUI();
       fireBtn.disabled=false;
       wind = Math.max(-WIND_MAX, Math.min(WIND_MAX, wind + (Math.random()*0.06 - 0.03)));
@@ -799,135 +746,36 @@
     }
   }
 
-  // ======= Teleport tap-to-place =======
-  stage.addEventListener('pointerdown', (e)=>{
-    if (!placingTeleport) return;
-    const {px,py} = screenToWorld(e);
-    const pos = findTeleportDestination(px,py);
-    if (!pos){ toast('Blocked — choose a free spot'); tone(180,0.08,'sine',0.12); return; }
-    players[turn].ammo.teleport--; whoosh();
-    players[turn].x = pos.x; players[turn].y = pos.y; players[turn].vx=0; players[turn].vy=0;
-    poof();
-    placingTeleport = false; fireBtn.disabled=false;
-    endShot();
-  });
-
-  function findTeleportDestination(x,y){
-    x = Math.max(PLAYER_R+2, Math.min(W-PLAYER_R-2, x|0));
-    y = Math.max(PLAYER_R+2, Math.min(H-PLAYER_R-2, y|0));
-    let yy=y; let tries=0;
-    while(tries++<80 && terrainMask[(yy|0)*W+(x|0)]===SOLID){ yy--; }
-    if (terrainMask[(yy|0)*W+(x|0)]===SOLID) return null;
-    return {x, y:yy};
-  }
-
-  // ======= UI & controls =======
-  function updateTurnUI(){
-    turnEl.textContent = turn===0 ? 'P1' : 'P2';
-    updateBadge();
-  }
-  function updateHPUI(){
-    hp1.style.width = players[0].hp+'%';
-    hp2.style.width = players[1].hp+'%';
-    hp1v.textContent = players[0].hp+'%';
-    hp2v.textContent = players[1].hp+'%';
-    np1.textContent = `P1 — ${players[0].hp}%`;
-    np2.textContent = `P2 — ${players[1].hp}%`;
-  }
-  function updateWindUI(){
-    const mag = Math.min(1, Math.abs(wind)/WIND_MAX || 0);
-    const side = (mag*50).toFixed(1);
-    windL.style.width = (wind<0?side:0)+'%';
-    windR.style.width = (wind>0?side:0)+'%';
-    const arrow = wind>0?'→ ': wind<0 ? '← ' : '· ';
-    windVal.textContent = arrow + Math.round(mag*100);
-  }
-
-  // Weapon menu
-  function openWeaponMenu(open){
-    weaponMenu.style.display = open ? 'flex' : 'none';
-    weaponBadge.setAttribute('aria-expanded', open?'true':'false');
-  }
-  weaponBadge.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    if (placingTeleport) return;
-    openWeaponMenu(weaponMenu.style.display!=='flex');
-  });
-  document.addEventListener('click', ()=> openWeaponMenu(false));
-  weaponMenu.addEventListener('click', (e)=>{
-    if (!(e.target instanceof HTMLElement)) return;
-    const opt = e.target.closest('.opt'); if (!opt) return;
-    const w = opt.dataset.w; if (!w) return;
-    weapon = w;
-    if (weapon===Weapons.TELEPORT){
-      const am = players[turn].ammo.teleport;
-      if (am<=0){ toast('No teleport ammo'); weapon=Weapons.NORMAL; }
-      else { placingTeleport = true; fireBtn.disabled=true; toast('Teleport: tap the map to choose destination (two-finger tap to cancel)'); }
-    } else { placingTeleport=false; fireBtn.disabled=false; }
-    updateBadge();
-    openWeaponMenu(false);
-  });
-  fuseMini.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    const p=players[turn]; p.fuse = (p.fuse||3)%5 + 1; updateBadge();
-  });
-
-  // Fire (hold to charge; shotgun instant)
-  let charging=false, chargePower=1, chargeInterval=null;
-  function startCharge(){
-    if (shot || placingTeleport) return;
-    if (weapon===Weapons.SHOTGUN){
-      launchShot(60); return;
+  // ======= Terrain carving =======
+  function carveCrater(cx,cy,r=EXPLOSION_R){
+    const minx=Math.max(0,Math.floor(cx-r)), maxx=Math.min(W-1,Math.ceil(cx+r));
+    const miny=Math.max(0,Math.floor(cy-r)), maxy=Math.min(H-1,Math.ceil(cy+r));
+    const img = terrCtx.getImageData(minx,miny,maxx-minx+1,maxy-miny+1);
+    const d = img.data, rr=r*r;
+    for(let y=miny;y<=maxy;y++){
+      for(let x=minx;x<=maxx;x++){
+        const dx=x-cx, dy=y-cy;
+        if (dx*dx+dy*dy<=rr){
+          const idx=y*W+x; terrainMask[idx]=SKY;
+          const p=((y-miny)*(maxx-minx+1)+(x-minx))*4; d[p+3]=0;
+        }
+      }
     }
-    charging=true; chargePower=1; startChargeSound(); chargeBar.style.width='0%';
-    chargeInterval = setInterval(()=>{
-      chargePower = Math.min(100, chargePower + 1.8);
-      const pct = Math.max(0, Math.min(100, chargePower));
-      chargeBar.style.width = pct + '%'; updateChargeSound(pct/100);
-    },60);
-  }
-  function endChargeAndFire(){
-    if (weapon===Weapons.SHOTGUN || placingTeleport) return;
-    if (!charging) return; clearInterval(chargeInterval); chargeInterval=null;
-    stopChargeSound(); charging=false; launchShot(chargePower); chargePower=1; chargeBar.style.width='0%';
-  }
-  fireBtn.addEventListener('mousedown', startCharge);
-  fireBtn.addEventListener('mouseup', endChargeAndFire);
-  fireBtn.addEventListener('mouseleave', endChargeAndFire);
-  fireBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); startCharge(); }, {passive:false});
-  fireBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
-  fireBtn.addEventListener('touchcancel', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
-
-  // Aim helper: drag sets angle
-  cvs.addEventListener('pointerdown', onPointer);
-  cvs.addEventListener('pointermove', onPointer);
-  function onPointer(e){
-    if (shot || placingTeleport) return;
-    const {px,py} = screenToWorld(e);
-    const p = players[turn];
-    const dx = px - p.x;
-    const dy = p.y - py;
-    let ang = Math.atan2(dy, Math.abs(dx)) * 180/Math.PI;
-    ang = Math.max(0, Math.min(180, ang));
-    p.angle = ang|0;
+    terrCtx.putImageData(img,minx,miny);
+    for(let x=minx;x<=maxx;x++){
+      let y; for(y=0;y<H;y++){ if (terrainMask[y*W+x]===SOLID) break; }
+      heightmap[x]=(y===H)?H:y;
+    }
+    const g=decalCtx.createRadialGradient(cx,cy,2,cx,cy,r);
+    g.addColorStop(0,'rgba(0,0,0,0.28)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    decalCtx.fillStyle=g; decalCtx.beginPath(); decalCtx.arc(cx,cy,r,0,Math.PI*2); decalCtx.fill();
   }
 
-  // Zoom controls (double-tap to reset)
-  zoomIn.addEventListener('click', ()=>{ cam.targetScale=Math.min(cam.max, cam.targetScale+0.15); });
-  zoomOut.addEventListener('click', ()=>{ cam.targetScale=Math.max(cam.min, cam.targetScale-0.15); });
-  let lastTap=0;
-  cvs.addEventListener('pointerdown', (e)=>{
-    const now=performance.now();
-    if (now-lastTap<280 && Math.abs(e.movementX)<2 && Math.abs(e.movementY)<2){ cam.targetScale=1; }
-    lastTap=now;
-  });
-
-  // ======= Physics: player settle/fall =======
+  // ======= Players physics =======
   function groundYAt(x){ x=Math.max(0,Math.min(W-1,x|0)); return heightmap[x]; }
   function stepPlayers(){
     for (let i=0;i<2;i++){
       const p=players[i];
-
       const under = terrainMask[Math.min(H-1,(p.y+PLAYER_R+1|0))*W + (p.x|0)];
       const onSolid = (under===SOLID);
 
@@ -959,7 +807,275 @@
     }
   }
 
-  // ======= Drawing, camera, FX =======
+  // ======= Drawing =======
+  const miniCtx2d = miniCtx;
+  function drawMiniPreview(){
+    miniCtx2d.clearRect(0,0,mini.width,mini.height);
+    miniCtx2d.fillStyle='#0b1020'; miniCtx2d.fillRect(0,0,mini.width,mini.height);
+    miniCtx2d.fillStyle='#18203a';
+    for(let x=0;x<mini.width;x++){
+      const wx = Math.floor(x * (W/mini.width));
+      const hy = heightmap[wx] * (mini.height/H);
+      miniCtx2d.fillRect(x, hy, 1, mini.height-hy);
+    }
+    miniCtx2d.fillStyle='#6ea8fe'; miniCtx2d.beginPath();
+    miniCtx2d.arc(players[0].x * (mini.width/W), players[0].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx2d.fill();
+    miniCtx2d.fillStyle='#90c2ff'; miniCtx2d.beginPath();
+    miniCtx2d.arc(players[1].x * (mini.width/W), players[1].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx2d.fill();
+    miniCtx2d.fillStyle='#fff'; miniCtx2d.font='10px system-ui';
+    const mag = Math.min(1, Math.abs(wind)/WIND_MAX || 0);
+    const arrow = wind>0?'→'+Math.round(mag*100): wind<0 ? '←'+Math.round(mag*100) : '· 0';
+    miniCtx2d.fillText('Wind '+arrow, 6, 12);
+  }
+
+  function updateTurnUI(){
+    turnEl.textContent = turn===0 ? 'P1' : (aiEnabled ? 'P2 (CPU 🤖)' : 'P2');
+    updateBadge();
+  }
+  function updateHPPlates(){
+    const p1 = players[0], p2 = players[1];
+    np1.textContent = `P1 — ${p1.hp}%`;
+    np2.textContent = (aiEnabled? 'P2 (CPU) — ' : 'P2 — ') + `${p2.hp}%`;
+  }
+  function updateWindUI(){
+    const mag = Math.min(1, Math.abs(wind)/WIND_MAX || 0);
+    const side = (mag*50).toFixed(1);
+    windL.style.width = (wind<0?side:0)+'%';
+    windR.style.width = (wind>0?side:0)+'%';
+    const arrow = wind>0?'→ ': wind<0 ? '← ' : '· ';
+    windVal.textContent = arrow + Math.round(mag*100);
+  }
+
+  // Weapon menu interactions
+  function openWeaponMenu(open){
+    weaponMenu.style.display = open ? 'flex' : 'none';
+    weaponBadge.setAttribute('aria-expanded', open?'true':'false');
+  }
+  weaponBadge.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if (placingTeleport) return;
+    openWeaponMenu(weaponMenu.style.display!=='flex');
+  });
+  document.addEventListener('click', ()=> openWeaponMenu(false));
+  weaponMenu.addEventListener('click', (e)=>{
+    if (!(e.target instanceof HTMLElement)) return;
+    const opt = e.target.closest('.opt'); if (!opt) return;
+    const w = opt.dataset.w; if (!w) return;
+    weapon = w;
+    // persist per player immediately
+    players[turn].lastWeapon = weapon;
+
+    if (weapon==='teleport'){
+      const am = players[turn].ammo.teleport;
+      if (am<=0){ toast('No teleport ammo'); weapon='normal'; players[turn].lastWeapon = weapon; }
+      else { placingTeleport = true; fireBtn.disabled=true; toast('Teleport: tap the map to choose destination (two-finger tap to cancel)'); }
+    } else { placingTeleport=false; fireBtn.disabled=false; }
+    updateBadge();
+    openWeaponMenu(false);
+  });
+  fuseMini.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const p=players[turn]; p.fuse = (p.fuse||3)%5 + 1; updateBadge();
+  });
+
+  // Fire/charge
+  let charging=false, chargePower=1, chargeInterval=null;
+  function startCharge(){
+    if (shot || placingTeleport) return;
+    if (weapon==='shotgun'){ launchShot(60); return; }
+    charging=true; chargePower=1; startChargeSound(); chargeBar.style.width='0%';
+    chargeInterval = setInterval(()=>{
+      chargePower = Math.min(100, chargePower + 1.8);
+      const pct = Math.max(0, Math.min(100, chargePower));
+      chargeBar.style.width = pct + '%'; updateChargeSound(pct/100);
+    },60);
+  }
+  function endChargeAndFire(){
+    if (weapon==='shotgun' || placingTeleport) return;
+    if (!charging) return; clearInterval(chargeInterval); chargeInterval=null;
+    stopChargeSound(); charging=false; launchShot(chargePower); chargePower=1; chargeBar.style.width='0%';
+  }
+  fireBtn.addEventListener('mousedown', startCharge);
+  fireBtn.addEventListener('mouseup', endChargeAndFire);
+  fireBtn.addEventListener('mouseleave', endChargeAndFire);
+  fireBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); startCharge(); }, {passive:false});
+  fireBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
+  fireBtn.addEventListener('touchcancel', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
+
+  // Aim with drag
+  cvs.addEventListener('pointerdown', onPointer);
+  cvs.addEventListener('pointermove', onPointer);
+  function onPointer(e){
+    if (shot || placingTeleport) return;
+    const {px,py} = screenToWorld(e);
+    const p = players[turn];
+    const dx = px - p.x;
+    const dy = p.y - py;
+    let ang = Math.atan2(dy, Math.abs(dx)) * 180/Math.PI;
+    ang = Math.max(0, Math.min(180, ang));
+    p.angle = ang|0;
+  }
+
+  // Zoom controls (clamped, no drift)
+  zoomIn.addEventListener('click', ()=>{ cam.targetScale=Math.min(cam.max, cam.targetScale+0.15); });
+  zoomOut.addEventListener('click', ()=>{ cam.targetScale=Math.max(cam.min, cam.targetScale-0.15); });
+  let lastTap=0;
+  cvs.addEventListener('pointerdown', (e)=>{
+    const now=performance.now();
+    if (now-lastTap<280 && Math.abs(e.movementX)<2 && Math.abs(e.movementY)<2){ cam.targetScale=1; }
+    lastTap=now;
+  });
+
+  // Teleport place
+  stage.addEventListener('pointerdown', (e)=>{
+    if (!placingTeleport) return;
+    const {px,py} = screenToWorld(e);
+    const pos = findTeleportDestination(px,py);
+    if (!pos){ toast('Blocked — choose a free spot'); tone(180,0.08,'sine',0.12); return; }
+    players[turn].ammo.teleport--; whoosh();
+    players[turn].x = pos.x; players[turn].y = pos.y; players[turn].vx=0; players[turn].vy=0;
+    poof();
+    placingTeleport = false; fireBtn.disabled=false;
+    endShot();
+  });
+  function findTeleportDestination(x,y){
+    x = Math.max(PLAYER_R+2, Math.min(W-PLAYER_R-2, x|0));
+    y = Math.max(PLAYER_R+2, Math.min(H-PLAYER_R-2, y|0));
+    let yy=y; let tries=0;
+    while(tries++<80 && terrainMask[(yy|0)*W+(x|0)]===SOLID){ yy--; }
+    if (terrainMask[(yy|0)*W+(x|0)]===SOLID) return null;
+    return {x, y:yy};
+  }
+
+  // Helpers
+  function screenToWorld(e){
+    const rect=cvs.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (W/rect.width);
+    const py = (e.clientY - rect.top)  * (H/rect.height);
+    return {px,py};
+  }
+  const lastPointer={x:0,y:0,event:{clientX:0,clientY:0}};
+  stage.addEventListener('pointermove', (e)=>{ lastPointer.event=e; });
+
+  function randomizeWind(){ readMenuSettings(); wind = (Math.random()*2-1)*WIND_MAX; updateWindUI(); }
+  function toast(msg){
+    const el = document.createElement('div');
+    el.textContent = msg;
+    Object.assign(el.style, {position:'absolute', left:'50%', top:'20%', transform:'translateX(-50%)',
+      background:'rgba(18,25,50,.95)', color:'var(--ink)', border:'1px solid var(--line)',
+      padding:'6px 10px', borderRadius:'10px', zIndex:70, fontSize:'13px'});
+    stage.appendChild(el);
+    setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 900);
+  }
+
+  // ======= Menu logic =======
+  function openMenu(open){ menuPanel.style.display = open ? 'block' : 'none'; }
+  menuBtn.addEventListener('click', ()=> openMenu(menuPanel.style.display!=='block'));
+  closeMenu.addEventListener('click', ()=> openMenu(false));
+  newMapBtn.addEventListener('click', ()=> resetGame(true));
+  startBtn.addEventListener('click', ()=> { resetGame(false); openMenu(false); });
+  rerollBtn.addEventListener('click', ()=> { srand(); seedTxt.value=''; resetGame(true); });
+  // long-press seed
+  let miniTimer=null;
+  mini.addEventListener('pointerdown', ()=>{ miniTimer=setTimeout(()=>{
+      const s = prompt('Enter custom seed (letters/numbers, up to 12):','');
+      if (s){ srand(s); seedTxt.value=s; resetGame(true); }
+    }, 600);
+  });
+  ['pointerup','pointerleave'].forEach(evt=>mini.addEventListener(evt, ()=> clearTimeout(miniTimer)));
+  seedTxt.addEventListener('change', ()=>{ if (seedTxt.value.trim()){ srand(seedTxt.value.trim()); resetGame(true); }});
+
+  function readMenuSettings(){
+    aiEnabled = (modeSel.value==='pvc');
+    const wv = windSel.value;
+    WIND_MAX = (wv==='Off'?0 : wv==='Low'?0.02 : wv==='Normal'?0.05 : 0.09);
+  }
+
+  // ======= AI =======
+  function aiPlay(){
+    if (!aiEnabled || turn!==1 || shot) return;
+    const me = players[1], you = players[0];
+    const dx = you.x - me.x, dy = me.y - you.y;
+    const dist = Math.hypot(dx,dy);
+    if (wGrenade.checked && me.ammo.grenade>0 && dist>220) weapon='grenade';
+    else if (wShotgun.checked && me.ammo.shotgun>0 && dist<220) weapon='shotgun';
+    else weapon='normal';
+    me.lastWeapon = weapon; // persist AI choice too
+
+    const diff = diffSel.value;
+    let angle = me.angle, power = me.lastPower||50;
+
+    if (diff==='Easy'){
+      angle = 20 + Math.random()*140;
+      power = 30 + Math.random()*60;
+    } else if (diff==='Medium'){
+      const wBias = wind*800;
+      angle = 30 + Math.random()*120;
+      power = 40 + Math.random()*50 + (Math.sign(dx)*wBias);
+    } else {
+      let best = {miss:1e9, angle:45, power:60};
+      for (let a=20;a<=160;a+=8){
+        for (let p=30;p<=90;p+=10){
+          const miss = simulateHit(me.x, me.y, me.facing, a, p, weapon);
+          if (miss<best.miss){ best={miss, angle:a, power:p}; }
+        }
+      }
+      angle = best.angle; power = best.power;
+    }
+
+    me.angle = angle|0; me.lastPower = power;
+    updateBadge();
+
+    if (weapon==='teleport' && wTeleport.checked && me.ammo.teleport>0){
+      const tx = (me.x*0.4 + you.x*0.6); const ty = groundYAt(tx)-PLAYER_R-2;
+      me.ammo.teleport--; whoosh(); me.x=tx; me.y=ty; poof(); endShot(); return;
+    }
+
+    if (weapon==='shotgun') launchShot(60);
+    else launchShot(power);
+  }
+
+  function simulateHit(x0,y0,facing, angDeg, power, kind){
+    const opp = players[0];
+    let x = x0 + Math.cos(angDeg*Math.PI/180)*(PLAYER_R+6)*(facing===1?1:-1);
+    let y = y0 - Math.sin(angDeg*Math.PI/180)*(PLAYER_R+6);
+    let vx = Math.cos(angDeg*Math.PI/180)*Math.max(1,power)*0.9*(facing===1?1:-1);
+    let vy = -Math.sin(angDeg*Math.PI/180)*Math.max(1,power)*0.9;
+    for (let t=0;t<300;t++){
+      if (kind==='grenade'){ vy += G; } else { vx += wind; vy += G; }
+      x += vx; y += vy;
+      if (x<0||x>=W||y<0||y>=H) break;
+      const ix=x|0, iy=y|0;
+      if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID) break;
+      const dx = x-opp.x, dy=y-opp.y;
+      if (dx*dx+dy*dy <= PLAYER_R*PLAYER_R) return 0;
+    }
+    return Math.hypot(x-opp.x,y-opp.y);
+  }
+
+  // ======= FX & render =======
+  function showWinBanner(idx, reason){
+    const sh = stats.shots[idx], hi = stats.hits[idx];
+    const acc = sh? Math.round(100*hi/sh):0;
+    const big = stats.bestHit[idx]||0;
+    winTxt.textContent = `P${idx+1} wins 🎉 (${reason})`;
+    statsTxt.textContent = `Shots: ${sh} · Accuracy: ${acc}% · Biggest hit: ${big}`;
+    banner.style.display='flex';
+  }
+  rematchBtn.addEventListener('click', ()=>{ banner.style.display='none'; resetGame(false); });
+  newMapBannerBtn.addEventListener('click', ()=>{ banner.style.display='none'; resetGame(true); });
+  openMenuBtn.addEventListener('click', ()=>{ banner.style.display='none'; openMenu(true); });
+
+  function confettiBurst(){
+    const colors = ['#ffd166','#a78bfa','#6ea8fe','#22c55e','#ef4444'];
+    for(let i=0;i<120;i++){
+      particles.push({type:'confetti', x:W/2, y:H/3, vx:(Math.random()*4-2), vy:(-3 - Math.random()*2),
+        rot:Math.random()*Math.PI, vr:(Math.random()*0.2-0.1), w:4+Math.random()*6, h:8+Math.random()*6,
+        color: colors[Math.floor(Math.random()*colors.length)]
+      });
+    }
+  }
+
   function draw(){
     requestAnimationFrame(draw);
     cam.scale += (cam.targetScale - cam.scale)*0.15;
@@ -988,8 +1104,7 @@
 
       if (idx===turn && !shot && !placingTeleport){
         const ang=(p.angle*Math.PI)/180; const dir=p.facing===1?1:-1; const len=22;
-        const x2=p.x+Math.cos(ang)*len*dir;
-        const y2=p.y-Math.sin(ang)*len;
+        const x2=p.x+Math.cos(ang)*len*dir; const y2=p.y-Math.sin(ang)*len;
         ctx.strokeStyle='#ffd166'; ctx.lineWidth=3;
         ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(x2,y2); ctx.stroke();
       }
@@ -1023,7 +1138,9 @@
     }
 
     if (placingTeleport){
-      const {px,py} = screenToWorld(lastPointer.event);
+      const rect=cvs.getBoundingClientRect();
+      const px = (lastPointer.event.clientX - rect.left) * (W/rect.width);
+      const py = (lastPointer.event.clientY - rect.top)  * (H/rect.height);
       ctx.strokeStyle='rgba(160,220,255,.9)'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(px,py,10,0,Math.PI*2); ctx.moveTo(px-14,py); ctx.lineTo(px+14,py); ctx.moveTo(px,py-14); ctx.lineTo(px,py+14); ctx.stroke();
     }
@@ -1031,20 +1148,18 @@
     if (shot){
       for(let i=0;i<2;i++) stepShot();
 
-      if (shot.kind==='normal'){
-        const s=shot;
-        ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.2;
+      if (shot && shot.kind==='normal'){
+        const s=shot; ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.2;
         ctx.beginPath(); for(let i=0;i<s.trail.length;i++){ const t=s.trail[i]; if (i===0) ctx.moveTo(t.x,t.y); else ctx.lineTo(t.x,t.y); } ctx.stroke();
         ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(s.x,s.y,3,0,Math.PI*2); ctx.fill();
-      } else if (shot.kind==='grenade'){
-        const s=shot;
-        ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=1.2;
+      } else if (shot && shot.kind==='grenade'){
+        const s=shot; ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=1.2;
         ctx.beginPath(); for(let i=0;i<s.trail.length;i++){ const t=s.trail[i]; if (i===0) ctx.moveTo(t.x,t.y); else ctx.lineTo(t.x,t.y); } ctx.stroke();
         ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(s.x,s.y,4,0,Math.PI*2); ctx.fill();
         const secs = Math.max(0, Math.ceil(s.t/60));
         ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='12px system-ui'; ctx.textAlign='center';
         ctx.fillText(`${secs}s`, s.x, s.y-10);
-      } else if (shot.kind==='shotgun'){
+      } else if (shot && shot.kind==='shotgun'){
         ctx.fillStyle='#ffd166';
         shot.pellets.forEach(p=>{
           ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1;
@@ -1055,6 +1170,7 @@
       }
     }
 
+    // particles
     for(let i=particles.length-1;i>=0;i--){
       const P=particles[i];
       if (P.type==='confetti'){
@@ -1068,12 +1184,8 @@
       P.vy += (P.smoke? 0.05 : G*0.6);
       P.x += P.vx; P.y += P.vy;
       P.life--;
-      if (P.smoke){
-        ctx.globalAlpha=Math.max(0, (P.alpha??0.5) * P.life/70);
-        ctx.fillStyle='#cbd5e1'; ctx.beginPath(); ctx.arc(P.x,P.y,3.5,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
-      } else {
-        ctx.fillStyle='#9aa5bf'; ctx.beginPath(); ctx.arc(P.x,P.y,2.2,0,Math.PI*2); ctx.fill();
-      }
+      if (P.smoke){ ctx.globalAlpha=Math.max(0, (P.alpha??0.5) * P.life/70); ctx.fillStyle='#cbd5e1'; ctx.beginPath(); ctx.arc(P.x,P.y,3.5,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+      else { ctx.fillStyle='#9aa5bf'; ctx.beginPath(); ctx.arc(P.x,P.y,2.2,0,Math.PI*2); ctx.fill(); }
       if (P.life<=0) particles.splice(i,1);
     }
 
@@ -1090,7 +1202,6 @@
       ctx.fillText(d.val, d.x, d.y); ctx.globalAlpha=1;
       if (d.life<=0) dmgNums.splice(i,1);
     }
-
     ctx.restore();
 
     positionNameplate(np1, players[0]);
@@ -1107,7 +1218,40 @@
     el.style.top  = (sy - 22) + 'px';
   }
 
-  // ======= Win banner & confetti =======
+  // ======= Reset & boot =======
+  function showWinBanner(idx, reason){/* overwritten above */}
+
+  function updateAll(){ updateHPPlates(); updateTurnUI(); updateWindUI(); }
+
+  function resetGame(newMap){
+    readMenuSettings();
+    if (newMap){ if (seedTxt.value.trim()) srand(seedTxt.value.trim()); else srand(); }
+    stats.shots=[0,0]; stats.hits=[0,0]; stats.bestHit=[0,0];
+
+    for (let i=0;i<2;i++){
+      players[i].hp=100; players[i].vx=players[i].vy=0;
+      players[i].ammo={ shotgun: wShotgun.checked?5:0, grenade: wGrenade.checked?5:0, teleport: wTeleport.checked?1:0 };
+      players[i].fuse = 3;
+      // keep lastWeapon when rematching same session, else default to bazooka
+      if (newMap) players[i].lastWeapon = Weapons.NORMAL;
+    }
+    updateHPPlates();
+
+    shot=null; turn=0; fireBtn.disabled=false; placingTeleport=false;
+    cam.scale=1; cam.targetScale=1;
+    generateTerrain();
+    players[turn].emote='😼'; players[turn].emoteT=80;
+    weapon = players[turn].lastWeapon || Weapons.NORMAL;
+    updateTurnUI(); updateBadge(); drawMiniPreview();
+  }
+
+  // menu open initially so user sees it
+  menuPanel.style.display='block';
+
+  // Boot
+  srand(); generateTerrain(); updateAll(); draw();
+
+  // Buttons on banner
   function showWinBanner(idx, reason){
     const sh = stats.shots[idx], hi = stats.hits[idx];
     const acc = sh? Math.round(100*hi/sh):0;
@@ -1119,186 +1263,6 @@
   rematchBtn.addEventListener('click', ()=>{ banner.style.display='none'; resetGame(false); });
   newMapBannerBtn.addEventListener('click', ()=>{ banner.style.display='none'; resetGame(true); });
   openMenuBtn.addEventListener('click', ()=>{ banner.style.display='none'; openMenu(true); });
-
-  function confettiBurst(){
-    const colors = ['#ffd166','#a78bfa','#6ea8fe','#22c55e','#ef4444'];
-    for(let i=0;i<120;i++){
-      particles.push({type:'confetti', x:W/2, y:H/3, vx:(Math.random()*4-2), vy:(-3 - Math.random()*2),
-        rot:Math.random()*Math.PI, vr:(Math.random()*0.2-0.1), w:4+Math.random()*6, h:8+Math.random()*6,
-        color: colors[Math.floor(Math.random()*colors.length)]
-      });
-    }
-  }
-
-  // ======= Mini map preview =======
-  function drawMiniPreview(){
-    miniCtx.clearRect(0,0,mini.width,mini.height);
-    miniCtx.fillStyle='#0b1020'; miniCtx.fillRect(0,0,mini.width,mini.height);
-    miniCtx.fillStyle='#18203a';
-    for(let x=0;x<mini.width;x++){
-      const wx = Math.floor(x * (W/mini.width));
-      const hy = heightmap[wx] * (mini.height/H);
-      miniCtx.fillRect(x, hy, 1, mini.height-hy);
-    }
-    miniCtx.fillStyle='#6ea8fe'; miniCtx.beginPath();
-    const p1x = players[0].x * (mini.width/W), p1y = players[0].y * (mini.height/H);
-    miniCtx.arc(p1x, p1y, 3, 0, Math.PI*2); miniCtx.fill();
-    miniCtx.fillStyle='#90c2ff'; miniCtx.beginPath();
-    const p2x = players[1].x * (mini.width/W), p2y = players[1].y * (mini.height/H);
-    miniCtx.arc(p2x, p2y, 3, 0, Math.PI*2); miniCtx.fill();
-    miniCtx.fillStyle='#fff'; miniCtx.font='10px system-ui';
-    const mag = Math.min(1, Math.abs(wind)/WIND_MAX || 0);
-    const arrow = wind>0?'→'+Math.round(mag*100): wind<0 ? '←'+Math.round(mag*100) : '· 0';
-    miniCtx.fillText('Wind '+arrow, 6, 12);
-  }
-
-  // ======= Menu fold/logic =======
-  function openMenu(open){
-    menuPanel.style.display = open ? 'block' : 'none';
-    menuTab.textContent = open ? 'Menu ⌃' : 'Menu ⌄';
-  }
-  menuTab.addEventListener('click', ()=> openMenu(menuPanel.style.display!=='block'));
-  closeMenu.addEventListener('click', ()=> openMenu(false));
-  newMapBtn.addEventListener('click', ()=> resetGame(true));
-  startBtn.addEventListener('click', ()=> { resetGame(false); openMenu(false); });
-  rerollBtn.addEventListener('click', ()=> { srand(); seedTxt.value=''; resetGame(true); });
-
-  // long-press on mini to prompt seed
-  let miniTimer=null;
-  mini.addEventListener('pointerdown', ()=>{
-    miniTimer=setTimeout(()=>{
-      const s = prompt('Enter custom seed (letters/numbers, up to 12):','');
-      if (s){ srand(s); seedTxt.value=s; resetGame(true); }
-    }, 600);
-  });
-  mini.addEventListener('pointerup', ()=> clearTimeout(miniTimer));
-  mini.addEventListener('pointerleave', ()=> clearTimeout(miniTimer));
-  seedTxt.addEventListener('change', ()=>{ if (seedTxt.value.trim()){ srand(seedTxt.value.trim()); resetGame(true); }});
-
-  // Difficulty & mode read
-  function readMenuSettings(){
-    aiEnabled = (modeSel.value==='pvc');
-    const wv = windSel.value;
-    WIND_MAX = (wv==='Off'?0 : wv==='Low'?0.02 : wv==='Normal'?0.05 : 0.09);
-  }
-
-  // ======= AI =======
-  function aiPlay(){
-    if (!aiEnabled || turn!==1 || shot) return;
-    const me = players[1], you = players[0];
-    const dx = you.x - me.x, dy = me.y - you.y;
-    const dist = Math.hypot(dx,dy);
-    if (wGrenade.checked && me.ammo.grenade>0 && dist>220) weapon=Weapons.GRENADE;
-    else if (wShotgun.checked && me.ammo.shotgun>0 && dist<220) weapon=Weapons.SHOTGUN;
-    else weapon=Weapons.NORMAL;
-
-    const diff = diffSel.value;
-    let angle = me.angle, power = me.lastPower||50;
-
-    if (diff==='Easy'){
-      angle = 20 + Math.random()*140;
-      power = 30 + Math.random()*60;
-    } else if (diff==='Medium'){
-      const wBias = wind*800;
-      angle = 30 + Math.random()*120;
-      power = 40 + Math.random()*50 + (Math.sign(dx)*wBias);
-    } else {
-      let best = {miss:1e9, angle:45, power:60};
-      for (let a=20;a<=160;a+=8){
-        for (let p=30;p<=90;p+=10){
-          const miss = simulateHit(me.x, me.y, me.facing, a, p, weapon);
-          if (miss<best.miss){ best={miss, angle:a, power:p}; }
-        }
-      }
-      angle = best.angle; power = best.power;
-    }
-
-    me.angle = angle|0; me.lastPower = power;
-    updateBadge();
-
-    if (weapon===Weapons.TELEPORT && wTeleport.checked && me.ammo.teleport>0){
-      const tx = (me.x*0.4 + you.x*0.6); const ty = groundYAt(tx)-PLAYER_R-2;
-      players[1].ammo.teleport--; whoosh(); me.x=tx; me.y=ty; poof(); endShot(); return;
-    }
-
-    if (weapon===Weapons.SHOTGUN) launchShot(60);
-    else launchShot(power);
-  }
-
-  function simulateHit(x0,y0,facing, angDeg, power, kind){
-    const opp = players[0];
-    let x = x0 + Math.cos(angDeg*Math.PI/180)*(PLAYER_R+6)*(facing===1?1:-1);
-    let y = y0 - Math.sin(angDeg*Math.PI/180)*(PLAYER_R+6);
-    let vx = Math.cos(angDeg*Math.PI/180)*Math.max(1,power)*0.9*(facing===1?1:-1);
-    let vy = -Math.sin(angDeg*Math.PI/180)*Math.max(1,power)*0.9;
-    for (let t=0;t<300;t++){
-      if (kind===Weapons.GRENADE){ vy += G; } else { vx += wind; vy += G; }
-      x += vx; y += vy;
-      if (x<0||x>=W||y<0||y>=H) break;
-      const ix=x|0, iy=y|0;
-      if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID) break;
-      const dx = x-opp.x, dy=y-opp.y;
-      if (dx*dx+dy*dy <= PLAYER_R*PLAYER_R) return 0;
-    }
-    return Math.hypot(x-opp.x,y-opp.y);
-  }
-
-  // ======= Helpers =======
-  function screenToWorld(e){
-    const rect=cvs.getBoundingClientRect();
-    const px = (e.clientX - rect.left) * (W/rect.width);
-    const py = (e.clientY - rect.top)  * (H/rect.height);
-    return {px,py};
-  }
-  const lastPointer={x:0,y:0,event:{clientX:0,clientY:0}};
-  stage.addEventListener('pointermove', (e)=>{ lastPointer.event=e; const r=cvs.getBoundingClientRect(); lastPointer.x=e.clientX; lastPointer.y=e.clientY; });
-
-  function randomizeWind(){ readMenuSettings();
-    wind = (Math.random()*2-1)*WIND_MAX;
-    updateWindUI();
-  }
-
-  function toast(msg){
-    const el = document.createElement('div');
-    el.textContent = msg;
-    Object.assign(el.style, {position:'absolute', left:'50%', top:'20%', transform:'translateX(-50%)',
-      background:'rgba(18,25,50,.95)', color:'var(--ink)', border:'1px solid var(--line)',
-      padding:'6px 10px', borderRadius:'10px', zIndex:50, fontSize:'13px'});
-    stage.appendChild(el);
-    setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 900);
-  }
-
-  // ======= Reset & boot =======
-  function resetGame(newMap){
-    readMenuSettings();
-    if (newMap){ if (seedTxt.value.trim()) srand(seedTxt.value.trim()); else srand(); }
-    stats.shots=[0,0]; stats.hits=[0,0]; stats.bestHit=[0,0];
-
-    for (let i=0;i<2;i++){
-      players[i].hp=100; players[i].vx=players[i].vy=0;
-      players[i].ammo={ shotgun: wShotgun.checked?5:0, grenade: wGrenade.checked?5:0, teleport: wTeleport.checked?1:0 };
-      players[i].lastWeapon = Weapons.NORMAL;
-      players[i].fuse = 3;
-    }
-    updateHPUI();
-
-    shot=null; turn=0; fireBtn.disabled=false; placingTeleport=false;
-    cam.scale=1; cam.targetScale=1;
-    generateTerrain();
-    players[turn].emote='😼'; players[turn].emoteT=80;
-    weapon = players[turn].lastWeapon || Weapons.NORMAL;
-    updateTurnUI(); updateBadge(); drawMiniPreview();
-  }
-
-  function updateAll(){ updateHPUI(); updateTurnUI(); updateWindUI(); }
-
-  // Boot
-  srand(); generateTerrain(); updateAll();
-  players[turn].emote='😼'; players[turn].emoteT=80;
-  draw();
-
-  // OPEN MENU AT START (so it's visible and clickable)
-  openMenu(true);
 
 })();
 </script>
