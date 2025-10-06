@@ -33,7 +33,7 @@
 
   .panel.left{left:10px; top:10px; width:min(280px,45vw)}
   .panel.right{right:10px; top:10px; width:min(280px,45vw)}
-  .panel.center{left:50%; transform:translateX(-50%); top:10px; min-width:220px; text-align:center}
+  .panel.center{left:50%; transform:translateX(-50%); top:10px; min-width:220px; text-align:center; z-index:20}
 
   /* HP bars */
   .hpBar{height:8px;background:#1a2346;border-radius:99px;overflow:hidden}
@@ -94,12 +94,18 @@
   .menuTab{
     position:absolute; top:10px; left:50%; transform:translateX(-50%);
     background:rgba(18,25,50,.85); border:1px solid var(--line); border-radius:999px; padding:6px 12px;
-    font-weight:700; cursor:pointer; user-select:none;
+    font-weight:700; cursor:pointer; user-select:none; z-index:35;
+    box-shadow: 0 2px 10px rgba(0,0,0,.35);
+    outline: 1px solid rgba(110,168,254,.25);
   }
   .menuPanel{
     position:absolute; top:52px; left:50%; transform:translateX(-50%);
     width:min(92%,760px); background:rgba(10,14,30,.92); border:1px solid var(--line); border-radius:16px; padding:14px; display:none; z-index:30;
   }
+  /* FIX: make menu clickable */
+  .menuPanel, .menuPanel * { pointer-events: auto; }
+  /* FIX: winner banner clickable */
+  .banner, .banner * { pointer-events: auto; }
   .menuGrid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
   .menuRow{display:flex; align-items:center; justify-content:space-between; gap:10px}
   .menuRow > * {font-size:14px}
@@ -358,7 +364,7 @@
   const newMapBtn = document.getElementById('newMapBtn');
   const closeMenu = document.getElementById('closeMenu');
 
-  // Prevent page zoom on rapid taps
+  // Prevent page zoom on rapid taps (double-tap)
   document.addEventListener('dblclick', e => {
     if (stage.contains(e.target)) e.preventDefault();
   }, {passive:false});
@@ -645,9 +651,7 @@
       const vx = Math.cos(ang)*v * (p.facing===1?1:-1);
       const vy = -Math.sin(ang)*v;
       const fuse = (players[turn].fuse||grenadeFuse);
-      shot = { kind:'grenade', x:muzzleX, y:muzzleY, vx, vy, trail:[], t: fuse*60, // frames
-               // windless
-             };
+      shot = { kind:'grenade', x:muzzleX, y:muzzleY, vx, vy, trail:[], t: fuse*60 /*frames*/ };
       tone(260,0.06,'triangle',0.12);
       spendAmmo();
     } else if (weapon===Weapons.SHOTGUN){
@@ -693,7 +697,6 @@
   function stepShot(){
     if (!shot) return;
 
-    // Single projectile modes
     if (shot.kind==='normal'){
       const s=shot;
       s.vx += wind; s.vy += G; s.x += s.vx; s.y += s.vy;
@@ -724,14 +727,14 @@
 
       if (s.x<0 || s.x>=W || s.y>=H){ endShot(null); return; }
 
-      // direct player bump: small push, no instant KO
+      // bump players softly
       for (let i=0;i<2;i++){
         const pl=players[i]; const dx=s.x-pl.x, dy=s.y-pl.y;
         const d2=dx*dx+dy*dy;
         if (d2 <= (PLAYER_R*PLAYER_R)*0.8){
           const d=Math.max(1,Math.sqrt(d2)); const nx=dx/d, ny=dy/d;
           pl.vx += nx*0.8; pl.vy += ny*0.5-0.2;
-          // bounce off player softly
+          // bounce off player
           s.vx = -nx*Math.abs(s.vx)*0.8; s.vy = -ny*Math.abs(s.vy)*0.6;
         }
       }
@@ -739,16 +742,13 @@
       const ix=s.x|0, iy=s.y|0;
       if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID){
         // infinite bounces with damping
-        // estimate surface normal with heightmap slope
         const gx = (heightmap[Math.min(W-1,ix+1)] - heightmap[Math.max(0,ix-1)])*0.5;
         let nx = -gx; let ny = 2; // crude up normal
         const len = Math.max(1, Math.hypot(nx,ny)); nx/=len; ny/=len;
-        // reflect
         const dot = s.vx*nx + s.vy*ny;
         s.vx = (s.vx - 2*dot*nx) * 0.92;
         s.vy = (s.vy - 2*dot*ny) * 0.68;
         tone(180,0.04,'square',0.12);
-        // nudge out
         let c=0; while((terrainMask[(s.y|0)*W+(s.x|0)]===SOLID) && c++<6){ s.y-=1; }
       }
     }
@@ -766,16 +766,13 @@
         const dx=p.x-opp.x, dy=p.y-opp.y;
         if (dx*dx+dy*dy <= (PLAYER_R*PLAYER_R)*0.85){
           applyDamage(1-turn,16,true); floatDmg(opp.x, opp.y-PLAYER_R-8, -16);
-          // tiny knock
           const d=Math.max(1,Math.hypot(dx,dy)); opp.vx += (dx/d)*0.6; opp.vy += (dy/d)*0.35-0.2;
           pellets.splice(k,1);
           continue;
         }
         if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID){
-          // tiny crater for pellets
           carveCrater(p.x,p.y,10);
           applySplashDamage(p.x,p.y,12);
-          // tiny debris
           for(let i=0;i<6;i++){
             const a=Math.random()*Math.PI*2, sp=1+Math.random()*2.5;
             particles.push({x:p.x,y:p.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1.2,life:28,smoke:false});
@@ -793,14 +790,11 @@
       turn = 1-turn;
       updateTurnUI();
       fireBtn.disabled=false;
-      // wind drift
       wind = Math.max(-WIND_MAX, Math.min(WIND_MAX, wind + (Math.random()*0.06 - 0.03)));
       updateWindUI();
-      // emote
       players[turn].emote = ['😼','😹','😾','😺','😸'][Math.floor(Math.random()*5)];
       players[turn].emoteT = 80;
       ensureAmmoOrSwitch();
-      // AI move if enabled and P2's turn
       if (aiEnabled && turn===1) setTimeout(aiPlay, 650);
     }
   }
@@ -811,20 +805,16 @@
     const {px,py} = screenToWorld(e);
     const pos = findTeleportDestination(px,py);
     if (!pos){ toast('Blocked — choose a free spot'); tone(180,0.08,'sine',0.12); return; }
-    // consume ammo, move, whoosh/poof
     players[turn].ammo.teleport--; whoosh();
-    // short invuln can be simulated by a flag if needed; here just move and settle
     players[turn].x = pos.x; players[turn].y = pos.y; players[turn].vx=0; players[turn].vy=0;
     poof();
     placingTeleport = false; fireBtn.disabled=false;
-    // if in air, falling logic will take over; end turn
     endShot();
   });
 
   function findTeleportDestination(x,y){
     x = Math.max(PLAYER_R+2, Math.min(W-PLAYER_R-2, x|0));
     y = Math.max(PLAYER_R+2, Math.min(H-PLAYER_R-2, y|0));
-    // if inside terrain, scan upwards up to 80px to free cell
     let yy=y; let tries=0;
     while(tries++<80 && terrainMask[(yy|0)*W+(x|0)]===SOLID){ yy--; }
     if (terrainMask[(yy|0)*W+(x|0)]===SOLID) return null;
@@ -860,7 +850,7 @@
   }
   weaponBadge.addEventListener('click', (e)=>{
     e.stopPropagation();
-    if (placingTeleport) return; // can't open while selecting teleport
+    if (placingTeleport) return;
     openWeaponMenu(weaponMenu.style.display!=='flex');
   });
   document.addEventListener('click', ()=> openWeaponMenu(false));
@@ -869,7 +859,6 @@
     const opt = e.target.closest('.opt'); if (!opt) return;
     const w = opt.dataset.w; if (!w) return;
     weapon = w;
-    // Teleport enters selection mode
     if (weapon===Weapons.TELEPORT){
       const am = players[turn].ammo.teleport;
       if (am<=0){ toast('No teleport ammo'); weapon=Weapons.NORMAL; }
@@ -878,7 +867,6 @@
     updateBadge();
     openWeaponMenu(false);
   });
-  // fuse tweak by clicking fuse chip in menu
   fuseMini.addEventListener('click', (e)=>{
     e.stopPropagation();
     const p=players[turn]; p.fuse = (p.fuse||3)%5 + 1; updateBadge();
@@ -896,7 +884,6 @@
       chargePower = Math.min(100, chargePower + 1.8);
       const pct = Math.max(0, Math.min(100, chargePower));
       chargeBar.style.width = pct + '%'; updateChargeSound(pct/100);
-      // ghost arc length depends on charge
     },60);
   }
   function endChargeAndFire(){
@@ -941,20 +928,16 @@
     for (let i=0;i<2;i++){
       const p=players[i];
 
-      // If terrain below is SKY, start falling/settling
       const under = terrainMask[Math.min(H-1,(p.y+PLAYER_R+1|0))*W + (p.x|0)];
       const onSolid = (under===SOLID);
 
       if (!onSolid){
         p.vy += G; p.y += p.vy; p.x += p.vx;
-        // landing detection
         const gy = groundYAt(p.x);
         if (p.y+PLAYER_R > gy){
-          // fall distance to measure damage
           const over = p.y+PLAYER_R - gy;
           const prevVy = p.vy;
           p.y = gy-PLAYER_R; p.vy=0; p.vx*=0.6;
-          // fall damage
           if (fallChk.checked){
             const drop = Math.abs(prevVy*8 + over);
             if (drop>FALL_NO_DMG){
@@ -964,7 +947,6 @@
           }
         }
       } else {
-        // sliding along slope: sample left/right heights
         const xl = Math.max(0, p.x-2|0), xr=Math.min(W-1, p.x+2|0);
         const sl = groundYAt(xl), sr=groundYAt(xr);
         const slope = (sr-sl)/4;
@@ -972,51 +954,38 @@
         p.vx*=0.9; p.vy=0;
       }
 
-      // clamp bounds
       p.x = Math.max(PLAYER_R, Math.min(W-PLAYER_R, p.x));
       p.y = Math.max(PLAYER_R, Math.min(H-PLAYER_R, p.y));
     }
   }
 
   // ======= Drawing, camera, FX =======
-  const shake={t:0};
-
   function draw(){
     requestAnimationFrame(draw);
-
-    // camera lerp
     cam.scale += (cam.targetScale - cam.scale)*0.15;
 
     ctx.save();
     ctx.clearRect(0,0,W,H);
-    // sky
     const g = ctx.createLinearGradient(0,0,0,H);
     g.addColorStop(0,'#0b1020'); g.addColorStop(1,'#0e1430');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
 
-    // camera
     ctx.translate(W/2, H/2); ctx.scale(cam.scale, cam.scale); ctx.translate(-W/2, -H/2);
 
-    // terrain + decals
     ctx.drawImage(terrCanvas,0,0);
     ctx.drawImage(decalCanvas,0,0);
 
-    // players
     players.forEach((p,idx)=>{
-      // shadow
       ctx.fillStyle='rgba(0,0,0,.25)';
       ctx.beginPath(); ctx.ellipse(p.x, p.y+PLAYER_R-2, PLAYER_R*0.8, 5, 0,0,Math.PI*2); ctx.fill();
 
-      // body
       ctx.fillStyle = idx===0 ? '#6ea8fe' : '#90c2ff';
       ctx.beginPath(); ctx.arc(p.x,p.y,PLAYER_R,0,Math.PI*2); ctx.fill();
       ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke();
 
-      // face
       ctx.font='18px system-ui,emoji'; ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(p.emoji, p.x, p.y-1);
 
-      // cannon direction (only current turn & not shooting/teleport)
       if (idx===turn && !shot && !placingTeleport){
         const ang=(p.angle*Math.PI)/180; const dir=p.facing===1?1:-1; const len=22;
         const x2=p.x+Math.cos(ang)*len*dir;
@@ -1025,7 +994,6 @@
         ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(x2,y2); ctx.stroke();
       }
 
-      // emotes
       if (p.emoteT>0 && p.emote){
         ctx.globalAlpha=Math.min(1, p.emoteT/30);
         ctx.font='20px system-ui,emoji';
@@ -1034,18 +1002,16 @@
       }
     });
 
-    // Ghost arc + crosshair
     if (!shot && !placingTeleport){
       const p=players[turn]; const ang=(p.angle*Math.PI)/180; const dir=(p.facing===1?1:-1);
-      const baseV = 0.9 * Math.max(1, (parseFloat(chargeBar.style.width)||0)); // approx charge
+      const baseV = 0.9 * Math.max(1, (parseFloat(chargeBar.style.width)||0));
       let x = p.x + Math.cos(ang)*(PLAYER_R+6)*dir;
       let y = p.y - Math.sin(ang)*(PLAYER_R+6);
       let vx = Math.cos(ang)*Math.max(1,baseV)*dir, vy = -Math.sin(ang)*Math.max(1,baseV);
       ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.5; ctx.setLineDash([3,6]); ctx.beginPath(); ctx.moveTo(x,y);
       let hitX=x, hitY=y;
       for(let i=0;i<18;i++){
-        // if grenade selected, preview without wind
-        if (weapon===Weapons.GRENADE){ vy += G; x += vx; y += vy; }
+        if (weapon==='grenade'){ vy += G; x += vx; y += vy; }
         else { vx += wind; vy += G; x += vx; y += vy; }
         const ix=x|0, iy=y|0;
         if (ix<0||ix>=W||iy<0||iy>=H || (iy>=0 && terrainMask[iy*W+ix]===SOLID)){ hitX=x; hitY=y; break; }
@@ -1056,15 +1022,12 @@
       ctx.moveTo(hitX-6,hitY); ctx.lineTo(hitX+6,hitY); ctx.moveTo(hitX,hitY-6); ctx.lineTo(hitX,hitY+6); ctx.stroke();
     }
 
-    // Teleport cursor
     if (placingTeleport){
-      const mx = lastPointer.x, my = lastPointer.y;
       const {px,py} = screenToWorld(lastPointer.event);
       ctx.strokeStyle='rgba(160,220,255,.9)'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(px,py,10,0,Math.PI*2); ctx.moveTo(px-14,py); ctx.lineTo(px+14,py); ctx.moveTo(px,py-14); ctx.lineTo(px,py+14); ctx.stroke();
     }
 
-    // projectiles
     if (shot){
       for(let i=0;i<2;i++) stepShot();
 
@@ -1075,12 +1038,9 @@
         ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(s.x,s.y,3,0,Math.PI*2); ctx.fill();
       } else if (shot.kind==='grenade'){
         const s=shot;
-        // trail
         ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=1.2;
         ctx.beginPath(); for(let i=0;i<s.trail.length;i++){ const t=s.trail[i]; if (i===0) ctx.moveTo(t.x,t.y); else ctx.lineTo(t.x,t.y); } ctx.stroke();
-        // body
         ctx.fillStyle='#ffd166'; ctx.beginPath(); ctx.arc(s.x,s.y,4,0,Math.PI*2); ctx.fill();
-        // fuse countdown text
         const secs = Math.max(0, Math.ceil(s.t/60));
         ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='12px system-ui'; ctx.textAlign='center';
         ctx.fillText(`${secs}s`, s.x, s.y-10);
@@ -1095,19 +1055,15 @@
       }
     }
 
-    // Particles (debris & smoke & confetti)
     for(let i=particles.length-1;i>=0;i--){
       const P=particles[i];
       if (P.type==='confetti'){
         P.vy += 0.05; P.x += P.vx; P.y += P.vy; P.rot += P.vr;
-        ctx.save();
-        ctx.translate(P.x,P.y); ctx.rotate(P.rot);
-        ctx.fillStyle=P.color; ctx.fillRect(-P.w/2,-P.h/2,P.w,P.h);
-        ctx.restore();
+        ctx.save(); ctx.translate(P.x,P.y); ctx.rotate(P.rot);
+        ctx.fillStyle=P.color; ctx.fillRect(-P.w/2,-P.h/2,P.w,P.h); ctx.restore();
         if (P.y>H+20) particles.splice(i,1);
         continue;
       }
-      // debris / smoke
       P.vx += (P.smoke? wind*0.5 : wind);
       P.vy += (P.smoke? 0.05 : G*0.6);
       P.x += P.vx; P.y += P.vy;
@@ -1121,7 +1077,6 @@
       if (P.life<=0) particles.splice(i,1);
     }
 
-    // Shockwave rings
     for(let i=rings.length-1;i>=0;i--){
       const R=rings[i]; R.r+=2.6; R.alpha*=0.92;
       ctx.strokeStyle=`rgba(255,255,255,${R.alpha})`; ctx.lineWidth=2;
@@ -1129,7 +1084,6 @@
       if (R.alpha<0.02) rings.splice(i,1);
     }
 
-    // Damage numbers
     ctx.fillStyle='#fff'; ctx.font='14px system-ui'; ctx.textAlign='center';
     for (let i=dmgNums.length-1;i>=0;i--){
       const d=dmgNums[i]; d.y -= 0.5; d.life--; ctx.globalAlpha=Math.max(0,d.life/40);
@@ -1139,16 +1093,13 @@
 
     ctx.restore();
 
-    // Update nameplates in DOM (follow camera & scaling)
     positionNameplate(np1, players[0]);
     positionNameplate(np2, players[1]);
 
-    // step players physics after drawing terrain
     stepPlayers();
   }
 
   function positionNameplate(el, p){
-    // project world->screen relative to stage client rect
     const rect = cvs.getBoundingClientRect();
     const sx = rect.left + (p.x * rect.width / W);
     const sy = rect.top + (p.y * rect.height / H);
@@ -1189,14 +1140,12 @@
       const hy = heightmap[wx] * (mini.height/H);
       miniCtx.fillRect(x, hy, 1, mini.height-hy);
     }
-    // players
     miniCtx.fillStyle='#6ea8fe'; miniCtx.beginPath();
     const p1x = players[0].x * (mini.width/W), p1y = players[0].y * (mini.height/H);
     miniCtx.arc(p1x, p1y, 3, 0, Math.PI*2); miniCtx.fill();
     miniCtx.fillStyle='#90c2ff'; miniCtx.beginPath();
     const p2x = players[1].x * (mini.width/W), p2y = players[1].y * (mini.height/H);
     miniCtx.arc(p2x, p2y, 3, 0, Math.PI*2); miniCtx.fill();
-    // wind arrow
     miniCtx.fillStyle='#fff'; miniCtx.font='10px system-ui';
     const mag = Math.min(1, Math.abs(wind)/WIND_MAX || 0);
     const arrow = wind>0?'→'+Math.round(mag*100): wind<0 ? '←'+Math.round(mag*100) : '· 0';
@@ -1237,14 +1186,12 @@
   function aiPlay(){
     if (!aiEnabled || turn!==1 || shot) return;
     const me = players[1], you = players[0];
-    // Choose weapon: simple logic
     const dx = you.x - me.x, dy = me.y - you.y;
     const dist = Math.hypot(dx,dy);
     if (wGrenade.checked && me.ammo.grenade>0 && dist>220) weapon=Weapons.GRENADE;
     else if (wShotgun.checked && me.ammo.shotgun>0 && dist<220) weapon=Weapons.SHOTGUN;
     else weapon=Weapons.NORMAL;
 
-    // Aim & power strategies by difficulty
     const diff = diffSel.value;
     let angle = me.angle, power = me.lastPower||50;
 
@@ -1252,16 +1199,10 @@
       angle = 20 + Math.random()*140;
       power = 30 + Math.random()*60;
     } else if (diff==='Medium'){
-      // nudge toward target
-      const dir = dx>0 ? -1 : 1; // because facing
+      const wBias = wind*800;
       angle = 30 + Math.random()*120;
-      power = 40 + Math.random()*50;
-      if (weapon===Weapons.NORMAL || weapon===Weapons.SHOTGUN){
-        // simple bias for wind
-        const wBias = wind*800;
-        power += (Math.sign(dx)*wBias);
-      }
-    } else { // Hard: simulate few candidates and pick closest
+      power = 40 + Math.random()*50 + (Math.sign(dx)*wBias);
+    } else {
       let best = {miss:1e9, angle:45, power:60};
       for (let a=20;a<=160;a+=8){
         for (let p=30;p<=90;p+=10){
@@ -1276,11 +1217,8 @@
     updateBadge();
 
     if (weapon===Weapons.TELEPORT && wTeleport.checked && me.ammo.teleport>0){
-      // teleport closer to a mid point above terrain
       const tx = (me.x*0.4 + you.x*0.6); const ty = groundYAt(tx)-PLAYER_R-2;
-      players[1].ammo.teleport--; whoosh();
-      me.x=tx; me.y=ty; poof();
-      endShot(); return;
+      players[1].ammo.teleport--; whoosh(); me.x=tx; me.y=ty; poof(); endShot(); return;
     }
 
     if (weapon===Weapons.SHOTGUN) launchShot(60);
@@ -1288,7 +1226,6 @@
   }
 
   function simulateHit(x0,y0,facing, angDeg, power, kind){
-    // returns distance miss from enemy center
     const opp = players[0];
     let x = x0 + Math.cos(angDeg*Math.PI/180)*(PLAYER_R+6)*(facing===1?1:-1);
     let y = y0 - Math.sin(angDeg*Math.PI/180)*(PLAYER_R+6);
@@ -1335,14 +1272,11 @@
   function resetGame(newMap){
     readMenuSettings();
     if (newMap){ if (seedTxt.value.trim()) srand(seedTxt.value.trim()); else srand(); }
-    // reset stats
     stats.shots=[0,0]; stats.hits=[0,0]; stats.bestHit=[0,0];
 
-    // players hp and ammo
     for (let i=0;i<2;i++){
       players[i].hp=100; players[i].vx=players[i].vy=0;
       players[i].ammo={ shotgun: wShotgun.checked?5:0, grenade: wGrenade.checked?5:0, teleport: wTeleport.checked?1:0 };
-      // remember last weapon per player
       players[i].lastWeapon = Weapons.NORMAL;
       players[i].fuse = 3;
     }
@@ -1363,7 +1297,9 @@
   players[turn].emote='😼'; players[turn].emoteT=80;
   draw();
 
-  // ======= Banner buttons already wired =======
+  // OPEN MENU AT START (so it's visible and clickable)
+  openMenu(true);
+
 })();
 </script>
 </body>
