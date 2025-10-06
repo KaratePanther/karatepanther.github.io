@@ -14,7 +14,7 @@
   html,body{
     margin:0;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--ink);
     font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;height:100%;
-    overscroll-behavior:none; overflow:hidden;
+    overscroll-behavior:none; overflow:hidden; /* no page scroll */
   }
 
   /* Fullscreen stage that letterboxes to fit without scrolling */
@@ -23,8 +23,7 @@
   }
   .stage{
     position:relative; border-radius:14px; border:1px solid var(--line);
-    overflow:hidden; background:#0b1020; 
-    /* the canvas inside will be sized by JS to preserve aspect ratio */
+    overflow:hidden; background:#0b1020;
   }
   canvas{display:block; touch-action:manipulation}
 
@@ -91,16 +90,17 @@
   .zoomRow{display:flex; gap:8px}
   .zoomRow .btn{min-width:44px}
 
-  /* Foldable menu */
+  /* Menu panel: scrollable only inside when taller than viewport */
   .menuPanel{
     position:absolute; top:60px; left:50%; transform:translateX(-50%);
     width:min(92%,760px); background:rgba(10,14,30,.92); border:1px solid var(--line); border-radius:16px; padding:14px; display:none; z-index:50;
+    max-height:calc(100vh - 90px); overflow:auto; -webkit-overflow-scrolling:touch;
   }
   .menuGrid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
   .menuRow{display:flex; align-items:center; justify-content:space-between; gap:10px}
   .menuRow > * {font-size:14px}
   .sel, .chk, .txt{
-    appearance:none; background:#0f1633; color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 10px
+    appearance:none; background:#0f1633; color:#e8ecff; border:1px solid var(--line); border-radius:10px; padding:8px 10px
   }
   .miniPreview{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#0b1020}
   .miniBar{display:flex; gap:8px; margin-top:8px; align-items:center}
@@ -117,7 +117,7 @@
   .stats{color:var(--muted); font-size:13px; margin:8px 0 12px}
   .card .btn{margin:0 6px}
 
-  /* Nameplates over players (HP only now) */
+  /* Nameplates (HP only) */
   .nameplate{position:absolute; transform:translate(-50%, -100%); background:rgba(18,25,50,.9); border:1px solid var(--line);
     padding:2px 8px; border-radius:999px; font-size:12px; pointer-events:none}
 
@@ -130,13 +130,8 @@
   .rotate .box{
     background:rgba(18,25,50,.93); border:1px solid var(--line); border-radius:14px; padding:16px 18px; max-width:360px;
   }
-
-  @media (orientation:portrait){
-    .rotate{display:flex}
-  }
-  @media (max-width:700px){
-    .menuGrid{grid-template-columns:1fr}
-  }
+  @media (orientation:portrait){ .rotate{display:flex} }
+  @media (max-width:700px){ .menuGrid{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -197,7 +192,7 @@
       </div>
     </div>
 
-    <!-- Menu Panel -->
+    <!-- Menu Panel (scrolls internally if needed) -->
     <div class="menuPanel" id="menuPanel">
       <div class="menuGrid">
         <div>
@@ -271,7 +266,7 @@
 
 <script>
 (()=> {
-  // ======= Canvas constants =======
+  // ======= Canvas constants & fit =======
   const cvs = document.getElementById('c');
   const ctx = cvs.getContext('2d');
   const stage = document.getElementById('stage');
@@ -285,14 +280,12 @@
   const SKY = 0, SOLID = 1;
   const FALL_NO_DMG = 60; // px drop threshold
 
-  // Fit canvas to viewport without scrolling (letterbox)
   function fitCanvas(){
     const vw = window.innerWidth, vh = window.innerHeight;
     const scale = Math.min(vw / W, vh / H);
     const cssW = Math.round(W * scale), cssH = Math.round(H * scale);
     cvs.style.width = cssW + 'px';
     cvs.style.height = cssH + 'px';
-    // center the stage to the size of canvas
     stage.style.width = cssW + 'px';
     stage.style.height = cssH + 'px';
   }
@@ -300,7 +293,7 @@
   window.addEventListener('orientationchange', fitCanvas);
   fitCanvas();
 
-  // Prevent page scroll on the game area (iOS Safari included)
+  // Prevent page scroll on game area (iOS Safari included)
   stage.addEventListener('touchmove', (e)=>{ e.preventDefault(); }, {passive:false});
   document.addEventListener('dblclick', e => { if (stage.contains(e.target)) e.preventDefault(); }, {passive:false});
 
@@ -353,7 +346,7 @@
   const mini = document.getElementById('mini');
   const miniCtx = mini.getContext('2d');
 
-  // ======= Audio (unchanged core) =======
+  // ======= Audio (same as before) =======
   let audioCtx = null, chargeOsc=null, chargeGain=null;
   function audio(){ if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
   function tone(freq=200, dur=0.1, type='square', gain=0.18){
@@ -557,14 +550,34 @@
     const left = (weapon==='shotgun')?am.shotgun : weapon==='grenade'?am.grenade : weapon==='teleport'?am.teleport : Infinity;
     if (left!==Infinity) meta += ` (${left>0?'x'+left:'empty'})`;
     weaponMeta.textContent = meta;
+
     fuseMini.textContent = `⏱${p.fuse||grenadeFuse}s`;
     pipNormal.textContent = '∞';
     pipGrenade.textContent = 'x'+ am.grenade;
     pipShotgun.textContent = 'x'+ am.shotgun;
     pipTeleport.textContent = 'x'+ am.teleport;
 
+    refreshWeaponOptions();
     // menu active highlight
     [...weaponMenu.querySelectorAll('.opt')].forEach(o=>o.classList.toggle('active', o.dataset.w===weapon));
+  }
+
+  function refreshWeaponOptions(){
+    const p = players[turn];
+    const optG = weaponMenu.querySelector('[data-w="grenade"]');
+    const optS = weaponMenu.querySelector('[data-w="shotgun"]');
+    const optT = weaponMenu.querySelector('[data-w="teleport"]');
+    // Hide when ammo is 0 (and show when >0)
+    if (optG) optG.style.display = p.ammo.grenade>0 ? 'flex' : 'none';
+    if (optS) optS.style.display = p.ammo.shotgun>0 ? 'flex' : 'none';
+    if (optT) optT.style.display = p.ammo.teleport>0 ? 'flex' : 'none';
+    // If current weapon disappeared, fallback to bazooka
+    if ((weapon==='grenade' && p.ammo.grenade<=0) ||
+        (weapon==='shotgun' && p.ammo.shotgun<=0) ||
+        (weapon==='teleport' && p.ammo.teleport<=0)){
+      weapon = 'normal';
+      players[turn].lastWeapon = weapon;
+    }
   }
 
   function ensureAmmoOrSwitch(){
@@ -578,31 +591,43 @@
 
   function spendAmmo(){
     const p=players[turn], am=p.ammo;
-    if (weapon==='shotgun') am.shotgun--;
-    if (weapon==='grenade') am.grenade--;
-    if (weapon==='teleport') am.teleport--;
-    if ((weapon!=='normal') && ((weapon==='shotgun'&&am.shotgun<=0) || (weapon==='grenade'&&am.grenade<=0) || (weapon==='teleport'&&am.teleport<=0))){
-      toast('Out of ammo — switched to Bazooka');
+    if (weapon==='shotgun') am.shotgun = Math.max(0, am.shotgun - 1);
+    if (weapon==='grenade') am.grenade = Math.max(0, am.grenade - 1);
+    if (weapon==='teleport') am.teleport = Math.max(0, am.teleport - 1);
+
+    // If the just-used weapon hit zero, switch and hide it
+    if ((weapon==='shotgun' && am.shotgun===0) ||
+        (weapon==='grenade' && am.grenade===0) ||
+        (weapon==='teleport' && am.teleport===0)){
+      toast(`${displayName(weapon)} out — switched to Bazooka`);
       weapon='normal';
       players[turn].lastWeapon = weapon;
     }
+    updateBadge(); // will clamp & hide accordingly
+  }
+
+  // ======= Launch shot (now 360°) =======
+  function muzzleFrom(p, ang){
+    return {
+      x: p.x + Math.cos(ang)*(PLAYER_R+6),
+      y: p.y - Math.sin(ang)*(PLAYER_R+6)
+    };
   }
 
   function launchShot(power){
     const p = players[turn]; stats.shots[turn]++;
     const ang = (p.angle*Math.PI)/180;
-    const muzzleX = p.x + Math.cos(ang)*(PLAYER_R+6)*(p.facing===1?1:-1);
-    const muzzleY = p.y - Math.sin(ang)*(PLAYER_R+6);
+    const {x:muzzleX,y:muzzleY} = muzzleFrom(p, ang);
     const v = Math.max(1, power)*0.9;
 
     if (weapon==='normal'){
-      const vx = Math.cos(ang)*v * (p.facing===1?1:-1);
+      const vx = Math.cos(ang)*v;
       const vy = -Math.sin(ang)*v;
       shot = { kind:'normal', x:muzzleX, y:muzzleY, vx, vy, trail:[] };
       tone(320,0.06,'square',0.18);
       spendAmmo();
     } else if (weapon==='grenade'){
-      const vx = Math.cos(ang)*v * (p.facing===1?1:-1);
+      const vx = Math.cos(ang)*v;
       const vy = -Math.sin(ang)*v;
       const fuse = (players[turn].fuse||grenadeFuse);
       shot = { kind:'grenade', x:muzzleX, y:muzzleY, vx, vy, trail:[], t: fuse*60 };
@@ -612,7 +637,7 @@
       const pellets=[]; const spread = Math.PI/28; const n=7;
       for(let i=0;i<n;i++){
         const offset = (i-(n-1)/2)/(n-1) * spread;
-        const a = (p.facing===1?ang:-ang) + (p.facing===1?0:Math.PI) + offset;
+        const a = ang + offset;
         const speed = v*(0.9+Math.random()*0.2);
         pellets.push({ x:muzzleX, y:muzzleY, vx:Math.cos(a)*speed, vy:-Math.sin(a)*speed, trail:[] });
       }
@@ -729,11 +754,9 @@
     shot=null;
     if (players[0].hp>0 && players[1].hp>0){
       turn = 1-turn;
-      // Avoid zoom drift: normalize/clamp every turn
       cam.targetScale = Math.max(cam.min, Math.min(cam.max, cam.targetScale));
       cam.scale = Math.max(cam.min, Math.min(cam.max, cam.scale));
 
-      // restore the new player's last weapon
       weapon = players[turn].lastWeapon || 'normal';
       updateTurnUI();
       fireBtn.disabled=false;
@@ -808,24 +831,23 @@
   }
 
   // ======= Drawing =======
-  const miniCtx2d = miniCtx;
   function drawMiniPreview(){
-    miniCtx2d.clearRect(0,0,mini.width,mini.height);
-    miniCtx2d.fillStyle='#0b1020'; miniCtx2d.fillRect(0,0,mini.width,mini.height);
-    miniCtx2d.fillStyle='#18203a';
+    miniCtx.clearRect(0,0,mini.width,mini.height);
+    miniCtx.fillStyle='#0b1020'; miniCtx.fillRect(0,0,mini.width,mini.height);
+    miniCtx.fillStyle='#18203a';
     for(let x=0;x<mini.width;x++){
       const wx = Math.floor(x * (W/mini.width));
       const hy = heightmap[wx] * (mini.height/H);
-      miniCtx2d.fillRect(x, hy, 1, mini.height-hy);
+      miniCtx.fillRect(x, hy, 1, mini.height-hy);
     }
-    miniCtx2d.fillStyle='#6ea8fe'; miniCtx2d.beginPath();
-    miniCtx2d.arc(players[0].x * (mini.width/W), players[0].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx2d.fill();
-    miniCtx2d.fillStyle='#90c2ff'; miniCtx2d.beginPath();
-    miniCtx2d.arc(players[1].x * (mini.width/W), players[1].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx2d.fill();
-    miniCtx2d.fillStyle='#fff'; miniCtx2d.font='10px system-ui';
+    miniCtx.fillStyle='#6ea8fe'; miniCtx.beginPath();
+    miniCtx.arc(players[0].x * (mini.width/W), players[0].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx.fill();
+    miniCtx.fillStyle='#90c2ff'; miniCtx.beginPath();
+    miniCtx.arc(players[1].x * (mini.width/W), players[1].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx.fill();
+    miniCtx.fillStyle='#fff'; miniCtx.font='10px system-ui';
     const mag = Math.min(1, Math.abs(wind)/WIND_MAX || 0);
     const arrow = wind>0?'→'+Math.round(mag*100): wind<0 ? '←'+Math.round(mag*100) : '· 0';
-    miniCtx2d.fillText('Wind '+arrow, 6, 12);
+    miniCtx.fillText('Wind '+arrow, 6, 12);
   }
 
   function updateTurnUI(){
@@ -854,6 +876,7 @@
   weaponBadge.addEventListener('click', (e)=>{
     e.stopPropagation();
     if (placingTeleport) return;
+    refreshWeaponOptions(); // update visibility each open
     openWeaponMenu(weaponMenu.style.display!=='flex');
   });
   document.addEventListener('click', ()=> openWeaponMenu(false));
@@ -862,13 +885,12 @@
     const opt = e.target.closest('.opt'); if (!opt) return;
     const w = opt.dataset.w; if (!w) return;
     weapon = w;
-    // persist per player immediately
     players[turn].lastWeapon = weapon;
 
     if (weapon==='teleport'){
       const am = players[turn].ammo.teleport;
       if (am<=0){ toast('No teleport ammo'); weapon='normal'; players[turn].lastWeapon = weapon; }
-      else { placingTeleport = true; fireBtn.disabled=true; toast('Teleport: tap the map to choose destination (two-finger tap to cancel)'); }
+      else { placingTeleport = true; fireBtn.disabled=true; toast('Teleport: tap the map to choose destination'); }
     } else { placingTeleport=false; fireBtn.disabled=false; }
     updateBadge();
     openWeaponMenu(false);
@@ -902,21 +924,21 @@
   fireBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
   fireBtn.addEventListener('touchcancel', (e)=>{ e.preventDefault(); endChargeAndFire(); }, {passive:false});
 
-  // Aim with drag
+  // ======= 360° aiming by dragging anywhere =======
   cvs.addEventListener('pointerdown', onPointer);
   cvs.addEventListener('pointermove', onPointer);
   function onPointer(e){
     if (shot || placingTeleport) return;
     const {px,py} = screenToWorld(e);
     const p = players[turn];
-    const dx = px - p.x;
-    const dy = p.y - py;
-    let ang = Math.atan2(dy, Math.abs(dx)) * 180/Math.PI;
-    ang = Math.max(0, Math.min(180, ang));
-    p.angle = ang|0;
+    // full 360°: angle is direction from player -> pointer
+    let angRad = Math.atan2(p.y - py, px - p.x);          // right=0°, up=90°
+    let deg = angRad * 180/Math.PI;
+    if (deg < 0) deg += 360;                               // normalize to [0,360)
+    p.angle = Math.round(deg);
   }
 
-  // Zoom controls (clamped, no drift)
+  // Zoom controls (clamped, double-tap to reset)
   zoomIn.addEventListener('click', ()=>{ cam.targetScale=Math.min(cam.max, cam.targetScale+0.15); });
   zoomOut.addEventListener('click', ()=>{ cam.targetScale=Math.max(cam.min, cam.targetScale-0.15); });
   let lastTap=0;
@@ -932,10 +954,12 @@
     const {px,py} = screenToWorld(e);
     const pos = findTeleportDestination(px,py);
     if (!pos){ toast('Blocked — choose a free spot'); tone(180,0.08,'sine',0.12); return; }
-    players[turn].ammo.teleport--; whoosh();
+    players[turn].ammo.teleport = Math.max(0, players[turn].ammo.teleport - 1);
+    whoosh();
     players[turn].x = pos.x; players[turn].y = pos.y; players[turn].vx=0; players[turn].vy=0;
     poof();
     placingTeleport = false; fireBtn.disabled=false;
+    updateBadge();
     endShot();
   });
   function findTeleportDestination(x,y){
@@ -954,8 +978,6 @@
     const py = (e.clientY - rect.top)  * (H/rect.height);
     return {px,py};
   }
-  const lastPointer={x:0,y:0,event:{clientX:0,clientY:0}};
-  stage.addEventListener('pointermove', (e)=>{ lastPointer.event=e; });
 
   function randomizeWind(){ readMenuSettings(); wind = (Math.random()*2-1)*WIND_MAX; updateWindUI(); }
   function toast(msg){
@@ -968,7 +990,7 @@
     setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 900);
   }
 
-  // ======= Menu logic =======
+  // ======= Menu logic (scrollable panel, body stays locked) =======
   function openMenu(open){ menuPanel.style.display = open ? 'block' : 'none'; }
   menuBtn.addEventListener('click', ()=> openMenu(menuPanel.style.display!=='block'));
   closeMenu.addEventListener('click', ()=> openMenu(false));
@@ -1000,23 +1022,23 @@
     if (wGrenade.checked && me.ammo.grenade>0 && dist>220) weapon='grenade';
     else if (wShotgun.checked && me.ammo.shotgun>0 && dist<220) weapon='shotgun';
     else weapon='normal';
-    me.lastWeapon = weapon; // persist AI choice too
+    me.lastWeapon = weapon;
 
     const diff = diffSel.value;
     let angle = me.angle, power = me.lastPower||50;
 
     if (diff==='Easy'){
-      angle = 20 + Math.random()*140;
+      angle = 20 + Math.random()*340; // full circle randomness
       power = 30 + Math.random()*60;
     } else if (diff==='Medium'){
       const wBias = wind*800;
-      angle = 30 + Math.random()*120;
+      angle = 360*Math.random();
       power = 40 + Math.random()*50 + (Math.sign(dx)*wBias);
     } else {
       let best = {miss:1e9, angle:45, power:60};
-      for (let a=20;a<=160;a+=8){
+      for (let a=0;a<360;a+=12){
         for (let p=30;p<=90;p+=10){
-          const miss = simulateHit(me.x, me.y, me.facing, a, p, weapon);
+          const miss = simulateHit(me.x, me.y, a, p, weapon);
           if (miss<best.miss){ best={miss, angle:a, power:p}; }
         }
       }
@@ -1028,19 +1050,21 @@
 
     if (weapon==='teleport' && wTeleport.checked && me.ammo.teleport>0){
       const tx = (me.x*0.4 + you.x*0.6); const ty = groundYAt(tx)-PLAYER_R-2;
-      me.ammo.teleport--; whoosh(); me.x=tx; me.y=ty; poof(); endShot(); return;
+      me.ammo.teleport = Math.max(0, me.ammo.teleport-1);
+      whoosh(); me.x=tx; me.y=ty; poof(); updateBadge(); endShot(); return;
     }
 
     if (weapon==='shotgun') launchShot(60);
     else launchShot(power);
   }
 
-  function simulateHit(x0,y0,facing, angDeg, power, kind){
+  function simulateHit(x0,y0, angDeg, power, kind){
     const opp = players[0];
-    let x = x0 + Math.cos(angDeg*Math.PI/180)*(PLAYER_R+6)*(facing===1?1:-1);
-    let y = y0 - Math.sin(angDeg*Math.PI/180)*(PLAYER_R+6);
-    let vx = Math.cos(angDeg*Math.PI/180)*Math.max(1,power)*0.9*(facing===1?1:-1);
-    let vy = -Math.sin(angDeg*Math.PI/180)*Math.max(1,power)*0.9;
+    let ang = angDeg*Math.PI/180;
+    let x = x0 + Math.cos(ang)*(PLAYER_R+6);
+    let y = y0 - Math.sin(ang)*(PLAYER_R+6);
+    let vx = Math.cos(ang)*Math.max(1,power)*0.9;
+    let vy = -Math.sin(ang)*Math.max(1,power)*0.9;
     for (let t=0;t<300;t++){
       if (kind==='grenade'){ vy += G; } else { vx += wind; vy += G; }
       x += vx; y += vy;
@@ -1103,8 +1127,8 @@
       ctx.fillText(p.emoji, p.x, p.y-1);
 
       if (idx===turn && !shot && !placingTeleport){
-        const ang=(p.angle*Math.PI)/180; const dir=p.facing===1?1:-1; const len=22;
-        const x2=p.x+Math.cos(ang)*len*dir; const y2=p.y-Math.sin(ang)*len;
+        const ang=(p.angle*Math.PI)/180; const len=22;
+        const x2=p.x+Math.cos(ang)*len; const y2=p.y-Math.sin(ang)*len;
         ctx.strokeStyle='#ffd166'; ctx.lineWidth=3;
         ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(x2,y2); ctx.stroke();
       }
@@ -1117,12 +1141,13 @@
       }
     });
 
+    // predicted path (uses 360°)
     if (!shot && !placingTeleport){
-      const p=players[turn]; const ang=(p.angle*Math.PI)/180; const dir=(p.facing===1?1:-1);
+      const p=players[turn]; const ang=(p.angle*Math.PI)/180;
       const baseV = 0.9 * Math.max(1, (parseFloat(chargeBar.style.width)||0));
-      let x = p.x + Math.cos(ang)*(PLAYER_R+6)*dir;
+      let x = p.x + Math.cos(ang)*(PLAYER_R+6);
       let y = p.y - Math.sin(ang)*(PLAYER_R+6);
-      let vx = Math.cos(ang)*Math.max(1,baseV)*dir, vy = -Math.sin(ang)*Math.max(1,baseV);
+      let vx = Math.cos(ang)*Math.max(1,baseV), vy = -Math.sin(ang)*Math.max(1,baseV);
       ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.5; ctx.setLineDash([3,6]); ctx.beginPath(); ctx.moveTo(x,y);
       let hitX=x, hitY=y;
       for(let i=0;i<18;i++){
@@ -1139,8 +1164,8 @@
 
     if (placingTeleport){
       const rect=cvs.getBoundingClientRect();
-      const px = (lastPointer.event.clientX - rect.left) * (W/rect.width);
-      const py = (lastPointer.event.clientY - rect.top)  * (H/rect.height);
+      const px = (window.event?.clientX - rect.left) * (W/rect.width);
+      const py = (window.event?.clientY - rect.top)  * (H/rect.height);
       ctx.strokeStyle='rgba(160,220,255,.9)'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(px,py,10,0,Math.PI*2); ctx.moveTo(px-14,py); ctx.lineTo(px+14,py); ctx.moveTo(px,py-14); ctx.lineTo(px,py+14); ctx.stroke();
     }
@@ -1219,8 +1244,6 @@
   }
 
   // ======= Reset & boot =======
-  function showWinBanner(idx, reason){/* overwritten above */}
-
   function updateAll(){ updateHPPlates(); updateTurnUI(); updateWindUI(); }
 
   function resetGame(newMap){
@@ -1232,7 +1255,6 @@
       players[i].hp=100; players[i].vx=players[i].vy=0;
       players[i].ammo={ shotgun: wShotgun.checked?5:0, grenade: wGrenade.checked?5:0, teleport: wTeleport.checked?1:0 };
       players[i].fuse = 3;
-      // keep lastWeapon when rematching same session, else default to bazooka
       if (newMap) players[i].lastWeapon = Weapons.NORMAL;
     }
     updateHPPlates();
@@ -1245,25 +1267,11 @@
     updateTurnUI(); updateBadge(); drawMiniPreview();
   }
 
-  // menu open initially so user sees it
+  // Open menu initially
   menuPanel.style.display='block';
 
   // Boot
-  srand(); generateTerrain(); updateAll(); draw();
-
-  // Buttons on banner
-  function showWinBanner(idx, reason){
-    const sh = stats.shots[idx], hi = stats.hits[idx];
-    const acc = sh? Math.round(100*hi/sh):0;
-    const big = stats.bestHit[idx]||0;
-    winTxt.textContent = `P${idx+1} wins 🎉 (${reason})`;
-    statsTxt.textContent = `Shots: ${sh} · Accuracy: ${acc}% · Biggest hit: ${big}`;
-    banner.style.display='flex';
-  }
-  rematchBtn.addEventListener('click', ()=>{ banner.style.display='none'; resetGame(false); });
-  newMapBannerBtn.addEventListener('click', ()=>{ banner.style.display='none'; resetGame(true); });
-  openMenuBtn.addEventListener('click', ()=>{ banner.style.display='none'; openMenu(true); });
-
+  srand(); generateTerrain(); updateAll(); (function loop(){draw();})();
 })();
 </script>
 </body>
