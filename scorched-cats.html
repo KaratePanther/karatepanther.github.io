@@ -236,6 +236,15 @@
               <option>10</option><option>20</option><option selected>30</option><option>40</option><option>60</option><option>90</option>
             </select>
           </div>
+          <div class="menuRow"><span>Retreat time</span>
+            <select id="retSel" class="sel">
+              <option selected>0</option>
+              <option>3</option>
+              <option>5</option>
+              <option>8</option>
+              <option>10</option>
+            </select>
+          </div>
           <div class="menuRow"><span>Wind</span>
             <select id="windSel" class="sel">
               <option>Off</option><option>Low</option><option selected>Normal</option><option>High</option>
@@ -317,7 +326,7 @@
   window.addEventListener('orientationchange', fitCanvas);
   fitCanvas();
 
-  stage.addEventListener('touchmove', (e)=>{ e.preventDefault(); }, {passive:false});
+  cvs.addEventListener('touchmove', (e)=>{ e.preventDefault(); }, {passive:false});
   document.addEventListener('dblclick', e => { if (stage.contains(e.target)) e.preventDefault(); }, {passive:false});
 
   // ======= Physics & constants =======
@@ -377,6 +386,7 @@
   const wTeleport = document.getElementById('wTeleport');
   const wDrill = document.getElementById('wDrill');
   const turnSel = document.getElementById('turnSel');
+  const retSel = document.getElementById('retSel'); // <-- add this line here
   const seedTxt = document.getElementById('seedTxt');
   const startBtn = document.getElementById('startBtn');
   const newMapBtn = document.getElementById('newMapBtn');
@@ -483,7 +493,7 @@
   let turnSeconds = 30;
   let phase = 'move'; // 'move' | 'aim' (implicit) | 'retreat'
   let phaseTimeLeft = 30;
-  const RETREAT_TIME = 5;
+  let retreatSeconds = 0;  // default 0s, can be changed via menu
 
   // Movement joystick state
   let joyActive=false, joyDX=0, joyDY=0, joyCenter=null, joyRadius=44;
@@ -898,13 +908,18 @@
             }
           }
         }
+// ...inside stepPlayers(), in the "on ground" branch:
       } else {
         const xl = Math.max(0, p.x-2|0), xr=Math.min(W-1, p.x+2|0);
         const sl = groundYAt(xl), sr=groundYAt(xr);
         const slope = (sr-sl)/4;
         if (Math.abs(slope)>0.5){ p.x += slope*0.25; }
-        p.vx*=0.9; p.vy=0;
+      
+        p.x += p.vx;        // <-- add this line so they actually walk
+        p.vx*=0.9;          // friction on ground
+        p.vy=0;
       }
+
 
       p.x = Math.max(PLAYER_R, Math.min(W-PLAYER_R, p.x));
       p.y = Math.max(PLAYER_R, Math.min(H-PLAYER_R, p.y));
@@ -1119,6 +1134,7 @@ function setJoystickVisible(show){
     const wv = windSel.value;
     WIND_MAX = (wv==='Off'?0 : wv==='Low'?0.02 : wv==='Normal'?0.05 : 0.09);
     turnSeconds = parseInt(turnSel.value||'30',10);
+    retreatSeconds = parseInt(retSel.value || '0', 10);  // ← add this line
   }
 
   // ======= AI (minimal adjustments) =======
@@ -1374,13 +1390,13 @@ function setJoystickVisible(show){
   }
 
   function enterRetreat(){
-    if (phase === 'retreat') return; // already retreating; don't restart timer
+    if (phase === 'retreat') return;          // don’t restart timer if already retreating
     phase = 'retreat';
-    phaseTimeLeft = RETREAT_TIME;
+    phaseTimeLeft = retreatSeconds;           // use menu-controlled value
     updatePhaseUI();
-    // also ensure you can't fire during retreat
-    fireBtn.disabled = true;
+    fireBtn.disabled = true;                  // cannot fire during retreat
   }
+
 
   function tickPhase(){
     if (banner.style.display==='flex') return;
