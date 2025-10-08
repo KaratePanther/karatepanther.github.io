@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Smiley Duo Arcade — 4 Modes</title>
-<meta name="description" content="Two-player virtual joysticks with Dodgeballs, Collect the Dots, Sumo Arena, and Maze. " />
+<title>Smiley Duo Arcade — 5 Modes</title>
+<meta name="description" content="Two-player virtual joysticks with Dodgeballs, Collect the Dots, Sumo Arena, Maze, and Bomber." />
 <style>
   :root{
     --bg:#0b1020; --card:#121932; --ink:#e8ecff; --muted:#aab3d9; --line:#233055;
@@ -21,7 +21,7 @@
     position:fixed; top:8px; left:50%; transform:translateX(-50%);
     display:flex; gap:8px; padding:6px; background:rgba(18,25,50,.7);
     border:1px solid var(--line); border-radius:12px; backdrop-filter: blur(6px);
-    align-items:center; z-index:2; pointer-events:auto;
+    align-items:center; z-index:3; pointer-events:auto;
   }
   select, button{
     background:var(--card); color:var(--ink); border:1px solid var(--line);
@@ -54,7 +54,20 @@
   #msg{
     position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
     padding:14px 18px; border-radius:14px; background:rgba(18,25,50,.85); border:1px solid var(--line);
-    font-size:18px; display:none; z-index:3;
+    font-size:18px; display:none; z-index:4;
+  }
+  /* Bomber buttons */
+  .pad{
+    display:flex; gap:10px; align-items:flex-end;
+  }
+  .bombBtn{
+    min-width:64px; padding:10px 12px; font-size:13px;
+    border-radius:12px; border:1px solid var(--line); background:rgba(18,25,50,.8);
+  }
+  /* Small hint labels */
+  .hint{
+    position:fixed; bottom:10px; left:50%; transform:translateX(-50%);
+    color:var(--muted); font-size:12px; opacity:.8; z-index:1; pointer-events:none;
   }
 </style>
 </head>
@@ -68,6 +81,7 @@
     <option value="collect">Collect the Dots</option>
     <option value="sumo">Sumo Arena</option>
     <option value="maze">Maze</option>
+    <option value="bomber">Bomber</option>
   </select>
   <span class="score"><span class="p1">P1</span>: <span id="p1Score">0</span></span>
   <span class="score"><span class="p2">P2</span>: <span id="p2Score">0</span></span>
@@ -76,11 +90,18 @@
 </div>
 
 <div id="uiBottom">
-  <div class="stick" id="stickL" aria-label="Left joystick"><div class="thumb" id="thumbL"></div></div>
-  <div class="stick" id="stickR" aria-label="Right joystick"><div class="thumb" id="thumbR"></div></div>
+  <div class="pad">
+    <div class="stick" id="stickL" aria-label="Left joystick"><div class="thumb" id="thumbL"></div></div>
+    <button id="bombL" class="bombBtn">💣 P1</button>
+  </div>
+  <div class="pad">
+    <button id="bombR" class="bombBtn">💣 P2</button>
+    <div class="stick" id="stickR" aria-label="Right joystick"><div class="thumb" id="thumbR"></div></div>
+  </div>
 </div>
 
 <div id="msg"></div>
+<div class="hint" id="hint"></div>
 
 <script>
 (() => {
@@ -101,9 +122,10 @@
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
   const dist2 = (a,b) => { const dx=a.x-b.x, dy=a.y-b.y; return dx*dx+dy*dy; };
   const rnd = (a,b) => a + Math.random()*(b-a);
+  const chance = p => Math.random() < p;
 
   // ===== Game state =====
-  const MODE = { DODGE:'dodge', COLLECT:'collect', SUMO:'sumo', MAZE:'maze' };
+  const MODE = { DODGE:'dodge', COLLECT:'collect', SUMO:'sumo', MAZE:'maze', BOMBER:'bomber' };
   const ui = {
     modeSel: document.getElementById('mode'),
     p1Score: document.getElementById('p1Score'),
@@ -111,6 +133,9 @@
     resetBtn: document.getElementById('resetBtn'),
     pauseBtn: document.getElementById('pauseBtn'),
     msg: document.getElementById('msg'),
+    bombL: document.getElementById('bombL'),
+    bombR: document.getElementById('bombR'),
+    hint: document.getElementById('hint'),
   };
 
   const world = {
@@ -127,8 +152,10 @@
       targetX:0, targetY:0, score:0,
       // dodge
       hp:3, fireCd:0, fireRate:0.35,
-      // flags
+      // bomber stats
       alive:true,
+      bombsCarried:1, bombsMax:1, flame:2, speedBoost:0, canKick:false, canPass:false,
+      bombCooldown:0
     };
   }
   const p1 = basePlayer(innerWidth*0.3, innerHeight*0.6, '#6ea8fe');
@@ -140,55 +167,57 @@
 
   // ===== Maze data =====
   const maze = {
-    cols: 0, rows: 0, size: 28, pad: 12, // size: cell px; pad: inner padding from outer border
-    walls: null, // walls[y][x] = {N:true,E:true,S:true,W:true}
-    start: {x:0,y:0}, end:{x:0,y:0}, goal:{x:0,y:0}, // cell coords
+    cols: 0, rows: 0, size: 28, pad: 12,
+    walls: null, start: {x:0,y:0}, end:{x:0,y:0}, goal:{x:0,y:0},
     lineWidth: 4
   };
 
+  // ===== Bomber data =====
+  const bomber = {
+    cols: 15, rows: 13, tile: 40, ox: 0, oy: 0,
+    grid: [], // 0 empty, 1 solid, 2 crate
+    powerups: [], // {x,y,type}
+    bombs: [], // {x,y,owner,fuse,range,solidAt:time, moving:{dx,dy}}
+    flames: [], // {x,y,t}
+    roundWinsTo: 3,
+    suddenDeathAt: 60, sdTimer: 0, ring: 0
+  };
+
+  // ===== Common resets =====
   function resetCommonPositions() {
     p1.vx = p1.vy = 0; p2.vx = p2.vy = 0;
     p1.alive = p2.alive = true;
     if (world.mode === MODE.MAZE) {
-      // small + slower for maze feel
       p1.r = p2.r = 16;
       p1.maxSpeed = p2.maxSpeed = 200;
       p1.accel = p2.accel = 12;
-      // spawn at corners (cell centers)
       const csz = maze.size, ox = maze.pad, oy = maze.pad;
       const c1 = maze.start, c2 = maze.end;
       p1.x = ox + c1.x*csz + csz/2; p1.y = oy + c1.y*csz + csz/2;
       p2.x = ox + c2.x*csz + csz/2; p2.y = oy + c2.y*csz + csz/2;
+    } else if (world.mode === MODE.BOMBER) {
+      p1.r = p2.r = Math.floor(bomber.tile*0.35);
+      const baseSpeed = 180;
+      p1.maxSpeed = p2.maxSpeed = baseSpeed;
+      p1.accel = p2.accel = 14;
+      // place at corners
+      const c1 = {x:1,y:1}, c2 = {x:bomber.cols-2, y:bomber.rows-2};
+      p1.x = bomber.ox + c1.x*bomber.tile + bomber.tile/2;
+      p1.y = bomber.oy + c1.y*bomber.tile + bomber.tile/2;
+      p2.x = bomber.ox + c2.x*bomber.tile + bomber.tile/2;
+      p2.y = bomber.oy + c2.y*bomber.tile + bomber.tile/2;
+      // reset stats
+      [p1,p2].forEach(p=>{
+        p.bombsMax = 1; p.bombsCarried = 1; p.flame = 2;
+        p.speedBoost = 0; p.canKick = false; p.canPass = false; p.bombCooldown = 0;
+      });
     } else {
-      // defaults for arcade modes
       p1.r = p2.r = 28;
       p1.maxSpeed = p2.maxSpeed = 380;
       p1.accel = p2.accel = 10;
       p1.x = innerWidth*0.25; p1.y = innerHeight*0.6;
       p2.x = innerWidth*0.75; p2.y = innerHeight*0.6;
     }
-  }
-
-  function resetMode(mode) {
-    world.mode = mode;
-    world.roundOver = false;
-    bullets = []; dots = [];
-    if (mode === MODE.DODGE) { p1.hp = 3; p2.hp = 3; }
-    if (mode === MODE.SUMO) {
-      arena.r = Math.min(innerWidth, innerHeight) * 0.38;
-    }
-    if (mode === MODE.COLLECT) {
-      p1.score = 0; p2.score = 0;
-      for (let i=0;i<10;i++) spawnDot();
-    }
-    if (mode === MODE.MAZE) {
-      // Keep match score; generate a new maze round.
-      if (typeof resetMode._firstMaze === 'undefined') { p1.score = 0; p2.score = 0; resetMode._firstMaze = true; }
-      generateMaze();
-    }
-    resetCommonPositions();
-    ui.msg.style.display = 'none';
-    renderScores();
   }
 
   function renderScores() {
@@ -201,7 +230,35 @@
     }
   }
 
-  // ===== Joysticks (pointer events) =====
+  function resetMode(mode) {
+    world.mode = mode;
+    world.roundOver = false;
+    bullets = []; dots = [];
+    ui.msg.style.display = 'none';
+    ui.hint.textContent = '';
+
+    if (mode === MODE.DODGE) { p1.hp = 3; p2.hp = 3; }
+    if (mode === MODE.SUMO) {
+      arena.r = Math.min(innerWidth, innerHeight) * 0.38;
+    }
+    if (mode === MODE.COLLECT) {
+      p1.score = 0; p2.score = 0;
+      for (let i=0;i<10;i++) spawnDot();
+    }
+    if (mode === MODE.MAZE) {
+      if (typeof resetMode._firstMaze === 'undefined') { p1.score = 0; p2.score = 0; resetMode._firstMaze = true; }
+      generateMaze();
+    }
+    if (mode === MODE.BOMBER) {
+      if (typeof resetMode._firstBomber === 'undefined') { p1.score = 0; p2.score = 0; resetMode._firstBomber = true; }
+      buildBomberArena();
+      ui.hint.textContent = 'Controls: P1 WASD + Space · P2 Arrows + Enter · Tap 💣 or use joysticks + buttons';
+    }
+    resetCommonPositions();
+    renderScores();
+  }
+
+  // ===== Joysticks =====
   function makeStick(rootEl, thumbEl) {
     const STICK_R = 70;
     let activeId = null;
@@ -219,8 +276,8 @@
       const cx = rect.width/2, cy = rect.height/2;
       return { x, y, cx, cy, max: STICK_R - 10 };
     }
-    function start(ev){ if(activeId!==null) return; activeId = ev.pointerId; rootEl.setPointerCapture?.(ev.pointerId); move(ev); }
-    function end(ev){ if(ev.pointerId!==activeId) return; activeId = null; rootEl.releasePointerCapture?.(ev.pointerId); target.x=0; target.y=0; resetThumb(); }
+    function start(ev){ if(activeId!==null) return; activeId = ev.pointerId; rootEl.setPointerCapture?.(ev.pointerId); move(ev); ev.preventDefault(); }
+    function end(ev){ if(ev.pointerId!==activeId) return; activeId = null; rootEl.releasePointerCapture?.(ev.pointerId); target.x=0; target.y=0; resetThumb(); ev.preventDefault(); }
     function move(ev){
       if(ev.pointerId!==activeId) return;
       const {x,y,cx,cy,max} = centered(ev);
@@ -231,6 +288,7 @@
       if (d>0){ dx/=d; dy/=d; } else { dx=0; dy=0; }
       setThumb(dx*scale, dy*scale);
       target.x = dx*scale; target.y = dy*scale; // [-1..1]
+      ev.preventDefault();
     }
     ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']
       .forEach(t=>rootEl.addEventListener(t, (ev)=>{
@@ -245,15 +303,14 @@
   const stickL = makeStick(document.getElementById('stickL'), document.getElementById('thumbL'));
   const stickR = makeStick(document.getElementById('stickR'), document.getElementById('thumbR'));
 
-  // ===== Input -> velocity targets =====
   function updateTargets() {
-    p1.targetX = stickL.x * p1.maxSpeed;
-    p1.targetY = stickL.y * p1.maxSpeed;
-    p2.targetX = stickR.x * p2.maxSpeed;
-    p2.targetY = stickR.y * p2.maxSpeed;
+    p1.targetX = stickL.x * p1.maxSpeed * (1 + p1.speedBoost*0.12);
+    p1.targetY = stickL.y * p1.maxSpeed * (1 + p1.speedBoost*0.12);
+    p2.targetX = stickR.x * p2.maxSpeed * (1 + p2.speedBoost*0.12);
+    p2.targetY = stickR.y * p2.maxSpeed * (1 + p2.speedBoost*0.12);
   }
 
-  // ===== DODGE / COLLECT / SUMO logic (unchanged) =====
+  // ===== DODGE / COLLECT / SUMO logic =====
   function tryFire(player) {
     if (player.fireCd > 0) return;
     const ax = player.targetX, ay = player.targetY;
@@ -352,9 +409,8 @@
     }
   }
 
-  // ===== MAZE: generation =====
+  // ===== MAZE generation & movement =====
   function generateMaze() {
-    // Choose a cell size that gives ~30-40 columns for phones, adjust by width.
     const targetCols = clamp(Math.floor(innerWidth / 28), 20, 42);
     maze.size = Math.max(24, Math.min(34, Math.floor(innerWidth / targetCols)));
     maze.lineWidth = Math.max(3, Math.floor(maze.size * 0.14));
@@ -362,13 +418,11 @@
 
     maze.cols = Math.floor((innerWidth - maze.pad*2) / maze.size);
     maze.rows = Math.floor((innerHeight - maze.pad*2) / maze.size);
-    maze.cols = Math.max(8, maze.cols - (maze.cols%1));
-    maze.rows = Math.max(8, maze.rows - (maze.rows%1));
+    maze.cols = Math.max(8, maze.cols);
+    maze.rows = Math.max(8, maze.rows);
 
-    // Init walls
     maze.walls = Array.from({length: maze.rows}, ()=>Array.from({length: maze.cols}, ()=>({N:true,E:true,S:true,W:true, visited:false})));
 
-    // Recursive backtracker
     const stack = [];
     let cx = 0, cy = 0;
     const push = (x,y)=>{ stack.push({x,y}); maze.walls[y][x].visited = true; };
@@ -384,13 +438,11 @@
     while (stack.length) {
       const cur = stack[stack.length-1];
       cx = cur.x; cy = cur.y;
-      // shuffle dirs
       for (let i=dirs.length-1;i>0;i--){ const j=(Math.random()* (i+1))|0; [dirs[i],dirs[j]]=[dirs[j],dirs[i]]; }
       let advanced = false;
       for (const d of dirs) {
         const nx = cx + d.dx, ny = cy + d.dy;
         if (nx>=0 && nx<maze.cols && ny>=0 && ny<maze.rows && !maze.walls[ny][nx].visited) {
-          // knock wall
           maze.walls[cy][cx][d.a] = false;
           maze.walls[ny][nx][d.b] = false;
           push(nx,ny);
@@ -401,102 +453,356 @@
       if (!advanced) stack.pop();
     }
 
-    // Start/End corners and goal
     maze.start = {x:0,y:0};
     maze.end   = {x:maze.cols-1,y:maze.rows-1};
     maze.goal  = {x: (maze.cols/2)|0, y: (maze.rows/2)|0};
   }
 
-  // ===== MAZE: movement & collision =====
   function moveInMaze(p, dt) {
-    // axis-wise movement with wall checks against current cell
     const s = maze.size, ox = maze.pad, oy = maze.pad;
-    // Helper to get cell index from position
     const toCell = (x,y)=>({ cx: clamp(Math.floor((x-ox)/s), 0, maze.cols-1),
                              cy: clamp(Math.floor((y-oy)/s), 0, maze.rows-1) });
-
-    // desired step
     let nx = p.x + p.vx * dt;
     let ny = p.y + p.vy * dt;
 
-    // Resolve X
     if (p.vx !== 0) {
       const dir = Math.sign(p.vx);
       const {cx,cy} = toCell(p.x, p.y);
       const cell = maze.walls[cy][cx];
-      if (dir > 0) {
-        // moving right: check East wall of current cell
-        if (cell.E) {
-          const wallX = ox + (cx+1)*s; // inner edge
-          const maxX = wallX - p.r - 1;
-          nx = Math.min(nx, maxX);
-        }
-      } else {
-        // moving left: check West wall
-        if (cell.W) {
-          const wallX = ox + cx*s;
-          const minX = wallX + p.r + 1;
-          nx = Math.max(nx, minX);
-        }
-      }
-      // If we crossed into a new cell, also check that cell's opposite wall (corner safety)
+      if (dir > 0 && cell.E) nx = Math.min(nx, ox + (cx+1)*s - p.r - 1);
+      if (dir < 0 && cell.W) nx = Math.max(nx, ox + cx*s + p.r + 1);
       const {cx:ncx, cy:ncy} = toCell(nx, p.y);
       if (ncx !== cx || ncy !== cy) {
         const ncell = maze.walls[ncy][ncx];
-        if (dir > 0 && ncell.W) {
-          const wallX = ox + ncx*s;
-          const minX = wallX + p.r + 1;
-          nx = Math.max(nx, minX);
-        } else if (dir < 0 && ncell.E) {
-          const wallX = ox + (ncx+1)*s;
-          const maxX = wallX - p.r - 1;
-          nx = Math.min(nx, maxX);
-        }
+        if (dir > 0 && ncell.W) nx = Math.max(nx, ox + ncx*s + p.r + 1);
+        if (dir < 0 && ncell.E) nx = Math.min(nx, ox + (ncx+1)*s - p.r - 1);
       }
       p.x = nx;
     }
-
-    // Resolve Y
     if (p.vy !== 0) {
       const dir = Math.sign(p.vy);
       const {cx,cy} = toCell(p.x, p.y);
       const cell = maze.walls[cy][cx];
-      if (dir > 0) {
-        // moving down: check South wall
-        if (cell.S) {
-          const wallY = oy + (cy+1)*s;
-          const maxY = wallY - p.r - 1;
-          ny = Math.min(ny, maxY);
-        }
-      } else {
-        // moving up: check North wall
-        if (cell.N) {
-          const wallY = oy + cy*s;
-          const minY = wallY + p.r + 1;
-          ny = Math.max(ny, minY);
-        }
-      }
+      if (dir > 0 && cell.S) ny = Math.min(ny, oy + (cy+1)*s - p.r - 1);
+      if (dir < 0 && cell.N) ny = Math.max(ny, oy + cy*s + p.r + 1);
       const {cx:ncx, cy:ncy} = toCell(p.x, ny);
       if (ncx !== cx || ncy !== cy) {
         const ncell = maze.walls[ncy][ncx];
-        if (dir > 0 && ncell.N) {
-          const wallY = oy + ncy*s;
-          const minY = wallY + p.r + 1;
-          ny = Math.max(ny, minY);
-        } else if (dir < 0 && ncell.S) {
-          const wallY = oy + (ncy+1)*s;
-          const maxY = wallY - p.r - 1;
-          ny = Math.min(ny, maxY);
-        }
+        if (dir > 0 && ncell.N) ny = Math.max(ny, oy + ncy*s + p.r + 1);
+        if (dir < 0 && ncell.S) ny = Math.min(ny, oy + (ncy+1)*s - p.r - 1);
       }
       p.y = ny;
     }
 
-    // Clamp to maze bounds
     const minX = ox + p.r + 1, maxX = ox + maze.cols*s - p.r - 1;
     const minY = oy + p.r + 1, maxY = oy + maze.rows*s - p.r - 1;
     p.x = clamp(p.x, minX, maxX);
     p.y = clamp(p.y, minY, maxY);
+  }
+
+  function drawMaze() {
+    if (!maze.walls) return;
+    const s = maze.size, ox = maze.pad, oy = maze.pad;
+    ctx.save();
+    ctx.lineWidth = maze.lineWidth;
+    ctx.strokeStyle = 'rgba(232,236,255,0.85)';
+    ctx.lineCap = 'square';
+    ctx.beginPath();
+    ctx.rect(ox, oy, maze.cols*s, maze.rows*s);
+    ctx.stroke();
+    ctx.beginPath();
+    for (let y=0; y<maze.rows; y++) {
+      for (let x=0; x<maze.cols; x++) {
+        const w = maze.walls[y][x];
+        const px = ox + x*s, py = oy + y*s;
+        if (w.N) { ctx.moveTo(px, py); ctx.lineTo(px+s, py); }
+        if (w.E) { ctx.moveTo(px+s, py); ctx.lineTo(px+s, py+s); }
+        if (w.S) { ctx.moveTo(px, py+s); ctx.lineTo(px+s, py+s); }
+        if (w.W) { ctx.moveTo(px, py); ctx.lineTo(px, py+s); }
+      }
+    }
+    ctx.stroke();
+    const gx = ox + maze.goal.x*s + s/2;
+    const gy = oy + maze.goal.y*s + s/2;
+    drawStar(gx, gy, Math.max(8, Math.floor(s*0.28)), 5);
+    ctx.restore();
+  }
+
+  // ===== Bomber: arena build =====
+  function buildBomberArena(){
+    // Choose tile size to fit nicely
+    const targetCols = clamp(Math.floor(innerWidth / 40), 13, 19);
+    bomber.tile = Math.floor(innerWidth / targetCols);
+    bomber.cols = clamp(targetCols, 11, 21);
+    // rows based on height
+    bomber.rows = clamp(Math.floor((innerHeight - 120) / bomber.tile), 9, 17);
+
+    // center offset
+    bomber.ox = Math.floor((innerWidth - bomber.cols*bomber.tile)/2);
+    bomber.oy = Math.floor((innerHeight - bomber.rows*bomber.tile)/2);
+
+    // Build grid
+    bomber.grid = Array.from({length:bomber.rows}, (_,y)=>Array.from({length:bomber.cols}, (_,x)=>{
+      // Border solid
+      if (y===0 || y===bomber.rows-1 || x===0 || x===bomber.cols-1) return 1;
+      // Checker indestructible pillars
+      if (x%2===0 && y%2===0) return 1;
+      // Will decide crates later
+      return 0;
+    }));
+
+    // Place crates (not in safe spawn corridors)
+    for (let y=1;y<bomber.rows-1;y++){
+      for (let x=1;x<bomber.cols-1;x++){
+        if (bomber.grid[y][x]!==0) continue;
+        // keep spawn safe zones (2x2 around corners)
+        const inP1Safe = (x<=2 && y<=2);
+        const inP2Safe = (x>=bomber.cols-3 && y>=bomber.rows-3);
+        if (inP1Safe || inP2Safe) continue;
+        if (chance(0.6)) bomber.grid[y][x]=2; // crate
+      }
+    }
+
+    bomber.powerups = [];
+    bomber.bombs = [];
+    bomber.flames = [];
+    bomber.sdTimer = 0; bomber.ring = 0;
+  }
+
+  // Tile helpers
+  function pxToCell(px, py){
+    const cx = Math.floor((px - bomber.ox) / bomber.tile);
+    const cy = Math.floor((py - bomber.oy) / bomber.tile);
+    return {x: clamp(cx,0,bomber.cols-1), y: clamp(cy,0,bomber.rows-1)};
+  }
+  function cellCenter(cx, cy){
+    return {
+      x: bomber.ox + cx*bomber.tile + bomber.tile/2,
+      y: bomber.oy + cy*bomber.tile + bomber.tile/2
+    };
+  }
+
+  function cellBlocked(cx, cy, ignoreBombPass=false){
+    if (cx<0||cy<0||cx>=bomber.cols||cy>=bomber.rows) return true;
+    if (bomber.grid[cy][cx]===1) return true; // solid
+    if (bomber.grid[cy][cx]===2) return true; // crate blocks movement
+    // bombs block unless pass-through
+    const bombHere = bomber.bombs.find(b=>b.x===cx && b.y===cy);
+    if (bombHere && !(ignoreBombPass)) return true;
+    return false;
+  }
+
+  // Tight AABB move for bomber mode
+  function moveInBomber(p, dt){
+    const speed = p.maxSpeed * (1 + p.speedBoost*0.12);
+    p.vx = (p.targetX) * 0.9; // damp
+    p.vy = (p.targetY) * 0.9;
+
+    let nx = p.x + p.vx * dt;
+    let ny = p.y + p.vy * dt;
+
+    // radius safety
+    const r = Math.min(p.r, bomber.tile*0.4);
+
+    // resolve X
+    if (p.vx !== 0){
+      const dir = Math.sign(p.vx);
+      // sample ahead at upper/mid/lower points
+      const samples = [-r*0.6, 0, r*0.6];
+      let blocked = false;
+      for (const sy of samples){
+        const cx = Math.floor(( (nx + dir*r) - bomber.ox ) / bomber.tile);
+        const cy = Math.floor(( (p.y + sy) - bomber.oy ) / bomber.tile);
+        if (cellBlocked(cx, cy, p.canPass)) { blocked = true; break; }
+      }
+      if (blocked){
+        // snap to cell boundary
+        const cc = pxToCell(p.x, p.y);
+        const edge = dir>0 ? (bomber.ox + (cc.x+1)*bomber.tile) : (bomber.ox + cc.x*bomber.tile);
+        nx = edge - dir*r - 0.01*dir;
+      }
+      p.x = nx;
+    }
+    // resolve Y
+    if (p.vy !== 0){
+      const dir = Math.sign(p.vy);
+      const samples = [-r*0.6, 0, r*0.6];
+      let blocked = false;
+      for (const sx of samples){
+        const cx = Math.floor(( (p.x + sx) - bomber.ox ) / bomber.tile);
+        const cy = Math.floor(( (ny + dir*r) - bomber.oy ) / bomber.tile);
+        if (cellBlocked(cx, cy, p.canPass)) { blocked = true; break; }
+      }
+      if (blocked){
+        const cc = pxToCell(p.x, p.y);
+        const edge = dir>0 ? (bomber.oy + (cc.y+1)*bomber.tile) : (bomber.oy + cc.y*bomber.tile);
+        ny = edge - dir*r - 0.01*dir;
+      }
+      p.y = ny;
+    }
+
+    // collect powerup if centered in tile
+    const c = pxToCell(p.x, p.y);
+    const puIdx = bomber.powerups.findIndex(u=>u.x===c.x && u.y===c.y);
+    if (puIdx>=0){
+      const u = bomber.powerups[puIdx];
+      if (u.type==='bomb' && p.bombsMax<4) { p.bombsMax++; p.bombsCarried++; }
+      else if (u.type==='range' && p.flame<6) p.flame++;
+      else if (u.type==='speed' && p.speedBoost<3) p.speedBoost++;
+      else if (u.type==='kick') p.canKick = true;
+      else if (u.type==='pass') p.canPass = true;
+      bomber.powerups.splice(puIdx,1);
+    }
+
+    // Kicking bombs
+    if (p.canKick){
+      const b = bomber.bombs.find(b=>b.x===c.x && b.y===c.y);
+      if (b && !b.moving){
+        const dx = Math.sign(p.vx || p.targetX);
+        const dy = Math.sign(p.vy || p.targetY);
+        if (dx!==0 || dy!==0){
+          // slide until obstacle or bomb
+          let sx = b.x, sy = b.y;
+          while(true){
+            const nx = sx+dx, ny = sy+dy;
+            if (cellBlocked(nx, ny)) break;
+            if (bomber.bombs.find(ob=>ob!==b && ob.x===nx && ob.y===ny)) break;
+            sx = nx; sy = ny;
+            // stop if next is obstacle
+            if (cellBlocked(sx+dx, sy+dy)) break;
+          }
+          if (sx!==b.x || sy!==b.y){
+            b.moving = {dx,dy};
+          }
+        }
+      }
+    }
+  }
+
+  function placeBomb(player){
+    if (world.mode !== MODE.BOMBER || world.roundOver) return;
+    if (player.bombsCarried <= 0 || player.bombCooldown>0) return;
+    const c = pxToCell(player.x, player.y);
+    // tile must be empty of bomb and passable
+    if (cellBlocked(c.x, c.y, true)) return;
+    if (bomber.bombs.find(b=>b.x===c.x && b.y===c.y)) return;
+    bomber.bombs.push({
+      x:c.x, y:c.y, owner:player, fuse:1.8, range:player.flame,
+      solidAt: 0.15, moving:null
+    });
+    player.bombsCarried--;
+    player.bombCooldown = 0.12; // small anti-spam
+  }
+
+  function detonateBomb(b){
+    // create flames at center and in four directions up to range
+    const visited = [];
+    const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+    const pushFlame = (x,y)=>{ bomber.flames.push({x,y,t:0.28}); visited.push(x+','+y); };
+    pushFlame(b.x,b.y);
+
+    for (const d of dirs){
+      for (let i=1;i<=b.range;i++){
+        const cx = b.x + d.dx*i, cy = b.y + d.dy*i;
+        if (cx<=0||cy<=0||cx>=bomber.cols-1||cy>=bomber.rows-1) break;
+        const cell = bomber.grid[cy][cx];
+        if (cell===1) break; // solid stops
+        pushFlame(cx,cy);
+        if (cell===2){ // crate destroyed and stop
+          bomber.grid[cy][cx]=0;
+          // chance to spawn a powerup
+          if (chance(0.25)){
+            const types = ['bomb','range','speed','kick','pass'];
+            const type = types[(Math.random()*types.length)|0];
+            bomber.powerups.push({x:cx,y:cy,type});
+          }
+          break;
+        }
+        // keep going through empty
+      }
+    }
+    // chain reaction: ignite nearby bombs in flames
+    for (const ob of bomber.bombs){
+      if (ob===b) continue;
+      if (visited.includes(ob.x+','+ob.y)) ob.fuse = Math.min(ob.fuse, 0.02);
+    }
+  }
+
+  function updateBombs(dt){
+    for (const b of bomber.bombs){
+      // movement (kicked)
+      if (b.moving){
+        const nx = b.x + b.moving.dx;
+        const ny = b.y + b.moving.dy;
+        if (cellBlocked(nx, ny) || bomber.bombs.find(ob=>ob!==b && ob.x===nx && ob.y===ny)){
+          b.moving = null;
+        } else { b.x = nx; b.y = ny; }
+      }
+      b.fuse -= dt;
+      b.solidAt -= dt;
+    }
+    // explode
+    const toExplode = bomber.bombs.filter(b=>b.fuse<=0);
+    if (toExplode.length){
+      for (const b of toExplode) detonateBomb(b);
+      // return carried bombs to owners
+      for (const b of toExplode) b.owner.bombsCarried = Math.min(b.owner.bombsCarried+1, b.owner.bombsMax);
+    }
+    bomber.bombs = bomber.bombs.filter(b=>b.fuse>0);
+  }
+
+  function updateFlames(dt){
+    // damage players
+    for (const f of bomber.flames){
+      const cc = cellCenter(f.x,f.y);
+      [p1,p2].forEach(p=>{
+        if (!p.alive) return;
+        const r = p.r * 0.9;
+        if ((p.x>cc.x-bomber.tile/2 && p.x<cc.x+bomber.tile/2) &&
+            (p.y>cc.y-bomber.tile/2 && p.y<cc.y+bomber.tile/2)){
+          // overlaps tile
+          p.alive = false;
+        }
+      });
+      f.t -= dt;
+    }
+    bomber.flames = bomber.flames.filter(f=>f.t>0);
+    // resolve deaths
+    if (!world.roundOver){
+      const aliveCount = (p1.alive?1:0)+(p2.alive?1:0);
+      if (aliveCount<=1){
+        world.roundOver = true;
+        let winner = 'Draw';
+        if (p1.alive && !p2.alive){ winner='P1'; p1.score++; }
+        else if (p2.alive && !p1.alive){ winner='P2'; p2.score++; }
+        renderScores();
+        const champ = (p1.score>=bomber.roundWinsTo || p2.score>=bomber.roundWinsTo);
+        showMsg(champ? `${winner} wins the match!` : `${winner} wins the round!`);
+      }
+    }
+  }
+
+  function updateSuddenDeath(dt){
+    bomber.sdTimer += dt;
+    if (bomber.sdTimer < bomber.suddenDeathAt) return;
+    // every 3 seconds add a ring of solid from borders inward
+    const step = 3.0;
+    const phase = Math.floor((bomber.sdTimer - bomber.suddenDeathAt)/step)+1;
+    if (phase <= bomber.ring) return;
+    bomber.ring = phase;
+
+    const ring = bomber.ring;
+    const minX = ring, minY = ring, maxX = bomber.cols-1-ring, maxY = bomber.rows-1-ring;
+    if (minX >= maxX || minY >= maxY) return;
+
+    for (let x=minX; x<=maxX; x++){
+      if (bomber.grid[minY][x]===0) bomber.grid[minY][x]=1;
+      if (bomber.grid[maxY][x]===0) bomber.grid[maxY][x]=1;
+    }
+    for (let y=minY; y<=maxY; y++){
+      if (bomber.grid[y][minX]===0) bomber.grid[y][minX]=1;
+      if (bomber.grid[y][maxX]===0) bomber.grid[y][maxX]=1;
+    }
   }
 
   // ===== Rendering =====
@@ -514,11 +820,9 @@
     else { grd.addColorStop(0, '#ffd7a3'); grd.addColorStop(1, '#f59e0b'); }
     ctx.fillStyle = grd; ctx.fill();
     ctx.lineWidth=2; ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.stroke();
-    // eyes
     ctx.fillStyle='#1a1a1a';
     ctx.beginPath(); ctx.arc(x - r*0.35, y - r*0.2, r*0.12, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(x + r*0.35, y - r*0.2, r*0.12, 0, Math.PI*2); ctx.fill();
-    // mouth
     const spd = Math.hypot(p.vx, p.vy);
     const smile = Math.min(0.7, 0.2 + spd / Math.max(1,p.maxSpeed) * 0.5);
     ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=3; ctx.beginPath();
@@ -543,42 +847,6 @@
     ctx.beginPath(); ctx.arc(arena.x, arena.y, arena.r, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
   }
-
-  // ===== MAZE: render walls + goal =====
-  function drawMaze() {
-    if (!maze.walls) return;
-    const s = maze.size, ox = maze.pad, oy = maze.pad;
-    ctx.save();
-    ctx.lineWidth = maze.lineWidth;
-    ctx.strokeStyle = 'rgba(232,236,255,0.85)';
-    ctx.lineCap = 'square';
-
-    // Outer border
-    ctx.beginPath();
-    ctx.rect(ox, oy, maze.cols*s, maze.rows*s);
-    ctx.stroke();
-
-    // Cell walls
-    ctx.beginPath();
-    for (let y=0; y<maze.rows; y++) {
-      for (let x=0; x<maze.cols; x++) {
-        const w = maze.walls[y][x];
-        const px = ox + x*s, py = oy + y*s;
-        if (w.N) { ctx.moveTo(px, py); ctx.lineTo(px+s, py); }
-        if (w.E) { ctx.moveTo(px+s, py); ctx.lineTo(px+s, py+s); }
-        if (w.S) { ctx.moveTo(px, py+s); ctx.lineTo(px+s, py+s); }
-        if (w.W) { ctx.moveTo(px, py); ctx.lineTo(px, py+s); }
-      }
-    }
-    ctx.stroke();
-
-    // Goal star
-    const gx = ox + maze.goal.x*s + s/2;
-    const gy = oy + maze.goal.y*s + s/2;
-    drawStar(gx, gy, Math.max(8, Math.floor(s*0.28)), 5);
-    ctx.restore();
-  }
-
   function drawStar(x, y, r, spikes) {
     const outer = r, inner = r*0.5;
     let rot = Math.PI/2 * 3, step = Math.PI / spikes;
@@ -590,7 +858,6 @@
       let cy = y + Math.sin(rot) * outer;
       ctx.lineTo(cx, cy);
       rot += step;
-
       cx = x + Math.cos(rot) * inner;
       cy = y + Math.sin(rot) * inner;
       ctx.lineTo(cx, cy);
@@ -605,6 +872,97 @@
     ctx.restore();
   }
 
+  // Bomber draw
+  function drawBomber(){
+    const t = bomber.tile, ox = bomber.ox, oy = bomber.oy;
+    // soft board background
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(ox, oy, bomber.cols*t, bomber.rows*t);
+
+    // grid background
+    for (let y=0;y<bomber.rows;y++){
+      for (let x=0;x<bomber.cols;x++){
+        const px = ox + x*t, py = oy + y*t;
+        // floor
+        ctx.fillStyle = (x+y)%2===0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)';
+        ctx.fillRect(px, py, t, t);
+
+        const cell = bomber.grid[y][x];
+        if (cell===1){
+          // solid
+          ctx.fillStyle = '#1a244b';
+          ctx.fillRect(px+2, py+2, t-4, t-4);
+          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+          ctx.strokeRect(px+2, py+2, t-4, t-4);
+        } else if (cell===2){
+          // crate
+          ctx.fillStyle = '#3a2b18';
+          ctx.fillRect(px+3, py+3, t-6, t-6);
+          ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+          ctx.strokeRect(px+3, py+3, t-6, t-6);
+          // slats
+          ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+          ctx.beginPath();
+          ctx.moveTo(px+4, py+ t*0.33); ctx.lineTo(px+t-4, py+t*0.33);
+          ctx.moveTo(px+4, py+ t*0.66); ctx.lineTo(px+t-4, py+t*0.66);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // powerups
+    for (const u of bomber.powerups){
+      const cc = cellCenter(u.x,u.y);
+      ctx.save();
+      ctx.translate(cc.x, cc.y);
+      ctx.beginPath(); ctx.arc(0,0,t*0.22,0,Math.PI*2);
+      const mapColor = {
+        bomb:'#7dd3fc', range:'#a7f3d0', speed:'#fde68a', kick:'#c7d2fe', pass:'#fca5a5'
+      };
+      ctx.fillStyle = mapColor[u.type] || '#e8ecff';
+      ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.stroke();
+      ctx.fillStyle='#0b1020'; ctx.font = 'bold '+Math.floor(t*0.25)+'px system-ui';
+      const label = {bomb:'B',range:'R',speed:'S',kick:'K',pass:'P'}[u.type]||'?';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,0,1);
+      ctx.restore();
+    }
+
+    // bombs
+    for (const b of bomber.bombs){
+      const cc = cellCenter(b.x,b.y);
+      ctx.save();
+      ctx.translate(cc.x, cc.y);
+      ctx.beginPath(); ctx.arc(0,0,t*0.22,0,Math.PI*2);
+      ctx.fillStyle = '#222833';
+      ctx.fill();
+      // fuse
+      ctx.beginPath(); ctx.arc(0,-t*0.18, t*0.07, 0, Math.PI*2); ctx.fillStyle='#555b6b'; ctx.fill();
+      // flicker
+      ctx.fillStyle = b.fuse<0.5 ? '#ffd54d' : 'rgba(255,213,77,0.7)';
+      ctx.fillRect(-2,-t*0.27,4,8);
+      ctx.restore();
+    }
+
+    // flames
+    for (const f of bomber.flames){
+      const cc = cellCenter(f.x,f.y);
+      const alpha = clamp(f.t/0.28,0,1);
+      ctx.save();
+      ctx.globalAlpha = 0.9*alpha;
+      const g = ctx.createRadialGradient(cc.x, cc.y, 4, cc.x, cc.y, t*0.45);
+      g.addColorStop(0, 'rgba(255,240,170,1)');
+      g.addColorStop(1, 'rgba(255,120,60,0.1)');
+      ctx.fillStyle = g;
+      ctx.fillRect(cc.x - t/2 +2, cc.y - t/2 +2, t-4, t-4);
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // ===== Round/messages =====
   function showMsg(text) {
     ui.msg.textContent = text + ' — Tap Reset';
     ui.msg.style.display = 'block';
@@ -616,13 +974,10 @@
     const dt = Math.min(0.035, (now-last)/1000); last = now;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // Background grid (subtle)
-    if (world.mode !== MODE.MAZE) drawGrid();
-
     if (!world.paused && !world.roundOver) {
       updateTargets();
 
-      // accelerate toward target velocity
+      // accelerate toward target velocity (arcade modes)
       [p1,p2].forEach(p=>{
         const ax = (p.targetX - p.vx) * p.accel * dt;
         const ay = (p.targetY - p.vy) * p.accel * dt;
@@ -631,12 +986,23 @@
       });
 
       if (world.mode === MODE.MAZE) {
-        drawMaze(); // draw under players
+        drawMaze();
         moveInMaze(p1, dt);
         moveInMaze(p2, dt);
         checkMazeGoal();
+      } else if (world.mode === MODE.BOMBER){
+        drawBomber();
+        moveInBomber(p1, dt);
+        moveInBomber(p2, dt);
+        updateBombs(dt);
+        updateFlames(dt);
+        updateSuddenDeath(dt);
+        // cooldowns
+        p1.bombCooldown = Math.max(0, p1.bombCooldown - dt);
+        p2.bombCooldown = Math.max(0, p2.bombCooldown - dt);
       } else {
-        // Arcade movement & walls
+        // Arcade field
+        drawGrid();
         updatePlayer(p1, dt);
         updatePlayer(p2, dt);
 
@@ -654,9 +1020,9 @@
     } else {
       if (world.mode === MODE.SUMO) drawArena();
       if (world.mode === MODE.MAZE) drawMaze();
+      if (world.mode === MODE.BOMBER) drawBomber();
     }
 
-    // Render entities
     if (world.mode === MODE.COLLECT) drawDots();
     if (world.mode === MODE.DODGE) drawBullets();
     drawSmiley(p1); drawSmiley(p2);
@@ -665,24 +1031,18 @@
   }
   requestAnimationFrame(frame);
 
-  // ===== Maze goal check =====
+  // ===== MAZE goal check =====
   const MAZE_GOAL_WIN = 3;
   function checkMazeGoal() {
     const s = maze.size, ox = maze.pad, oy = maze.pad;
     const gx = ox + maze.goal.x*s + s/2;
     const gy = oy + maze.goal.y*s + s/2;
     const gr = Math.max(10, Math.floor(s*0.32));
-
-    // Touch if center within (gr + player.r)
-    const r1 = (p1.r + gr);
-    const r2 = (p2.r + gr);
-
+    const r1 = (p1.r + gr), r2 = (p2.r + gr);
     const hit1 = ((p1.x-gx)**2 + (p1.y-gy)**2) <= r1*r1;
     const hit2 = ((p2.x-gx)**2 + (p2.y-gy)**2) <= r2*r2;
 
     if (!hit1 && !hit2) return;
-
-    // Tie-break: earliest touch (this frame), else closer center wins
     let winner = null;
     if (hit1 && !hit2) winner = 'P1';
     else if (!hit1 && hit2) winner = 'P2';
@@ -700,13 +1060,11 @@
       showMsg(`${winner} wins the match!`);
       return;
     }
-
-    // New round: regenerate maze + respawn
     generateMaze();
     resetCommonPositions();
   }
 
-  // ===== Physics & update for arcade modes (unchanged) =====
+  // ===== Physics & update for arcade modes =====
   function updatePlayer(p, dt) {
     const ax = (p.targetX - p.vx) * p.accel * dt;
     const ay = (p.targetY - p.vy) * p.accel * dt;
@@ -726,10 +1084,7 @@
   }
 
   // ===== UI events =====
-  ui.modeSel.addEventListener('change', (e)=>{
-    // Reset for selected mode
-    resetMode(e.target.value);
-  });
+  ui.modeSel.addEventListener('change', (e)=> resetMode(e.target.value));
   ui.resetBtn.addEventListener('click', ()=> resetMode(world.mode));
   ui.pauseBtn.addEventListener('click', ()=>{
     world.paused = !world.paused;
@@ -737,8 +1092,43 @@
     ui.pauseBtn.setAttribute('aria-pressed', String(world.paused));
   });
 
+  // Bomb buttons
+  ui.bombL.addEventListener('click', ()=> placeBomb(p1));
+  ui.bombR.addEventListener('click', ()=> placeBomb(p2));
+
+  // Desktop controls
+  const keys = new Set();
+  addEventListener('keydown', (e)=>{
+    keys.add(e.code);
+    if (world.mode===MODE.BOMBER){
+      if (e.code==='Space'){ placeBomb(p1); e.preventDefault(); }
+      if (e.code==='Enter'){ placeBomb(p2); e.preventDefault(); }
+    }
+  }, {passive:false});
+  addEventListener('keyup', (e)=>{ keys.delete(e.code); }, {passive:true});
+
+  function pollKeys(){
+    // P1 WASD
+    let lx = 0, ly = 0;
+    if (keys.has('KeyA')) lx -= 1;
+    if (keys.has('KeyD')) lx += 1;
+    if (keys.has('KeyW')) ly -= 1;
+    if (keys.has('KeyS')) ly += 1;
+    // P2 arrows
+    let rx = 0, ry = 0;
+    if (keys.has('ArrowLeft')) rx -= 1;
+    if (keys.has('ArrowRight')) rx += 1;
+    if (keys.has('ArrowUp')) ry -= 1;
+    if (keys.has('ArrowDown')) ry += 1;
+
+    if (lx||ly){ const d = Math.hypot(lx,ly)||1; stickL.x = lx/d; stickL.y = ly/d; }
+    if (rx||ry){ const d = Math.hypot(rx,ry)||1; stickR.x = rx/d; stickR.y = ry/d; }
+    requestAnimationFrame(pollKeys);
+  }
+  requestAnimationFrame(pollKeys);
+
   // initial
-  resetMode(MODE.DODGE);
+  resetMode(MODE.BOMBER); // Start in Bomber for quick testing; change to MODE.DODGE if you prefer.
 })();
 </script>
 </body>
