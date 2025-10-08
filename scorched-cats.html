@@ -102,6 +102,15 @@
     width:min(92%,820px); background:rgba(10,14,30,.92); border:1px solid var(--line); border-radius:16px; padding:14px; display:none; z-index:50;
     max-height:calc(100vh - 90px); overflow:auto; -webkit-overflow-scrolling:touch;
   }
+
+  @media (max-width: 820px){
+  .menuPanel{
+    max-height: 70vh;        /* requested cap on small screens */
+    overflow-y: auto;         /* vertical scroll inside the panel */
+    -webkit-overflow-scrolling: touch;
+  }
+}
+  
   .menuGrid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
   .menuRow{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0}
   .menuRow > * {font-size:14px}
@@ -863,7 +872,8 @@
       if (i===turn && !placingTeleport && (phase==='move' || phase==='retreat') && !shot){
         const speed = 0.9; // walking speed
         p.vx += speed * (joyDX||0);
-        // jump
+      
+        // jump on ground only
         if (jumpQueued){
           const onGround = terrainMask[Math.min(H-1,(p.y+PLAYER_R+1|0))*W + (p.x|0)]===SOLID;
           if (onGround){ p.vy = -3.4; tone(560,0.05,'sine',0.1); }
@@ -941,10 +951,17 @@
     windVal.textContent = arrow + Math.round(mag*100);
   }
 
+function setJoystickVisible(show){
+  const s = show ? 'block' : 'none';
+  joyWrap.style.display = s;
+  jumpBtn.style.display = s;
+}
+  
   // Weapon menu interactions
   function openWeaponMenu(open){
     weaponMenu.style.display = open ? 'flex' : 'none';
     weaponBadge.setAttribute('aria-expanded', open?'true':'false');
+    setJoystickVisible(!open); // <-- hide joystick while menu is open
   }
   weaponBadge.addEventListener('click', (e)=>{
     e.stopPropagation();
@@ -963,8 +980,16 @@
     if (weapon==='teleport'){
       const am = players[turn].ammo.teleport;
       if (am<=0){ toast('No teleport ammo'); weapon='normal'; players[turn].lastWeapon = weapon; }
-      else { placingTeleport = true; fireBtn.disabled=true; toast('Teleport: tap the map to choose destination'); }
-    } else { placingTeleport=false; fireBtn.disabled=false; }
+      else {
+        placingTeleport = true;
+        fireBtn.disabled = true; // selecting teleport disables fire until placed
+        toast('Teleport: tap the map to choose destination');
+      }
+    } else {
+      placingTeleport = false;
+      // only enable fire if we are in Move phase
+      fireBtn.disabled = (phase!=='move');
+    }
     updateBadge();
     openWeaponMenu(false);
   });
@@ -976,6 +1001,7 @@
   // Fire/charge
   let charging=false, chargePower=1, chargeInterval=null;
   function startCharge(){
+    if (phase!=='move') return;           // <-- only fire during Move
     if (shot || placingTeleport) return;
     if (weapon==='shotgun'){ launchShot(60); return; }
     charging=true; chargePower=1; startChargeSound(); chargeBar.style.width='0%';
@@ -1030,7 +1056,8 @@
     whoosh();
     players[turn].x = pos.x; players[turn].y = pos.y; players[turn].vx=0; players[turn].vy=0;
     poof();
-    placingTeleport = false; fireBtn.disabled=false;
+    placingTeleport = false;
+    fireBtn.disabled = (phase!=='move');   // <-- stays disabled during retreat
     updateBadge();
     enterRetreat(); // teleport uses the shot slot
   });
@@ -1064,10 +1091,19 @@
 
   // ======= Menu logic =======
   function openMenu(open){ menuPanel.style.display = open ? 'block' : 'none'; }
-  menuBtn.addEventListener('click', ()=> openMenu(menuPanel.style.display!=='block'));
-  closeMenu.addEventListener('click', ()=> openMenu(false));
+  menuBtn.addEventListener('click', ()=>{
+  const open = menuPanel.style.display!=='block';
+  openMenu(open);
+  setJoystickVisible(!open);             // <-- add this
+  });
+  closeMenu.addEventListener('click', ()=> { openMenu(false); setJoystickVisible(true); }); // <-- add this
   newMapBtn.addEventListener('click', ()=> resetGame(true)); // regenerates terrain but stays in menu
-  startBtn.addEventListener('click', ()=> { resetGame(false); openMenu(false); });
+  startBtn.addEventListener('click', ()=> {
+  resetGame(false);
+  openMenu(false);
+  setJoystickVisible(true);           // <-- add this
+  });
+
   // long-press seed
   let miniTimer=null;
   mini.addEventListener('pointerdown', ()=>{ miniTimer=setTimeout(()=>{
@@ -1161,7 +1197,12 @@
   }
   rematchBtn.addEventListener('click', ()=>{ banner.style.display='none'; startTurn(0,false); });
   newMapBannerBtn.addEventListener('click', ()=>{ banner.style.display='none'; resetGame(true); });
-  openMenuBtn.addEventListener('click', ()=>{ banner.style.display='none'; openMenu(true); });
+  openMenuBtn.addEventListener('click', ()=>{
+  banner.style.display='none';
+  openMenu(true);
+  setJoystickVisible(false);          // <-- add this
+  });
+
 
   function confettiBurst(){
     const colors = ['#ffd166','#a78bfa','#6ea8fe','#22c55e','#ef4444'];
@@ -1333,9 +1374,12 @@
   }
 
   function enterRetreat(){
+    if (phase === 'retreat') return; // already retreating; don't restart timer
     phase = 'retreat';
     phaseTimeLeft = RETREAT_TIME;
     updatePhaseUI();
+    // also ensure you can't fire during retreat
+    fireBtn.disabled = true;
   }
 
   function tickPhase(){
