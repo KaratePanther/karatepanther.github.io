@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="en" data-theme="light"> <!-- default; will be changed by the bootstrap -->
+<html lang="en" data-theme="light">
 <head>
-    <!-- Google tag (gtag.js) -->
+  <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -9,17 +9,15 @@
     gtag('js', new Date());
     gtag('config', 'G-LN5WKNMNR1');
   </script>
-  
-  <!-- Theme bootstrap: run FIRST so CSS sees the attribute -->
+
+  <!-- Theme bootstrap -->
   <script>
     (function () {
       try {
-        const saved = localStorage.getItem('theme');            // "light" | "dark" | null
+        const saved = localStorage.getItem('theme');
         const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const theme = saved || (systemDark ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', theme);
-
-        // Track system changes only when there's no manual override
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
           if (!localStorage.getItem('theme')) {
             document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
@@ -31,19 +29,20 @@
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Anton Ko — Product Manager & Growth</title>
-  <meta name="description" content="Product Manager focused on growth experimentation, data-informed decisions, and shipping outcomes. Based in Italy, open to remote/hybrid EU roles.">
+  <title>Anton Korolev — Product Manager & Growth</title>
+  <meta name="description" content="Product Manager focused on growth experiments and shipping outcomes. Based in Italy; open to remote/hybrid EU roles. CV & case studies on /pro.">
   <link rel="icon" href="favicon.ico">
   <link rel="canonical" href="https://antonko.com/">
+
   <!-- Open Graph / Twitter -->
-  <meta property="og:title" content="Anton Ko — Product Manager & Growth">
-  <meta property="og:description" content="I design experiments and ship outcomes. Case studies, experience, and contact.">
+  <meta property="og:title" content="Anton Korolev — Product Manager & Growth">
+  <meta property="og:description" content="I design experiments and ship outcomes. CV & case studies on /pro.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://antonko.com/">
   <meta property="og:image" content="https://antonko.com/anton-ko.jpeg">
   <meta name="twitter:card" content="summary_large_image">
 
-  <!-- Tell the UA we support both; tint the URL bar -->
+  <!-- Theme colors -->
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
@@ -51,138 +50,51 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="nav"></div>
-  <script>
-    (async () => {
-      const mount = document.getElementById("nav");
-      const html = await fetch("/nav.html").then(r => r.text());
-      mount.innerHTML = html;
+  <!-- No top navigation on purpose -->
 
-      // init hamburger + active link
-      const nav = mount.querySelector(".site-nav");
-      const btn = nav.querySelector(".burger");
-      const list = nav.querySelector("#nav-links");
-      const mq = window.matchMedia("(max-width: 768px)");
-
-      const here = location.pathname.replace(/index\.html$/, "/");
-      nav.querySelectorAll(".links a").forEach(a => {
-        const href = a.getAttribute("href");
-        if (href === here) a.classList.add("active");
-      });
-
-      const setState = () => {
-        const mobile = mq.matches;
-        if (list) list.hidden = mobile;
-        if (btn) btn.setAttribute("aria-expanded", (!mobile).toString());
-      };
-      setState();
-
-      btn?.addEventListener("click", () => {
-        const expanded = btn.getAttribute("aria-expanded") === "true";
-        btn.setAttribute("aria-expanded", (!expanded).toString());
-        list.hidden = expanded;
-      });
-
-      list?.addEventListener("click", e => {
-        if (mq.matches && e.target.tagName === "A") {
-          btn.setAttribute("aria-expanded", "false");
-          list.hidden = true;
-        }
-      });
-
-      mq.addEventListener("change", setState);
-    })();
-  </script>
-
+  <!-- HERO (single fold) -->
   <header class="site">
-    <div class="container hero">
+    <div class="container hero solo">
       <div class="profile">
-        <img src="anton-ko.jpeg" alt="Portrait of Anton Ko" class="avatar" width="160" height="160" loading="eager" decoding="async">
+        <img src="anton-ko.jpeg" alt="Portrait of Anton Korolev" class="avatar" width="160" height="160" loading="eager" decoding="async">
         <div>
-          <h1>Anton Ko</h1>
-          <p class="tagline">Product Manager focused on growth, experiments, and shipping outcomes.</p>
-          <p class="muted">Italy · Open to remote/hybrid across EU</p>
+          <h1>Anton Korolev</h1>
+          <p class="tagline">Product Manager for growth — I design experiments and ship outcomes.</p>
+          <ul class="inline-chips" aria-label="Highlights">
+            <li>+3.6× online growth</li>
+            <li>−25% checkout drop-off</li>
+            <li>EU remote/hybrid</li>
+          </ul>
           <div class="cta">
-            <a class="btn" href="contact.html" aria-label="Contact Anton">Let’s talk</a>
-            <a class="btn alt" href="Anton-Ko-CV.pdf" target="_blank" rel="noopener">Download CV</a>
+            <a class="btn" href="/pro.html" aria-label="View professional profile and case studies">View /pro</a>
+            <a class="btn alt" href="/contact.html" aria-label="Contact Anton Korolev">Contact</a>
           </div>
+          <p class="tiny muted" style="margin-top:10px">CV & full case studies on <a class="link" href="/pro.html">/pro</a>.</p>
         </div>
       </div>
     </div>
   </header>
 
+  <!-- NOW (single compact card) -->
   <main class="container">
-  
-    <!-- HERO stays as in your current file -->
-    <!-- Keep your existing header hero above; no change needed -->
-  
-    <!-- Now (3 bullets) -->
     <section class="card" aria-labelledby="now">
       <h2 id="now">Now</h2>
       <ul class="bullets">
         <li>🎯 Exploring remote/hybrid Product Manager roles across EU</li>
-        <li>📈 Running lean experiments and building simple tools to speed decisions</li>
-        <li>🏐 Living in Northern Italy; async-friendly, distributed teams</li>
+        <li>📈 Running lean experiments + decision tools</li>
+        <li>🗂️ For recruiters: CV + cases → <a class="link" href="/pro.html">/pro</a></li>
       </ul>
     </section>
-  
-    <!-- One case study teaser -->
-    <section class="card" aria-labelledby="case-teaser">
-      <div class="flexhead">
-        <h2 id="case-teaser">Recent Work</h2>
-        <a class="mini" href="/pro.html">See details →</a>
-      </div>
-      <article class="case-grid">
-        <div class="case">
-          <h3>E-commerce relaunch for premium retail</h3>
-          <p class="muted">Context → Actions → Outcome</p>
-          <ul class="bullets">
-            <li>Checkout drop-off ↓ <strong>XX%</strong></li>
-            <li>Time-to-ship ↓ <strong>YY%</strong></li>
-            <li>Organic traffic ↑ <strong>ZZ%</strong> (6 months)</li>
-          </ul>
-          <a class="link" href="/pro.html#ecommerce">Read more on /pro →</a>
-        </div>
-      </article>
-    </section>
-  
-    <!-- Profiles & CTAs -->
-    <section class="card" aria-labelledby="connect">
-      <h2 id="connect">Let’s connect</h2>
-      <p class="muted">Best via LinkedIn or email. Full details and case studies live at <a class="link" href="/pro.html">antonko.com/pro</a>.</p>
-      <p class="cta">
-        <a class="btn" href="/contact.html">Contact</a>
-        <a class="btn alt" href="/Anton-Ko-CV.pdf" target="_blank" rel="noopener">Download CV</a>
-        <a class="btn alt" href="/pro.html">View /pro</a>
-      </p>
-      <div class="chips" style="margin-top:8px">
-        <a class="chip" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener">LinkedIn</a>
-        <a class="chip" href="https://github.com/KaratePanther" target="_blank" rel="noopener">GitHub</a>
-        <a class="chip" href="/socials">Socials & Labs</a>
-        <span id="email-slot"></span>
-        <script>
-          (function(){
-            var u='antonko.hq', d='gmail.com';
-            var a=document.createElement('a');
-            a.className='chip';
-            a.href='mailto:'+u+'@'+d;
-            a.textContent='✉️ Email';
-            a.rel='noopener noreferrer';
-            document.getElementById('email-slot').appendChild(a);
-          })();
-        </script>
-      </div>
-    </section>
-  
   </main>
 
+  <!-- FOOTER (minimal) -->
   <footer class="container footer">
     <div class="footwrap">
-      <small>© <span id="y"></span> Anton Ko · Northern Italy</small>
+      <small>© <span id="y"></span> Anton Korolev · Northern Italy</small>
       <nav class="footnav">
+        <a href="/pro.html">Pro</a>
+        <a href="/contact.html">Contact</a>
         <a href="/about.html">About</a>
-        <a href="/cases.html">Case Studies</a>
-        <a href="/socials">Socials</a>
       </nav>
     </div>
     <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
