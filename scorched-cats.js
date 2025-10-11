@@ -405,11 +405,18 @@ function toast(msg){
 function openMenu(open){
   menuPanel.style.display = open ? 'block' : 'none';
   menuBtn.setAttribute('aria-expanded', open? 'true':'false');
-  // Pause timer while menu open
+
   if (open && timerRunning) pauseTimer();
   if (!open && turnTimerMs>0 && allowInput) resumeTimer();
-  // Hide joystick when menu open
-  if (open) hideJoystick();
+
+  if (open) {
+    hideJoystick();      // always hide while menu is open
+  } else {
+    // menu just closed → reflect Movement option
+    if (isTouch) {
+      if (movementOn) showJoystick(); else hideJoystick();
+    }
+  }
 }
 menuBtn.addEventListener('click', ()=> openMenu(menuPanel.style.display!=='block'));
 closeMenu.addEventListener('click', ()=> openMenu(false));
@@ -418,6 +425,17 @@ startBtn.addEventListener('click', ()=>{
   mapSeed = (seedTxt.value.trim() || mapSeed || Math.random().toString(36).slice(2,8));
   resetGame(false);   // use current previewed map
   openMenu(false);
+});
+// Live-toggle movement + joystick from the menu
+moveSel.addEventListener('change', () => {
+// Re-read all menu settings so movementOn and timer reflect the UI
+  readMenuSettings();
+
+// If menu is currently open, we still show/hide the joystick immediately,
+// so when you close the menu it's already correct.
+  if (isTouch) {
+    if (movementOn) showJoystick(); else hideJoystick();
+  }
 });
 
 mini.addEventListener('pointerdown', onMiniLongPressStart);
@@ -886,6 +904,11 @@ document.addEventListener('keydown', (e)=>{
     rel += (e.code==='ArrowUp' ? +step : -step);
     setRelativeAngle(p, rel);
     return;
+  }
+
+  // Prevent browser default for left/right when movement is enabled (some browsers still try to scroll)
+  if (movementOn && (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'KeyA' || e.code === 'KeyD')) {
+  e.preventDefault();
   }
 
   // Movement / jumping (only if enabled & allowed & timer state)
