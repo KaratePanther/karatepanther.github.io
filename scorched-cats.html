@@ -1,34 +1,44 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Arcade+ — Scorched Cats</title>
-  <link rel="stylesheet" href="scorched-cats.css">
-  <meta name="description" content="Two-player artillery game with wind, terrain destruction, movement & a turn timer." />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="scorched-cats.css" />
+
+  <!-- Game logic (you’ll add this next) -->
+  <script src="scorched-cats.js" defer></script>
 </head>
 <body>
-  <!-- Rotate overlay for portrait -->
-  <div class="rotate"><div class="box">
-    <div class="rot-title">Please rotate your device</div>
-    <div class="small">This game is best experienced in landscape.</div>
-  </div></div>
+  <!-- Rotate overlay when device is vertical -->
+  <div class="rotate" id="rotateOverlay" aria-hidden="true">
+    <div class="box">
+      <div class="title">Please rotate your device</div>
+      <div class="small">This game is best experienced in landscape.</div>
+    </div>
+  </div>
 
+  <!-- Stage -->
   <div class="stage-wrap">
     <div class="stage" id="stage">
-      <canvas id="c" width="900" height="520"></canvas>
+      <canvas id="c" width="900" height="520" aria-label="Scorched Cats game canvas"></canvas>
 
       <!-- HUD -->
-      <div class="hud" id="hud">
-        <!-- Top bar: Menu • Turn • Wind • Timer -->
+      <div class="hud" id="hud" aria-live="polite">
+        <!-- Top bar: Menu • Turn • Timer • Wind -->
         <div class="topbar">
           <div class="left">
-            <button id="menuBtn" class="btn btn-small">Menu</button>
+            <button id="menuBtn" class="btn top-btn" aria-controls="menuPanel" aria-expanded="false">Menu</button>
           </div>
+
           <div class="mid">
             <span class="chip">Turn: <strong id="turn">P1</strong></span>
-            <span id="timerChip" class="chip chip-timer" style="display:none">⏱ 30s</span>
+            <!-- Countdown chip (hidden when Turn timer = Off) -->
+            <span id="timerChip" class="chip timer" aria-hidden="true" title="Time remaining">⏱ <b id="timerVal">30s</b></span>
           </div>
+
           <div class="right">
             <div class="small" id="windLabel">Wind</div>
             <div class="meter" title="Wind: left ⟵ 0 ⟶ right">
@@ -42,128 +52,163 @@
 
         <!-- Bottom Dock -->
         <div class="dock">
-          <div class="weap-wrap">
+          <!-- Weapon picker -->
+          <div style="position:relative">
             <div id="weaponBadge" class="weaponBadge" aria-haspopup="true" aria-expanded="false">
-              <span id="weaponEmoji">🚀</span><span id="weaponName">Bazooka</span>
-              <span id="weaponMeta" class="small"></span><span>⌄</span>
+              <span id="weaponEmoji">🚀</span>
+              <span id="weaponName">Bazooka</span>
+              <span id="weaponMeta" class="small"></span>
+              <span aria-hidden="true">⌄</span>
             </div>
+
             <div id="weaponMenu" class="weaponMenu" role="menu" aria-label="Select weapon">
-              <div class="opt active" data-w="normal"><span>🚀 Bazooka</span><span class="ammoPips" id="pipNormal">∞</span></div>
-              <div class="opt" data-w="grenade"><span>💣 Grenade <span id="fuseMini" class="small">⏱5s</span></span><span class="ammoPips" id="pipGrenade">x5</span></div>
-              <div class="opt" data-w="shotgun"><span>🔫 Shotgun</span><span class="ammoPips" id="pipShotgun">x5</span></div>
-              <div class="opt" data-w="teleport"><span>🌀 Teleport</span><span class="ammoPips" id="pipTeleport">x1</span></div>
+              <div class="opt active" data-w="normal">
+                <span>🚀 Bazooka</span><span class="ammoPips" id="pipNormal">∞</span>
+              </div>
+              <div class="opt" data-w="grenade">
+                <span>💣 Grenade <span id="fuseMini" class="fuseChip" role="button" aria-label="Change grenade fuse">⏱5s</span></span>
+                <span class="ammoPips" id="pipGrenade">x5</span>
+              </div>
+              <div class="opt" data-w="shotgun">
+                <span>🔫 Shotgun</span><span class="ammoPips" id="pipShotgun">x5</span>
+              </div>
+              <div class="opt" data-w="teleport">
+                <span>🌀 Teleport</span><span class="ammoPips" id="pipTeleport">x1</span>
+              </div>
             </div>
           </div>
 
+          <!-- Fire -->
           <div class="fireWrap">
-            <button id="fire" class="btn fireBtn">HOLD TO FIRE 🔥</button>
-            <div id="chargeBar" class="chargeBar"></div>
+            <button id="fire" class="btn fireBtn" aria-label="Hold to charge, release to fire">HOLD TO FIRE 🔥</button>
+            <div id="chargeBar" class="chargeBar" aria-hidden="true"></div>
           </div>
 
-          <div class="zoomRow">
-            <button id="zoomIn" class="btn" title="Zoom In">＋</button>
-            <button id="zoomOut" class="btn" title="Zoom Out">－</button>
+          <!-- Zoom -->
+          <div class="zoomRow" role="group" aria-label="Zoom controls">
+            <button id="zoomIn" class="btn" title="Zoom In" aria-label="Zoom in">＋</button>
+            <button id="zoomOut" class="btn" title="Zoom Out" aria-label="Zoom out">－</button>
           </div>
         </div>
 
-        <!-- Keyboard help -->
-        <div id="kbHelp" class="chip small kb-help">⌨︎ ←/→ walk · ←+↑ / →+↑ hop · ↑/↓ aim · Space fire · Q/E weapons</div>
+        <!-- Keyboard help (desktop only) -->
+        <div id="kbHelp" class="chip small kbhelp" aria-hidden="true">
+          ⌨︎ ←/→ walk (if enabled) · ↑/↓ aim · Space fire · Q/E weapons
+        </div>
       </div>
 
-      <!-- Menu Panel (scrolls internally if needed) -->
-      <div class="menuPanel" id="menuPanel">
+      <!-- Movement joystick (mobile/touch only; shown by JS when enabled) -->
+      <div id="joystick" class="joystick" aria-hidden="true">
+        <div class="ring"></div>
+        <div class="stick"></div>
+      </div>
+
+      <!-- Menu Panel (scrolls internally on small screens) -->
+      <div class="menuPanel" id="menuPanel" role="dialog" aria-modal="true" aria-label="Game menu">
         <div class="menuGrid">
           <div>
-            <div class="menuRow"><span>Mode</span>
-              <select id="modeSel" class="sel">
+            <div class="menuRow">
+              <span>Mode</span>
+              <select id="modeSel" class="sel" aria-label="Game mode">
                 <option value="pvp">🧍‍♂️ Player vs Player</option>
                 <option value="pvc">🤖 Player vs Computer</option>
               </select>
             </div>
-            <div class="menuRow"><span>Difficulty</span>
-              <select id="diffSel" class="sel">
-                <option>Easy</option><option selected>Medium</option><option>Hard</option>
-              </select>
-            </div>
-            <div class="menuRow"><span>Wind</span>
-              <select id="windSel" class="sel">
-                <option>Off</option><option>Low</option><option selected>Normal</option><option>High</option>
+
+            <div class="menuRow">
+              <span>Difficulty</span>
+              <select id="diffSel" class="sel" aria-label="CPU difficulty">
+                <option>Easy</option>
+                <option selected>Medium</option>
+                <option>Hard</option>
               </select>
             </div>
 
-            <div class="menuRow"><span>Turn timer</span>
-              <select id="turnTimerSel" class="sel">
+            <div class="menuRow">
+              <span>Wind</span>
+              <select id="windSel" class="sel" aria-label="Wind strength">
+                <option>Off</option>
+                <option>Low</option>
+                <option selected>Normal</option>
+                <option>High</option>
+              </select>
+            </div>
+
+            <div class="menuRow">
+              <span>Turn timer</span>
+              <select id="timerSel" class="sel" aria-label="Turn timer">
                 <option value="off">Off</option>
-                <option value="30" selected>30 s</option>
-                <option value="60">60 s</option>
-                <option value="90">90 s</option>
+                <option value="30" selected>30s</option>
+                <option value="60">60s</option>
+                <option value="90">90s</option>
               </select>
             </div>
 
-            <div class="menuRow"><span>Movement controls</span>
-              <select id="moveSel" class="sel">
+            <div class="menuRow">
+              <span>Movement controls</span>
+              <select id="moveSel" class="sel" aria-label="Movement controls">
                 <option value="off" selected>Off</option>
                 <option value="on">On</option>
               </select>
             </div>
 
-            <div class="menuRow"><span>Fall damage</span>
+            <div class="menuRow">
+              <span>Fall damage</span>
               <label><input id="fallChk" class="chk" type="checkbox" checked> On</label>
             </div>
-            <div class="menuRow"><span>Ammo limits</span>
+
+            <div class="menuRow">
+              <span>Ammo limits</span>
               <label><input id="ammoChk" class="chk" type="checkbox" checked> On</label>
             </div>
 
-            <div class="menuRow"><span>Weapons</span>
+            <div class="menuRow">
+              <span>Weapons</span>
               <div>
-                <label class="mr8"><input id="wShotgun" class="chk" type="checkbox" checked> 🔫</label>
-                <label class="mr8"><input id="wGrenade" class="chk" type="checkbox" checked> 💣</label>
+                <label style="margin-right:8px"><input id="wShotgun" class="chk" type="checkbox" checked> 🔫</label>
+                <label style="margin-right:8px"><input id="wGrenade" class="chk" type="checkbox" checked> 💣</label>
                 <label><input id="wTeleport" class="chk" type="checkbox" checked> 🌀</label>
               </div>
             </div>
-            <div class="menuRow"><span>Map seed</span>
-              <input id="seedTxt" class="txt" placeholder="random" maxlength="12" />
+
+            <div class="menuRow">
+              <span>Map seed</span>
+              <input id="seedTxt" class="txt" placeholder="random" maxlength="12" aria-label="Map seed" />
             </div>
           </div>
 
           <div>
             <div class="small">Map preview</div>
-            <div class="miniPreview"><canvas id="mini" width="160" height="92"></canvas></div>
+            <div class="miniPreview"><canvas id="mini" width="160" height="92" aria-label="Mini map preview"></canvas></div>
+            <div class="miniBar">
+              <button id="newMapBtn" class="miniBtn">🔁 New Map</button>
+            </div>
           </div>
         </div>
 
         <div class="menuActions">
           <button id="startBtn" class="btn">▶ Start Match</button>
-          <button id="newMapBtn" class="btn btn-alt">🔁 New Map</button>
-          <button id="closeMenu" class="btn btn-ghost">Close</button>
+          <button id="closeMenu" class="btn ghost">Close</button>
         </div>
       </div>
 
       <!-- Winner banner -->
-      <div class="banner" id="banner">
+      <div class="banner" id="banner" aria-live="polite" aria-hidden="true">
         <div class="card">
-          <div id="winTxt" class="win-title">P1 wins 🎉</div>
+          <div id="winTxt" class="winTxt">P1 wins 🎉</div>
           <div class="stats" id="statsTxt">Shots: 0 · Accuracy: 0% · Biggest hit: 0</div>
-          <div>
+          <div class="actions">
             <button id="rematchBtn" class="btn">Rematch</button>
-            <button id="newMapBannerBtn" class="btn btn-alt">New Map</button>
-            <button id="openMenuBtn" class="btn btn-ghost">Menu</button>
+            <button id="newMapBannerBtn" class="btn alt">New Map</button>
+            <button id="openMenuBtn" class="btn ghost">Menu</button>
           </div>
         </div>
       </div>
 
-      <!-- Nameplates -->
-      <div id="np1" class="nameplate">P1 — 100%</div>
-      <div id="np2" class="nameplate">P2 — 100%</div>
-
-      <!-- Mobile joystick (only shown when Movement=On and touch device) -->
-      <div id="joy" class="joy" aria-hidden="true">
-        <div class="joy-base"></div>
-        <div class="joy-knob"></div>
-      </div>
+      <!-- Nameplates (positioned via JS) -->
+      <div id="np1" class="nameplate" aria-hidden="true">P1 — 100%</div>
+      <div id="np2" class="nameplate" aria-hidden="true">P2 — 100%</div>
     </div>
   </div>
-
-  <script src="scorched-cats.js" defer></script>
 </body>
 </html>
