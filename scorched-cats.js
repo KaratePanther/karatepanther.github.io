@@ -66,6 +66,11 @@ const diffSel   = document.getElementById('diffSel');
 const windSel   = document.getElementById('windSel');
 const timerSel  = document.getElementById('timerSel');
 const moveSel   = document.getElementById('moveSel');
+// Live-toggle movement + joystick when menu option changes
+moveSel.addEventListener('change', () => {
+  movementOn = (moveSel.value === 'on');
+  if (isTouch && movementOn) showJoystick(); else hideJoystick();
+});
 const fallChk   = document.getElementById('fallChk');
 const ammoChk   = document.getElementById('ammoChk');
 const wShotgun  = document.getElementById('wShotgun');
@@ -861,6 +866,12 @@ function menuOpen(){
 
 document.addEventListener('keydown', (e)=>{
   if (menuOpen()) return;
+  // --- NEW: Space to start charging ---
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!shot && allowInput && !placingTeleport) startCharge();
+    return;
+  }
 
   // Weapons cycle
   if (e.key==='q' || e.key==='Q'){ e.preventDefault(); cycleWeapon(-1); return; }
@@ -895,9 +906,13 @@ document.addEventListener('keydown', (e)=>{
 });
 
 document.addEventListener('keyup', (e)=>{
-  keys[e.code] = false;
-  if (e.code==='Space'){
+  keys[e.code] = false; 
+  
+  // --- NEW: Space to release fire ---
+  if (e.code === 'Space') {
     e.preventDefault();
+    endChargeAndFire();
+    return;
   }
 });
 
