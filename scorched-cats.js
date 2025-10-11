@@ -1103,13 +1103,22 @@ function stepPlayers(){
         }
       }
     } else {
-      // slope settle
+      // --- ON GROUND: apply horizontal motion, slope settle, then friction ---
+    
+      // Follow gentle slope so the cat doesn't float above terrain
       const xl = Math.max(0, p.x-2|0), xr=Math.min(W-1, p.x+2|0);
-      const sl = groundYAt(xl), sr=groundYAt(xr);
-      const slope = (sr-sl)/4;
-      if (Math.abs(slope)>0.5){ p.x += slope*0.25; }
-      p.vx*=MOVE.friction; p.vy=0;
-
+      const sl = groundYAt(xl),        sr = groundYAt(xr);
+      const slope = (sr - sl) / 4;
+      if (Math.abs(slope) > 0.5) { p.x += slope * 0.25; }
+    
+      // ✅ Move horizontally while grounded (this line was missing before)
+      p.x += p.vx;
+    
+      // Ground friction & zero vertical velocity
+      p.vx *= MOVE.friction;
+      p.vy = 0;
+    
+      // Remember last time we were grounded (for coyote-time jumps)
       lastGroundedAt[i] = now();
     }
 
