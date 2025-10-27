@@ -149,9 +149,9 @@
 
     const base = Math.min(state.w, state.h);
     const puckR = Math.round(base * 0.015);
-    const malletR = Math.round(base * 0.033);
+    const malletR = Math.round(base * 0.048);
     state.puck.r = Math.max(10, puckR);
-    state.A.r = state.B.r = Math.max(20, malletR);
+    state.A.r = state.B.r = Math.max(28, malletR);
 
     centerFaceoff(true);
   }
@@ -180,11 +180,14 @@
     }
   }, {passive:false});
   canvas.addEventListener('touchmove', e=>{
+    let reassigned = false;
     for (const t of e.changedTouches) {
       if (touches.has(t.identifier)) {
         touches.set(t.identifier, clientToCanvas(t.clientX, t.clientY));
+        reassigned = true;
       }
     }
+    if (reassigned) assignTouchToPlayers();
     e.preventDefault();
   }, {passive:false});
   canvas.addEventListener('touchend', e=>{
