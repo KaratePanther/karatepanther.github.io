@@ -144,7 +144,16 @@ canvas{display:block; touch-action:manipulation}
 label{ cursor:pointer; }
 .miniPreview{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#0b1020}
 .miniBar{display:flex; gap:8px; margin-top:8px; align-items:center}
-.miniBtn{padding:6px 10px; border:1px solid var(--line); background:#141c3a; border-radius:8px; cursor:pointer}
+.miniBtn{
+  padding:6px 12px;
+  border:1px solid rgba(110,168,254,.65);
+  background:linear-gradient(135deg,#6ea8fe,#99bcff);
+  color:#07111f;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:700;
+  box-shadow:0 4px 14px rgba(110,168,254,.32);
+}
 .menuActions{display:flex; gap:10px; justify-content:flex-end; margin-top:12px}
 
 /* Winner banner */

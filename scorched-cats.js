@@ -233,7 +233,25 @@ function placePlayers(){
 }
 
 // Helpers
-function groundYAt(x){ x=Math.max(0,Math.min(W-1,x|0)); return heightmap[x]; }
+function groundYAt(x, hintY){
+  x = Math.max(0, Math.min(W-1, x|0));
+  if (hintY === undefined) return heightmap[x];
+
+  let y = Math.max(0, Math.min(H-1, Math.floor(hintY)));
+  const idx = y*W + x;
+  if (terrainMask[idx] === SOLID){
+    while (y>0 && terrainMask[(y-1)*W + x] === SOLID) y--;
+    return y;
+  } else {
+    while (y < H && terrainMask[y*W + x] !== SOLID) y++;
+    return y < H ? y : H;
+  }
+}
+function isSolidAt(x, y){
+  const xi = Math.max(0, Math.min(W-1, Math.floor(x)));
+  const yi = Math.max(0, Math.min(H-1, Math.floor(y)));
+  return terrainMask[yi*W + xi] === SOLID;
+}
 
 // ===================
 // = Game State     =
@@ -535,7 +553,7 @@ fuseMini.addEventListener('click',(e)=>{
 // Fire/charge
 let charging=false, chargePower=1, chargeInterval=null;
 function startCharge(){
-  if (!allowInput || shot || placingTeleport) return;
+  if (!allowInput || shot || placingTeleport || charging) return;
   if (weapon==='shotgun'){ launchShot(60); return; }
   charging=true; chargePower=1; startChargeSound(); chargeBar.style.width='0%';
   chargeInterval = setInterval(()=>{
@@ -618,8 +636,10 @@ function endShot(){
 
     // Prep next turn timer & inputs
     resetTurnTimer();
-    allowInput = true;
-    fireBtn.disabled = placingTeleport ? true : false;
+
+    const playerTurn = !aiEnabled || turn === 0;
+    allowInput = playerTurn;
+    fireBtn.disabled = playerTurn ? !!placingTeleport : true;
 
     if (aiEnabled && turn===1) setTimeout(aiPlay, 650);
   }
@@ -897,6 +917,16 @@ document.addEventListener('keydown', (e)=>{
 
   // Aiming
   if (e.code==='ArrowUp' || e.code==='ArrowDown'){
+    if (movementOn && allowInput && e.code==='ArrowUp'){
+      const left  = keys['ArrowLeft'] || keys['KeyA'];
+      const right = keys['ArrowRight'] || keys['KeyD'];
+      if (left || right){
+        e.preventDefault();
+        keys[e.code] = true;
+        queueJump(turn, right ? +1 : -1);
+        return;
+      }
+    }
     e.preventDefault();
     const step = e.shiftKey ? 5 : 2;
     const p = players[turn];
@@ -1047,22 +1077,17 @@ function queueJump(i, dir){
   const sinceGround = t - lastGroundedAt[i];
   const sinceJump   = t - lastJumpAt[i];
 
-  // cooldown
+  if (!grounded && sinceGround > MOVE.coyoteMs) return;
   if (sinceJump < MOVE.jumpCooldown) return;
 
-  const buffered = (t - (lastJumpPressedAt[i]||-9999)) <= MOVE.bufferMs;
-  const canCoyote = sinceGround <= MOVE.coyoteMs;
-
-  if (grounded || canCoyote || buffered){
-    // execute jump
-    p.vy = MOVE.jumpVy;
-    if (dir!==0){ p.vx += dir * MOVE.hopBoost; }
-    lastJumpAt[i] = t;
-    // tiny sparkle
-    for(let k=0;k<8;k++){
-      const a = Math.random()*Math.PI - Math.PI/2;
-      particles.push({x:p.x, y:p.y+PLAYER_R-2, vx:Math.cos(a)*1.2, vy:Math.sin(a)*1.2-0.6, life:26, smoke:false});
-    }
+  // execute jump
+  p.vy = MOVE.jumpVy;
+  if (dir!==0){ p.vx += dir * MOVE.hopBoost; }
+  lastJumpAt[i] = t;
+  // tiny sparkle
+  for(let k=0;k<8;k++){
+    const a = Math.random()*Math.PI - Math.PI/2;
+    particles.push({x:p.x, y:p.y+PLAYER_R-2, vx:Math.cos(a)*1.2, vy:Math.sin(a)*1.2-0.6, life:26, smoke:false});
   }
 }
 
@@ -1076,15 +1101,42 @@ function stepPlayers(){
     // Apply movement input for current turn player
     if (i===turn) setMoveForTurnPlayer();
 
-    // Physics
-    const onSolid = isGrounded(p);
+    let onSolid = isGrounded(p);
+    if (p.vy < 0) onSolid = false; // let jump impulse lift the cat off the ground
+
     if (!onSolid){
-      p.vy += G; p.y += p.vy; p.x += p.vx;
-      const gy = groundYAt(p.x);
-      if (p.y+PLAYER_R > gy){
-        const over = p.y+PLAYER_R - gy;
+      p.vy += G;
+      p.y += p.vy;
+      p.x += p.vx;
+
+      if (p.vy < 0){
+        let headHit = false;
+        const offsets = [0, -PLAYER_R*0.55, PLAYER_R*0.55];
+        const headY = p.y - PLAYER_R - 1;
+        for (let k=0;k<offsets.length;k++){
+          if (isSolidAt(p.x + offsets[k], headY)){
+            headHit = true; break;
+          }
+        }
+        if (headHit){
+          let iterations = 0;
+          do {
+            p.y += 0.5;
+            iterations++;
+            const newHead = p.y - PLAYER_R - 1;
+            headHit = offsets.some(off => isSolidAt(p.x + off, newHead));
+          } while(headHit && iterations < PLAYER_R*2);
+          p.vy = 0;
+        }
+      }
+
+      const gy = groundYAt(p.x, p.y + PLAYER_R);
+      if (gy < H && p.y + PLAYER_R > gy){
+        const over = p.y + PLAYER_R - gy;
         const prevVy = p.vy;
-        p.y = gy-PLAYER_R; p.vy=0; p.vx*=0.6;
+        p.y = gy - PLAYER_R;
+        p.vy = 0;
+        p.vx *= 0.6;
 
         // landing puff
         if (Math.abs(prevVy) > 1.2){
@@ -1101,23 +1153,33 @@ function stepPlayers(){
             if (dmg>0){ applyDamage(i, dmg, false); floatDmg(p.x, p.y-PLAYER_R-8, -dmg); }
           }
         }
+        lastGroundedAt[i] = now();
       }
     } else {
       // --- ON GROUND: apply horizontal motion, slope settle, then friction ---
-    
-      // Follow gentle slope so the cat doesn't float above terrain
+
+      const gy = groundYAt(p.x, p.y + PLAYER_R + 1);
+      if (gy < H) { p.y = gy - PLAYER_R; }
+
       const xl = Math.max(0, p.x-2|0), xr=Math.min(W-1, p.x+2|0);
-      const sl = groundYAt(xl),        sr = groundYAt(xr);
-      const slope = (sr - sl) / 4;
-      if (Math.abs(slope) > 0.5) { p.x += slope * 0.25; }
-    
-      // ✅ Move horizontally while grounded (this line was missing before)
+      const sl = groundYAt(xl, p.y + PLAYER_R);
+      const sr = groundYAt(xr, p.y + PLAYER_R);
+      if (sl < H && sr < H){
+        const slope = (sr - sl) / 4;
+        if (Math.abs(slope) > 0.5) { p.x += slope * 0.25; }
+      }
+
+      // Move horizontally while grounded
       p.x += p.vx;
-    
+      const gyAfter = groundYAt(p.x, p.y + PLAYER_R + 1);
+      if (gyAfter < H && p.y + PLAYER_R > gyAfter){
+        p.y = gyAfter - PLAYER_R;
+      }
+
       // Ground friction & zero vertical velocity
       p.vx *= MOVE.friction;
       p.vy = 0;
-    
+
       // Remember last time we were grounded (for coyote-time jumps)
       lastGroundedAt[i] = now();
     }
@@ -1136,33 +1198,61 @@ function aiPlay(){
   const me = players[1], you = players[0];
   const dx = you.x - me.x, dy = me.y - you.y;
   const dist = Math.hypot(dx,dy);
-  if (wGrenade.checked && (!ammoChk.checked || me.ammo.grenade>0) && dist>220) weapon='grenade';
-  else if (wShotgun.checked && (!ammoChk.checked || me.ammo.shotgun>0) && dist<220) weapon='shotgun';
-  else weapon='normal';
+  const heightDiff = Math.abs(dy);
+
+  const canGrenade = wGrenade.checked && (!ammoChk.checked || me.ammo.grenade>0);
+  const canShotgun = wShotgun.checked && (!ammoChk.checked || me.ammo.shotgun>0);
+
+  const preferGrenade = canGrenade && dist>220 && dist<520 && heightDiff<180;
+  const preferShotgun = canShotgun && dist<180 && heightDiff<80;
+
+  if (preferShotgun){
+    weapon='shotgun';
+  } else if (preferGrenade){
+    weapon='grenade';
+  } else {
+    weapon='normal';
+  }
   me.lastWeapon = weapon;
 
   const diff = diffSel.value;
-  let angle = me.angle, power = me.lastPower||50;
+  let angle = me.angle;
+  let power = Math.min(95, Math.max(30, me.lastPower||55));
 
   if (diff==='Easy'){
-    angle = 20 + Math.random()*340;
-    power = 30 + Math.random()*60;
-  } else if (diff==='Medium'){
-    const wBias = wind*800;
-    angle = 360*Math.random();
-    power = 40 + Math.random()*50 + (Math.sign(dx)*wBias);
+    angle = 15 + Math.random()*330;
+    power = 30 + Math.random()*55;
   } else {
-    let best = {miss:1e9, angle:45, power:60};
-    for (let a=0;a<360;a+=12){
-      for (let p=30;p<=90;p+=10){
-        const miss = simulateHit(me.x, me.y, a, p, weapon);
-        if (miss<best.miss){ best={miss, angle:a, power:p}; }
+    const coarseStep = (diff==='Medium') ? 8 : 4;
+    const powerStep  = (diff==='Medium') ? 8 : 4;
+    let best = searchShotSolution(me, you, weapon, coarseStep, powerStep);
+
+    if (diff==='Hard' && best.miss<1e8){
+      best = refineShotSolution(me, you, weapon, best, 2, 2);
+    }
+
+    if (!best || !isFinite(best.miss) || best.miss>260){
+      angle = 20 + Math.random()*320;
+      power = 35 + Math.random()*50;
+    } else {
+      angle = best.angle;
+      power = Math.max(28, Math.min(98, best.power));
+      if (weapon==='grenade'){
+        const fuseSeconds = Math.max(1, Math.min(5, Math.round(best.flight/60)));
+        me.fuse = fuseSeconds;
+      }
+      if (diff==='Medium'){
+        angle += (Math.random()*6 - 3);
+        power += (Math.random()*12 - 6);
       }
     }
-    angle = best.angle; power = best.power;
   }
 
-  me.angle = angle|0; me.lastPower = power; updateBadge();
+  angle = ((angle%360)+360)%360;
+  power = Math.max(20, Math.min(100, power));
+  me.angle = Math.round(angle);
+  me.lastPower = power;
+  updateBadge();
 
   if (weapon==='teleport' && wTeleport.checked && (!ammoChk.checked || me.ammo.teleport>0)){
     const tx = (me.x*0.4 + you.x*0.6); const ty = groundYAt(tx)-PLAYER_R-2;
@@ -1170,27 +1260,81 @@ function aiPlay(){
     whoosh(); me.x=tx; me.y=ty; poof(); updateBadge();
     lockInputsForShot(); setTimeout(()=>endShot(),200); return;
   }
-  if (weapon==='shotgun') launchShot(60);
+  if (weapon==='shotgun') launchShot(power);
   else launchShot(power);
 }
 
-function simulateHit(x0,y0, angDeg, power, kind){
-  const opp = players[0];
-  let ang = angDeg*Math.PI/180;
-  let x = x0 + Math.cos(ang)*(PLAYER_R+6);
-  let y = y0 - Math.sin(ang)*(PLAYER_R+6);
+function simulateHit(me, target, angDeg, power, kind){
+  const ang = angDeg * Math.PI / 180;
+  let x = me.x + Math.cos(ang)*(PLAYER_R+6);
+  let y = me.y - Math.sin(ang)*(PLAYER_R+6);
   let vx = Math.cos(ang)*Math.max(1,power)*0.9;
   let vy = -Math.sin(ang)*Math.max(1,power)*0.9;
-  for (let t=0;t<300;t++){
-    if (kind==='grenade'){ vy += G; } else { vx += wind; vy += G; }
+  let bestDist = Infinity;
+  let impactX = x, impactY = y;
+  let flight = 0;
+
+  for (let t=0; t<420; t++){
+    if (kind==='grenade') vy += G;
+    else { vx += wind; vy += G; }
     x += vx; y += vy;
-    if (x<0||x>=W||y<0||y>=H) break;
-    const ix=x|0, iy=y|0;
-    if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID) break;
-    const dx = x-opp.x, dy=y-opp.y;
-    if (dx*dx+dy*dy <= PLAYER_R*PLAYER_R) return 0;
+    flight = t+1;
+
+    if (x<0 || x>=W || y>=H) break;
+
+    const distToTarget = Math.hypot(x-target.x, y-target.y);
+    if (distToTarget < bestDist){
+      bestDist = distToTarget;
+      impactX = x; impactY = y;
+    }
+
+    if (distToTarget <= PLAYER_R*0.9){
+      return {miss:0, flight, impactX:x, impactY:y};
+    }
+
+    const ix = x|0, iy = y|0;
+    if (ix>=0 && ix<W && iy>=0 && iy<H && terrainMask[iy*W+ix]===SOLID){
+      break;
+    }
   }
-  return Math.hypot(x-opp.x,y-opp.y);
+
+  return {miss:bestDist, flight, impactX, impactY};
+}
+
+function searchShotSolution(me, target, weapon, angleStep, powerStep){
+  let best = {miss:1e12, angle:45, power:60, flight:60, score:1e12};
+  const minAngle = 8, maxAngle = 172;
+  const minPower = weapon==='shotgun' ? 35 : 24;
+  const maxPower = 100;
+  for (let ang = minAngle; ang<=maxAngle; ang+=angleStep){
+    for (let pow = minPower; pow<=maxPower; pow+=powerStep){
+      const res = simulateHit(me, target, ang, pow, weapon);
+      const penalty = (weapon==='shotgun' ? pow*0.4 : pow*0.1);
+      const score = res.miss + penalty*0.01;
+      if (score < best.score){
+        best = {...res, angle:ang, power:pow, score};
+      }
+    }
+  }
+  return best;
+}
+
+function refineShotSolution(me, target, weapon, seed, angleStep, powerStep){
+  if (!seed || !isFinite(seed.miss)) return seed;
+  let best = {...seed};
+  for (let ang = seed.angle - angleStep*4; ang <= seed.angle + angleStep*4; ang += angleStep){
+    if (ang<6 || ang>174) continue;
+    for (let pow = seed.power - powerStep*5; pow <= seed.power + powerStep*5; pow += powerStep){
+      if (pow<20 || pow>100) continue;
+      const res = simulateHit(me, target, ang, pow, weapon);
+      const penalty = (weapon==='shotgun' ? pow*0.4 : pow*0.1);
+      const score = res.miss + penalty*0.01;
+      if (score < best.score){
+        best = {...res, angle:ang, power:pow, score};
+      }
+    }
+  }
+  return best;
 }
 
 // =====================
