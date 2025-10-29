@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Castle Clashers</title>
+  <link rel="stylesheet" href="castle-clashers.css" />
+</head>
+<body>
+  <div id="game-root">
+    <canvas id="game" width="540" height="960" aria-label="Game canvas"></canvas>
+
+    <!-- Top (P2) hand -->
+    <div class="hand hand-top" id="handP2" role="group" aria-label="Player 2 hand">
+      <button class="card" data-player="P2" data-card="knight">Knight<br><small>3</small></button>
+      <button class="card" data-player="P2" data-card="archer">Archer<br><small>2</small></button>
+      <button class="card" data-player="P2" data-card="goblin">Goblin<br><small>2</small></button>
+      <button class="card" data-player="P2" data-card="giant">Giant<br><small>5</small></button>
+      <button class="card" data-player="P2" data-card="fireball">Fireball<br><small>4</small></button>
+      <div class="mana" id="manaP2" aria-hidden="true"><div class="fill"></div><span>10</span></div>
+      <div class="hand-status" id="deployStatusP2">Deploy Ready</div>
+      <div class="spell-opts" data-player="P2" hidden>
+        <button class="spell-option" data-player="P2" data-target="left">Left</button>
+        <button class="spell-option" data-player="P2" data-target="king">King</button>
+        <button class="spell-option" data-player="P2" data-target="right">Right</button>
+      </div>
+    </div>
+
+    <!-- Bottom (P1) hand -->
+    <div class="hand hand-bottom" id="handP1" role="group" aria-label="Player 1 hand">
+      <button class="card" data-player="P1" data-card="knight">Knight<br><small>3</small></button>
+      <button class="card" data-player="P1" data-card="archer">Archer<br><small>2</small></button>
+      <button class="card" data-player="P1" data-card="goblin">Goblin<br><small>2</small></button>
+      <button class="card" data-player="P1" data-card="giant">Giant<br><small>5</small></button>
+      <button class="card" data-player="P1" data-card="fireball">Fireball<br><small>4</small></button>
+      <div class="mana" id="manaP1" aria-hidden="true"><div class="fill"></div><span>10</span></div>
+      <div class="hand-status" id="deployStatusP1">Deploy Ready</div>
+      <div class="spell-opts" data-player="P1" hidden>
+        <button class="spell-option" data-player="P1" data-target="left">Left</button>
+        <button class="spell-option" data-player="P1" data-target="king">King</button>
+        <button class="spell-option" data-player="P1" data-target="right">Right</button>
+      </div>
+    </div>
+
+    <!-- Overlay UI -->
+    <div id="hud">
+      <div class="timer"><span id="time">03:00</span></div>
+      <div class="status" id="status">Tap a card, then tap your half to deploy.</div>
+    </div>
+
+    <div id="start-overlay" class="overlay">
+      <div class="panel">
+        <h1>Castle Clashers</h1>
+        <p>Two players on one device. P1 bottom, P2 top.</p>
+        <ul>
+          <li>Tap a card in your hand (cost in corner), then tap your half to place.</li>
+          <li>Units auto-walk to enemy and fight. Towers shoot automatically.</li>
+          <li>Destroy the enemy King to win. Double mana in the last minute.</li>
+        </ul>
+        <button id="startBtn">Both players ready — start</button>
+        <button class="ghost-btn sound-toggle" aria-pressed="false">Sound: Off</button>
+      </div>
+    </div>
+
+    <div id="end-overlay" class="overlay" hidden>
+      <div class="panel">
+        <h2 id="result-title">Game Over</h2>
+        <button id="restartBtn">Play Again</button>
+        <button class="ghost-btn sound-toggle" aria-pressed="false">Sound: Off</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="castle-clashers.js" defer></script>
+</body>
+</html>
