@@ -6,7 +6,10 @@ const cvs = document.getElementById('c');
 const ctx = cvs.getContext('2d', { alpha: true });
 const stage = document.getElementById('stage');
 
-const W = cvs.width, H = cvs.height;
+const BASE_W = cvs.width, BASE_H = cvs.height;
+const BIG_MAP_SCALE = 1.6;
+let worldScale = 1;
+let W = BASE_W, H = BASE_H;
 const SKY = 0, SOLID = 1;
 const PLAYER_R = 16;
 const EXPLOSION_R = 34;
@@ -76,6 +79,10 @@ const ammoChk   = document.getElementById('ammoChk');
 const wShotgun  = document.getElementById('wShotgun');
 const wGrenade  = document.getElementById('wGrenade');
 const wTeleport = document.getElementById('wTeleport');
+const bigMapChk = document.getElementById('bigMapChk');
+const hillyChk = document.getElementById('hillyChk');
+const spawnVarChk = document.getElementById('spawnVarChk');
+const chaosChk  = document.getElementById('chaosChk');
 const seedTxt   = document.getElementById('seedTxt');
 const startBtn  = document.getElementById('startBtn');
 const newMapBtn = document.getElementById('newMapBtn');
@@ -95,6 +102,10 @@ const np2 = document.getElementById('np2');
 
 const timerChip = document.getElementById('timerChip');
 const timerVal  = document.getElementById('timerVal');
+
+bigMapChk.addEventListener('change', () => {
+  resetGame(true);
+});
 
 // Joystick
 const joystick = document.getElementById('joystick');
@@ -175,6 +186,27 @@ const decalCtx = decalCanvas.getContext('2d');
 let terrainMask = new Uint8Array(W*H);
 let heightmap = new Int16Array(W);
 
+function setWorldScale(scale){
+  const target = Math.max(1, scale);
+  if (Math.abs(target - worldScale) < 0.001) return false;
+  worldScale = target;
+  W = Math.round(BASE_W * worldScale);
+  H = Math.round(BASE_H * worldScale);
+
+  cvs.width = W;
+  cvs.height = H;
+  terrCanvas.width = W;
+  terrCanvas.height = H;
+  decalCanvas.width = W;
+  decalCanvas.height = H;
+
+  terrainMask = new Uint8Array(W*H);
+  heightmap = new Int16Array(W);
+
+  fitCanvas();
+  return true;
+}
+
 function generateTerrain(){
   terrCtx.clearRect(0,0,W,H);
   decalCtx.clearRect(0,0,W,H);
@@ -182,14 +214,31 @@ function generateTerrain(){
 
   const base = new Float32Array(W);
   let y = H*0.55 + (rand()*80-40); let dy = 0;
-  for(let x=0;x<W;x++){ dy += (rand()-0.5)*2; dy*=0.95; y += dy; base[x]=y; }
+  const roughAmp = hillierTerrainOn ? 2.8 : 2.3;
+  const roughDamp = hillierTerrainOn ? 0.9 : 0.93;
+  for(let x=0;x<W;x++){
+    dy += (rand()-0.5)*roughAmp;
+    dy*=roughDamp;
+    y += dy;
+    base[x]=y;
+  }
   const smooth = new Float32Array(W);
-  const K=14; let acc=0;
+  const K = hillierTerrainOn ? 9 : 12;
+  let acc=0;
   for(let x=0;x<W+K;x++){ if(x<W) acc+=base[x]; if(x>=K) acc-=base[x-K];
     if(x>=K-1) smooth[x-(K-1)] = acc/Math.min(x+1,K,W);
   }
   for(let x=0;x<W;x++){
-    let yy = smooth[x] + Math.sin(x*0.01)*14 + Math.sin(x*0.053)*8;
+    let yy = smooth[x]
+      + Math.sin(x*0.01)  * (hillierTerrainOn ? 28 : 18)
+      + Math.sin(x*0.053) * (hillierTerrainOn ? 14 : 10)
+      + Math.sin(x*0.018) * (hillierTerrainOn ? 10 : 6);
+    if (hillierTerrainOn){
+      yy += Math.sin(x*0.025) * 22;
+      yy += Math.sin(x*0.18)  * 8;
+    } else {
+      yy += Math.sin(x*0.11) * 4;
+    }
     yy = Math.max(H*0.35, Math.min(H*0.85, yy));
     heightmap[x] = Math.floor(yy);
   }
@@ -202,6 +251,9 @@ function generateTerrain(){
     }
   }
   terrCtx.putImageData(img,0,0);
+
+  if (scatterDebrisOn) applyChaosTerrain();
+
   terrCtx.strokeStyle = '#2ecc71'; terrCtx.lineWidth=2; terrCtx.beginPath();
   for(let x=0;x<W;x++) terrCtx.lineTo(x+0.5, heightmap[x]-1.5);
   terrCtx.stroke();
@@ -211,25 +263,121 @@ function generateTerrain(){
   drawMiniPreview();
 }
 
+function applyChaosTerrain(){
+  const craterCount = 1 + Math.floor(rand()*3); // 1-3 surface gouges
+  for(let i=0;i<craterCount;i++){
+    const radius = 18 + rand()*26;
+    const x = Math.floor(60 + rand()*(W-120));
+    const surface = heightmap[Math.max(0, Math.min(W-1, x))];
+    const cy = Math.max(radius*0.4, Math.min(H-4, surface - radius*0.45 + rand()*10));
+    carveCrater(x, cy, radius);
+  }
+
+  const blobCount = 2 + Math.floor(rand()*3); // 2-4 airborne dirt blobs
+  for(let i=0;i<blobCount;i++){
+    const radius = 14 + rand()*18;
+    const x = Math.floor(80 + rand()*(W-160));
+    const base = heightmap[Math.max(0, Math.min(W-1, x))];
+    const cy = Math.max(radius+6, base - 36 - rand()*110);
+    addFloatingBlob(x, cy, radius);
+  }
+}
+
 function placePlayers(){
-  function findSurfaceX(x0,x1){
+  function findSurfaceX(x0,x1, preference){
+    const min = Math.floor(Math.min(x0, x1));
+    const max = Math.floor(Math.max(x0, x1));
+    const span = Math.max(1, max - min);
+    let best = null;
     for(let tries=0;tries<500;tries++){
-      const x = Math.floor(x0 + rand()*(x1-x0));
-      const y = heightmap[x]-PLAYER_R;
+      const x = min + Math.floor(rand()*span);
+      const y = heightmap[Math.max(0, Math.min(W-1, x))] - PLAYER_R;
       if (y>0 && y<H-PLAYER_R){
         const left = heightmap[Math.max(0,x-6)];
         const right= heightmap[Math.min(W-1,x+6)];
-        if (Math.abs(left-right) < 20) return {x,y};
+        if (Math.abs(left-right) < 20){
+          if (!preference) return {x,y};
+          if (!best ||
+             (preference==='high' && y < best.y) ||
+             (preference==='low'  && y > best.y)){
+            best = {x,y};
+          }
+        }
       }
     }
-    return {x:Math.floor((x0+x1)/2), y:heightmap[Math.floor((x0+x1)/2)]-PLAYER_R};
+    if (best) return best;
+    const mid = Math.floor((min+max)/2);
+    return {x:mid, y:heightmap[Math.max(0, Math.min(W-1, mid))]-PLAYER_R};
   }
-  const a=findSurfaceX(40, W/2-80);
-  const b=findSurfaceX(W/2+80, W-40);
-  const placeB = (Math.abs(b.x - a.x) < 220) ? findSurfaceX(W-200, W-40) : b;
 
-  Object.assign(players[0], {x:a.x, y:a.y, vx:0, vy:0, facing:1, angle:45});
-  Object.assign(players[1], {x:placeB.x, y:placeB.y, vx:0, vy:0, facing:-1, angle:135});
+  const leftPref = varySpawnHeights ? 'high' : null;
+  const rightPref = varySpawnHeights ? 'low' : null;
+
+  let leftSpawn = findSurfaceX(40, W/2-80, leftPref);
+  let rightSpawn = findSurfaceX(W/2+80, W-40, rightPref);
+
+  if (Math.abs(rightSpawn.x - leftSpawn.x) < 220){
+    rightSpawn = findSurfaceX(W-200, W-40, rightPref);
+  }
+
+  if (varySpawnHeights){
+    const leftOptions = [
+      leftSpawn,
+      findSurfaceX(40, W/2-120, 'high'),
+      findSurfaceX(60, W/2-100, 'high'),
+    ];
+    const rightOptions = [
+      rightSpawn,
+      findSurfaceX(W-220, W-40, 'low'),
+      findSurfaceX(W/2+80, W-40, 'low'),
+      findSurfaceX(W/2+100, W-70, 'low'),
+    ];
+
+    let bestLeft = leftSpawn;
+    let bestRight = rightSpawn;
+    let bestDelta = Math.abs(rightSpawn.y - leftSpawn.y);
+    const minSep = 200;
+
+    leftOptions.forEach(l=>{
+      rightOptions.forEach(r=>{
+        if (!l || !r) return;
+        if (Math.abs(r.x - l.x) < minSep) return;
+        const delta = Math.abs(r.y - l.y);
+        if (delta > bestDelta + 4){
+          bestDelta = delta;
+          bestLeft = l;
+          bestRight = r;
+        }
+      });
+    });
+
+    if (bestDelta < 45){
+      for(let i=0;i<8;i++){
+        const cand = findSurfaceX(W/2+70, W-40, (i%2===0)?'low':null);
+        if (!cand) continue;
+        if (Math.abs(cand.x - bestLeft.x) < minSep) continue;
+        const delta = Math.abs(cand.y - bestLeft.y);
+        if (delta > bestDelta){
+          bestDelta = delta;
+          bestRight = cand;
+          if (delta >= 60) break;
+        }
+      }
+    }
+
+    leftSpawn = bestLeft;
+    rightSpawn = bestRight;
+  }
+
+  if (Math.abs(rightSpawn.x - leftSpawn.x) < 200){
+    const fallback = findSurfaceX(W-200, W-40, rightPref);
+    if (Math.abs(fallback.x - leftSpawn.x) >= 200){
+      rightSpawn = fallback;
+    }
+  }
+
+  Object.assign(players[0], {x:leftSpawn.x, y:leftSpawn.y, vx:0, vy:0, facing:1, angle:45});
+  Object.assign(players[1], {x:rightSpawn.x, y:rightSpawn.y, vx:0, vy:0, facing:-1, angle:135});
 }
 
 // Helpers
@@ -278,8 +426,14 @@ let dmgNums = [];
 const stats = { shots:[0,0], hits:[0,0], bestHit:[0,0] };
 let placingTeleport = false;
 
+const aiMemory = { lastSolution: null };
+
 // Movement options & state
 let movementOn = false;
+let bigMapOn = false;
+let hillierTerrainOn = false;
+let varySpawnHeights = false;
+let scatterDebrisOn = false;
 const MOVE = {
   accel: 0.06,
   max: 0.8,
@@ -473,7 +627,14 @@ function readMenuSettings(){
   const wv = windSel.value;
   WIND_MAX = (wv==='Off'?0 : wv==='Low'?0.02 : wv==='Normal'?0.05 : 0.09);
 
+  const desiredScale = bigMapChk.checked ? BIG_MAP_SCALE : 1;
+  setWorldScale(desiredScale);
+  bigMapOn = bigMapChk.checked;
+
   movementOn = (moveSel.value==='on');
+  hillierTerrainOn = hillyChk.checked;
+  varySpawnHeights = spawnVarChk.checked;
+  scatterDebrisOn = chaosChk.checked;
 
   const tv = timerSel.value;
   turnTimerMs = (tv==='off') ? 0 : parseInt(tv,10)*1000;
@@ -483,6 +644,7 @@ function pickNewSeedAndPreview(){
   mapSeed = Math.random().toString(36).slice(2,8);
   seedTxt.value = mapSeed;
   srand(mapSeed);
+  readMenuSettings();
   generateTerrain();
   updateAll();
   drawMiniPreview();
@@ -692,6 +854,52 @@ function applySplashDamage(cx,cy,r, excludeIdx = -1){
   }
 }
 
+function addFloatingBlob(cx, cy, r){
+  const minx = Math.max(0, Math.floor(cx - r));
+  const maxx = Math.min(W-1, Math.ceil(cx + r));
+  const miny = Math.max(0, Math.floor(cy - r));
+  const maxy = Math.min(H-1, Math.ceil(cy + r));
+  if (minx>maxx || miny>maxy) return;
+
+  const width = maxx - minx + 1;
+  const height = maxy - miny + 1;
+  const img = terrCtx.getImageData(minx, miny, width, height);
+  const data = img.data;
+  const rr = r*r;
+  for(let y=miny;y<=maxy;y++){
+    for(let x=minx;x<=maxx;x++){
+      const dx = x - cx;
+      const dy = y - cy;
+      if (dx*dx + dy*dy <= rr){
+        const idx = y*W + x;
+        terrainMask[idx] = SOLID;
+        const p = ((y-miny)*width + (x-minx)) * 4;
+        data[p] = 36;
+        data[p+1] = 44;
+        data[p+2] = 72;
+        data[p+3] = 255;
+      }
+    }
+  }
+  terrCtx.putImageData(img, minx, miny);
+
+  for(let x=minx;x<=maxx;x++){
+    let y;
+    for(y=0;y<H;y++){
+      if (terrainMask[y*W + x] === SOLID) break;
+    }
+    heightmap[x] = (y===H) ? H : y;
+  }
+
+  const g = decalCtx.createRadialGradient(cx, cy, 2, cx, cy, r);
+  g.addColorStop(0,'rgba(210,174,110,0.25)');
+  g.addColorStop(1,'rgba(100,86,52,0)');
+  decalCtx.fillStyle = g;
+  decalCtx.beginPath();
+  decalCtx.arc(cx, cy, r, 0, Math.PI*2);
+  decalCtx.fill();
+}
+
 function carveCrater(cx,cy,r=EXPLOSION_R){
   const minx=Math.max(0,Math.floor(cx-r)), maxx=Math.min(W-1,Math.ceil(cx+r));
   const miny=Math.max(0,Math.floor(cy-r)), maxy=Math.min(H-1,Math.ceil(cy+r));
@@ -714,6 +922,49 @@ function carveCrater(cx,cy,r=EXPLOSION_R){
   const g=decalCtx.createRadialGradient(cx,cy,2,cx,cy,r);
   g.addColorStop(0,'rgba(0,0,0,0.28)'); g.addColorStop(1,'rgba(0,0,0,0)');
   decalCtx.fillStyle=g; decalCtx.beginPath(); decalCtx.arc(cx,cy,r,0,Math.PI*2); decalCtx.fill();
+}
+
+function computeShotPlan(me, target, weapon, angleStep, powerStep){
+  let best = searchShotSolution(me, target, weapon, angleStep, powerStep);
+
+  const last = aiMemory.lastSolution;
+  if (last && last.weapon === weapon){
+    const shift = Math.hypot((last.targetX||0) - target.x, (last.targetY||0) - target.y);
+    if (shift < 120){
+      const res = simulateHit(me, target, last.angle, last.power, weapon);
+      if (isFinite(res.miss)){
+        const seed = {
+          miss: res.miss,
+          angle: last.angle,
+          power: last.power,
+          flight: res.flight,
+          score: res.miss,
+        };
+        const stepA = Math.max(2, Math.floor(angleStep/2));
+        const stepP = Math.max(2, Math.floor(powerStep/2));
+        const refineFromLast = refineShotSolution(me, target, weapon, seed, stepA, stepP);
+        if (refineFromLast && (!best || refineFromLast.score < best.score)){
+          best = refineFromLast;
+        }
+      }
+    }
+  }
+
+  if (best && isFinite(best.miss)){
+    const fineA = Math.max(2, Math.floor(angleStep/2));
+    const fineP = Math.max(2, Math.floor(powerStep/2));
+    const fine = refineShotSolution(me, target, weapon, best, fineA, fineP);
+    if (fine && fine.score < best.score){
+      best = fine;
+    }
+  }
+
+  if (best && isFinite(best.miss)){
+    best.weapon = weapon;
+    best.targetX = target.x;
+    best.targetY = target.y;
+  }
+  return best;
 }
 
 // ======================
@@ -1209,37 +1460,70 @@ function aiPlay(){
   const dist = Math.hypot(dx,dy);
   const heightDiff = Math.abs(dy);
 
-  const canGrenade = wGrenade.checked && (!ammoChk.checked || me.ammo.grenade>0);
-  const canShotgun = wShotgun.checked && (!ammoChk.checked || me.ammo.shotgun>0);
-
-  const preferGrenade = canGrenade && dist>220 && dist<520 && heightDiff<180;
-  const preferShotgun = canShotgun && dist<180 && heightDiff<80;
-
-  if (preferShotgun){
-    weapon='shotgun';
-  } else if (preferGrenade){
-    weapon='grenade';
-  } else {
-    weapon='normal';
-  }
-  me.lastWeapon = weapon;
-
   const diff = diffSel.value;
   let angle = me.angle;
   let power = Math.min(95, Math.max(30, me.lastPower||55));
 
+  const canGrenade = wGrenade.checked && (!ammoChk.checked || me.ammo.grenade>0);
+  const canShotgun = wShotgun.checked && (!ammoChk.checked || me.ammo.shotgun>0);
+
+  const windMag = Math.abs(wind);
+  const windRatio = WIND_MAX>0 ? windMag / WIND_MAX : 0;
+  const strongWind = windRatio >= 0.55;
+  const blockedLine = terrainBlocksDirectShot(me, you);
+  const bigHeightGap = heightDiff > 140;
+  const midRange = dist > 210 && dist < 540;
+
+  let grenadeScore = 0;
+  if (strongWind) grenadeScore += 0.45;
+  if (blockedLine) grenadeScore += 0.4;
+  if (bigHeightGap) grenadeScore += 0.25;
+  grenadeScore = Math.min(1, grenadeScore);
+
+  const wantsShotgun = canShotgun && dist<180 && heightDiff<80;
+
   if (diff==='Easy'){
+    weapon = 'normal';
+    me.lastWeapon = weapon;
     angle = 15 + Math.random()*330;
     power = 30 + Math.random()*55;
-  } else {
-    const coarseStep = (diff==='Medium') ? 8 : 4;
-    const powerStep  = (diff==='Medium') ? 8 : 4;
-    let best = searchShotSolution(me, you, weapon, coarseStep, powerStep);
-
-    if (diff==='Hard' && best.miss<1e8){
-      best = refineShotSolution(me, you, weapon, best, 2, 2);
+  } else if (diff==='Medium'){
+    const coarseStep = 8;
+    const powerStep  = 8;
+    let prefersGrenade = false;
+    if (canGrenade && midRange && grenadeScore>0.45){
+      const probeNormal = searchShotSolution(me, you, 'normal', coarseStep, powerStep);
+      const probeGren = searchShotSolution(me, you, 'grenade', coarseStep, powerStep);
+      const normalMiss = probeNormal ? probeNormal.miss : Infinity;
+      const grenadeMiss = probeGren ? probeGren.miss : Infinity;
+      const weighted = grenadeMiss - grenadeScore*60;
+      prefersGrenade = weighted + 10 < normalMiss;
+      if (prefersGrenade && probeGren){
+        weapon='grenade';
+        me.lastWeapon = weapon;
+        let best = refineShotSolution(me, you, weapon, probeGren, 3, 3) || probeGren;
+        if (!best || !isFinite(best.miss) || best.miss>260){
+          angle = 20 + Math.random()*320;
+          power = 35 + Math.random()*50;
+        } else {
+          angle = best.angle + (Math.random()*6 - 3);
+          power = Math.max(28, Math.min(98, best.power + (Math.random()*12 - 6)));
+          const fuseSeconds = Math.max(1, Math.min(5, Math.round(best.flight/60)));
+          me.fuse = fuseSeconds;
+        }
+        angle = ((angle%360)+360)%360;
+        power = Math.max(20, Math.min(100, power));
+        me.angle = Math.round(angle);
+        me.lastPower = power;
+        updateBadge();
+        if (weapon==='shotgun') launchShot(power);
+        else launchShot(power);
+        return;
+      }
     }
-
+    weapon = wantsShotgun ? 'shotgun' : 'normal';
+    me.lastWeapon = weapon;
+    const best = searchShotSolution(me, you, weapon, coarseStep, powerStep);
     if (!best || !isFinite(best.miss) || best.miss>260){
       angle = 20 + Math.random()*320;
       power = 35 + Math.random()*50;
@@ -1250,9 +1534,87 @@ function aiPlay(){
         const fuseSeconds = Math.max(1, Math.min(5, Math.round(best.flight/60)));
         me.fuse = fuseSeconds;
       }
-      if (diff==='Medium'){
-        angle += (Math.random()*6 - 3);
-        power += (Math.random()*12 - 6);
+      angle += (Math.random()*6 - 3);
+      power += (Math.random()*12 - 6);
+    }
+  } else { // Hard
+    const coarseStep = 6;
+    const powerStep  = 5;
+    const normalPlan = computeShotPlan(me, you, 'normal', coarseStep, powerStep);
+    const grenadePlan = canGrenade ? computeShotPlan(me, you, 'grenade', coarseStep, powerStep) : null;
+    const shotgunPlan = wantsShotgun ? computeShotPlan(me, you, 'shotgun', coarseStep, powerStep) : null;
+
+    let chosenWeapon = 'normal';
+    let plan = normalPlan;
+
+    if (wantsShotgun && shotgunPlan && isFinite(shotgunPlan.miss) && shotgunPlan.miss < 110){
+      chosenWeapon = 'shotgun';
+      plan = shotgunPlan;
+    } else {
+      const normalMiss = normalPlan ? normalPlan.miss : Infinity;
+      let weightedNormal = normalMiss;
+      if (!blockedLine) weightedNormal -= 12;
+      if (bigHeightGap) weightedNormal -= 8;
+
+      if (grenadePlan && isFinite(grenadePlan.miss)){
+        let weightedGrenade = grenadePlan.miss - grenadeScore*80;
+        if (me.lastWeapon === 'grenade') weightedGrenade += 18;
+        if (blockedLine) weightedGrenade -= 12;
+        const wantsGrenade = grenadePlan.miss < normalMiss + 45 || (midRange && grenadeScore > 0.4);
+        if (weightedGrenade + 5 < weightedNormal || (wantsGrenade && grenadePlan.miss < normalMiss + 30)){
+          chosenWeapon = 'grenade';
+          plan = grenadePlan;
+        }
+      }
+
+      if (!plan && grenadePlan){
+        chosenWeapon = 'grenade';
+        plan = grenadePlan;
+      }
+      if (!plan && normalPlan){
+        chosenWeapon = 'normal';
+        plan = normalPlan;
+      }
+    }
+
+    weapon = chosenWeapon;
+    me.lastWeapon = weapon;
+
+    if (weapon === 'shotgun'){
+      if (plan && isFinite(plan.miss)){
+        angle = plan.angle;
+        power = Math.max(35, Math.min(90, plan.power));
+      } else {
+        let direct = Math.atan2(me.y - you.y, you.x - me.x);
+        if (direct < 0) direct += Math.PI*2;
+        angle = direct * 180/Math.PI;
+        power = Math.max(32, Math.min(80, dist*0.25 + 30));
+      }
+      aiMemory.lastSolution = null;
+    } else {
+      if (!plan || !isFinite(plan.miss) || plan.miss>300){
+        angle = 20 + Math.random()*320;
+        power = 35 + Math.random()*50;
+        aiMemory.lastSolution = null;
+      } else {
+        const baseAngle = plan.angle;
+        const basePower = Math.max(28, Math.min(98, plan.power));
+        angle = baseAngle + (Math.random()*3 - 1.5);
+        power = basePower + (Math.random()*4 - 2);
+        if (weapon === 'grenade'){
+          const fuseSeconds = Math.max(1, Math.min(5, Math.round(plan.flight/60)));
+          me.fuse = fuseSeconds;
+        }
+        aiMemory.lastSolution = {
+          weapon,
+          angle: baseAngle,
+          power: basePower,
+          miss: plan.miss,
+          score: plan.score,
+          flight: plan.flight,
+          targetX: you.x,
+          targetY: you.y,
+        };
       }
     }
   }
@@ -1271,6 +1633,24 @@ function aiPlay(){
   }
   if (weapon==='shotgun') launchShot(power);
   else launchShot(power);
+}
+
+function terrainBlocksDirectShot(from, to){
+  const left = Math.floor(Math.min(from.x, to.x));
+  const right = Math.ceil(Math.max(from.x, to.x));
+  if (right - left < 12) return false;
+  const dx = to.x - from.x;
+  if (Math.abs(dx) < 1) return false;
+  const slope = (to.y - from.y) / dx;
+  const step = Math.max(1, Math.floor((right - left) / 48));
+  for (let ix = left + 6; ix <= right - 6; ix += step){
+    const lineY = from.y + slope * (ix - from.x);
+    const groundY = heightmap[Math.max(0, Math.min(W-1, ix))];
+    if (groundY < lineY - 10){
+      return true;
+    }
+  }
+  return false;
 }
 
 function simulateHit(me, target, angDeg, power, kind){
@@ -1547,6 +1927,7 @@ function updateAll(){ updateHPPlates(); updateTurnUI(); updateWindUI(); }
 
 function resetGame(newMap){
   readMenuSettings();
+  aiMemory.lastSolution = null;
 
   // Stats reset
   stats.shots=[0,0]; stats.hits=[0,0]; stats.bestHit=[0,0];
