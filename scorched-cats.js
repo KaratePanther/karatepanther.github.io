@@ -520,6 +520,12 @@ function spendAmmo(){
 function openWeaponMenu(open){
   weaponMenu.style.display = open ? 'flex' : 'none';
   weaponBadge.setAttribute('aria-expanded', open?'true':'false');
+  if (!isTouch) return;
+  if (open) {
+    hideJoystick();
+  } else if (movementOn) {
+    showJoystick();
+  }
 }
 weaponBadge.addEventListener('click', (e)=>{
   e.stopPropagation();
@@ -993,7 +999,10 @@ function cycleWeapon(dir){
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints>0;
 if (isTouch) document.body.classList.add('is-touch');
 let joyActive=false, joyCenter={x:0,y:0}, joyVec={x:0,y:0};
-function showJoystick(){ if (!movementOn) return; joystick.classList.remove('hidden'); }
+function showJoystick(){
+  if (!movementOn || !isTouch || menuOpen()) return;
+  joystick.classList.remove('hidden');
+}
 function hideJoystick(){ joystick.classList.add('hidden'); joyActive=false; joyVec={x:0,y:0}; resetStick(); }
 
 function resetStick(){ stick.style.left='50%'; stick.style.top='50%'; }
