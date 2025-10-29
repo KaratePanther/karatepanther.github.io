@@ -46,19 +46,55 @@
     <div id="hud">
       <div class="timer"><span id="time">03:00</span></div>
       <div class="status" id="status">Tap a card, then tap your half to deploy.</div>
+      <button id="pauseBtn" class="hud-btn" aria-label="Pause game">Pause</button>
     </div>
 
     <div id="start-overlay" class="overlay">
-      <div class="panel">
+      <div class="panel menu-panel">
         <h1>Castle Clashers</h1>
-        <p>Two players on one device. P1 bottom, P2 top.</p>
-        <ul>
-          <li>Tap a card in your hand (cost in corner), then tap your half to place.</li>
-          <li>Units auto-walk to enemy and fight. Towers shoot automatically.</li>
-          <li>Destroy the enemy King to win. Double mana in the last minute.</li>
-        </ul>
-        <button id="startBtn">Both players ready — start</button>
-        <button class="ghost-btn sound-toggle" aria-pressed="false">Sound: Off</button>
+        <p class="menu-intro">Choose how you want to clash, then tap Start Match to begin.</p>
+
+        <section class="menu-section" aria-labelledby="modeTitle">
+          <h2 id="modeTitle">Game Mode</h2>
+          <label class="menu-option">
+            <input type="radio" name="mode" value="pvp" />
+            Two Players (same device)
+          </label>
+          <label class="menu-option">
+            <input type="radio" name="mode" value="ai" checked />
+            Player vs Computer
+          </label>
+        </section>
+
+        <section class="menu-section" id="difficultySection" aria-labelledby="difficultyTitle">
+          <h2 id="difficultyTitle">Computer Difficulty</h2>
+          <label class="menu-option">
+            <input type="radio" name="difficulty" value="easy" />
+            Easy — relaxed pacing, cheap units only
+          </label>
+          <label class="menu-option">
+            <input type="radio" name="difficulty" value="medium" checked />
+            Medium — balanced pressure, occasional spells
+          </label>
+          <label class="menu-option">
+            <input type="radio" name="difficulty" value="hard" />
+            Hard — aggressive pushes & smart spell usage
+          </label>
+        </section>
+
+        <section class="menu-section info-section">
+          <h2>How to Play</h2>
+          <ul>
+            <li>P1 bottom, P2 (or Computer) top.</li>
+            <li>Tap a card, then tap your half to deploy. Spells use the preset targets.</li>
+            <li>Units auto-fight. Destroy the enemy King to win. Mana doubles in the last minute.</li>
+          </ul>
+        </section>
+
+        <div class="menu-actions">
+          <button id="startBtn">Start Match</button>
+          <button class="ghost-btn sound-toggle" aria-pressed="false">Sound: Off</button>
+        </div>
       </div>
     </div>
 
@@ -67,6 +103,18 @@
         <h2 id="result-title">Game Over</h2>
         <button id="restartBtn">Play Again</button>
         <button class="ghost-btn sound-toggle" aria-pressed="false">Sound: Off</button>
+        <button class="ghost-btn" id="endMenuBtn">Main Menu</button>
+      </div>
+    </div>
+
+    <div id="pause-overlay" class="overlay" hidden>
+      <div class="panel pause-panel">
+        <h2>Paused</h2>
+        <div class="menu-actions">
+          <button id="resumeBtn">Continue</button>
+          <button id="pauseRestartBtn">Restart</button>
+          <button id="pauseMenuBtn">Main Menu</button>
+        </div>
       </div>
     </div>
   </div>

@@ -17,14 +17,24 @@
 
   const startOverlay = document.getElementById('start-overlay');
   const endOverlay = document.getElementById('end-overlay');
+  const pauseOverlay = document.getElementById('pause-overlay');
   const startBtn = document.getElementById('startBtn');
   const restartBtn = document.getElementById('restartBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const pauseRestartBtn = document.getElementById('pauseRestartBtn');
+  const pauseMenuBtn = document.getElementById('pauseMenuBtn');
+  const endMenuBtn = document.getElementById('endMenuBtn');
   const resultTitle = document.getElementById('result-title');
   const soundToggleButtons = Array.from(document.querySelectorAll('.sound-toggle'));
   const spellOptionContainers = {
     P1: handP1 ? handP1.querySelector('.spell-opts') : null,
     P2: handP2 ? handP2.querySelector('.spell-opts') : null,
   };
+  const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
+  const difficultyInputs = Array.from(document.querySelectorAll('input[name="difficulty"]'));
+  const difficultySection = document.getElementById('difficultySection');
+  if (pauseBtn) pauseBtn.disabled = true;
 
   // ---- Constants ----
   const W = canvas.width;
@@ -84,9 +94,34 @@
     return obj;
   };
 
+  const gameConfig = { mode: 'ai', difficulty: 'medium' };
+  let loopHandle = null;
+
+  function getSelectedMode() {
+    const selected = modeInputs.find(input => input.checked);
+    return selected ? selected.value : 'pvp';
+  }
+
+  function getSelectedDifficulty() {
+    const selected = difficultyInputs.find(input => input.checked);
+    return selected ? selected.value : 'medium';
+  }
+
+  function toggleDifficultySection(mode) {
+    if (!difficultySection) return;
+    const isAi = mode === 'ai';
+    difficultySection.hidden = !isAi;
+    difficultyInputs.forEach(input => {
+      input.disabled = !isAi;
+    });
+  }
+
   const state = {
     timeLeft: MATCH_SECONDS,
-    phase: 'playing', // 'playing' | 'ended'
+    phase: 'menu', // 'menu' | 'playing' | 'paused' | 'ended'
+    mode: 'pvp',
+    difficulty: 'easy',
+    paused: false,
     p1: {
       mana: 5, selected: 'knight',
       cooldowns: makeCooldowns(),
@@ -102,6 +137,7 @@
     effects: [],
     projectiles: [],
     spellQueue: [],
+    ai: null,
     nextId: 1,
     lastTick: performance.now(),
   };
@@ -422,17 +458,56 @@
     });
   });
 
+  modeInputs.forEach(input => {
+    input.addEventListener('change', () => {
+      if (input.checked) toggleDifficultySection(input.value);
+    });
+  });
+  toggleDifficultySection(getSelectedMode());
+
   // Start / restart
   startBtn.addEventListener('click', () => {
-    startOverlay.style.display = 'none';
     audio.unlock();
-    startMatch();
+    const mode = getSelectedMode();
+    const difficulty = getSelectedDifficulty();
+    gameConfig.mode = mode;
+    gameConfig.difficulty = difficulty;
+    startMatch(gameConfig);
   });
   restartBtn.addEventListener('click', () => {
     endOverlay.hidden = true;
     audio.unlock();
-    startMatch();
+    startMatch(gameConfig);
   });
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', () => {
+      audio.unlock();
+      enterPause();
+    });
+  }
+  if (resumeBtn) {
+    resumeBtn.addEventListener('click', () => {
+      audio.unlock();
+      exitPause();
+    });
+  }
+  if (pauseRestartBtn) {
+    pauseRestartBtn.addEventListener('click', () => {
+      audio.unlock();
+      pauseOverlay.hidden = true;
+      startMatch(gameConfig);
+    });
+  }
+  if (pauseMenuBtn) {
+    pauseMenuBtn.addEventListener('click', () => {
+      goToMainMenu();
+    });
+  }
+  if (endMenuBtn) {
+    endMenuBtn.addEventListener('click', () => {
+      goToMainMenu();
+    });
+  }
   const updateSoundButtons = () => {
     const muted = audio.isMuted();
     soundToggleButtons.forEach(btn => {
@@ -515,12 +590,210 @@
     if (targetKey === 'right') {
       return { x: LANE_RIGHT_X, y: MID_Y + dir * 120 };
     }
-    if (targetKey === 'king') {
-      const enemy = state.towers.find(t => t.owner !== player && t.kind === 'king');
-      if (enemy) return { x: enemy.pos.x, y: enemy.pos.y };
-      return { x: W/2, y: player === 'P1' ? FIELD.top + 80 : FIELD.bottom - 80 };
+  if (targetKey === 'king') {
+    const enemy = state.towers.find(t => t.owner !== player && t.kind === 'king');
+    if (enemy) return { x: enemy.pos.x, y: enemy.pos.y };
+    return { x: W/2, y: player === 'P1' ? FIELD.top + 80 : FIELD.bottom - 80 };
+  }
+  return null;
+}
+
+  const AI_CONFIG = {
+    easy: {
+      decisionRange: [2.6, 3.4],
+      cards: ['knight', 'archer', 'goblin'],
+      weights: { knight: 3, archer: 2, goblin: 2 },
+      fireball: false,
+    },
+    medium: {
+      decisionRange: [1.8, 2.4],
+      cards: ['knight', 'archer', 'goblin', 'giant'],
+      weights: { knight: 3, archer: 2, goblin: 2, giant: 1.2 },
+      fireball: true,
+      fireballRange: [8, 12],
+      fireballThreshold: 240,
+    },
+    hard: {
+      decisionRange: [1.1, 1.7],
+      cards: ['knight', 'archer', 'goblin', 'giant'],
+      weights: { knight: 2.6, archer: 2.2, goblin: 2.4, giant: 1.5 },
+      fireball: true,
+      fireballRange: [5, 8],
+      fireballThreshold: 170,
+    },
+  };
+
+  function randomRange(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function createAiState(difficulty) {
+    const cfg = AI_CONFIG[difficulty] || AI_CONFIG.medium;
+    return {
+      difficulty,
+      config: cfg,
+      decisionTimer: randomRange(cfg.decisionRange[0], cfg.decisionRange[1]),
+      fireballTimer: cfg.fireball ? randomRange(cfg.fireballRange[0], cfg.fireballRange[1]) : Infinity,
+    };
+  }
+
+  function updateAi(dt) {
+    const ai = state.ai;
+    if (!ai) return;
+    const cfg = ai.config;
+
+    ai.decisionTimer -= dt;
+    if (ai.decisionTimer <= 0) {
+      const acted = aiAttemptAction(ai);
+      ai.decisionTimer = randomRange(cfg.decisionRange[0], cfg.decisionRange[1]) + (acted ? 0 : 0.6);
     }
-    return null;
+
+    if (cfg.fireball) {
+      ai.fireballTimer -= dt;
+      if (ai.fireballTimer <= 0) {
+        const casted = aiAttemptFireball(ai);
+        ai.fireballTimer = randomRange(cfg.fireballRange[0], cfg.fireballRange[1]) + (casted ? 0 : 2.5);
+      }
+    }
+  }
+
+  function aiAttemptAction(ai) {
+    const owner = 'P2';
+    const playerState = state.p2;
+    const availableCards = ai.config.cards.filter(card => {
+      const def = Cards[card];
+      if (!def || def.spell) return false;
+      if (playerState.mana + 1e-3 < def.cost) return false;
+      if ((playerState.cooldowns[card] || 0) > 0) return false;
+      if (getUnitCount(owner) >= MAX_UNITS_PER_SIDE && card !== 'fireball') return false;
+      return true;
+    });
+    if (!availableCards.length) return false;
+
+    const card = aiChooseCard(ai, availableCards);
+    if (!card) return false;
+    const lane = aiChooseLane(ai, owner);
+    const spawnY = getAiSpawnY(owner, card);
+    const result = spawnUnit(owner, card, lane.x, spawnY);
+    if (result.ok) {
+      state.p2.selected = card;
+      return true;
+    }
+    return false;
+  }
+
+  function aiChooseCard(ai, available) {
+    const weights = ai.config.weights || {};
+    let total = 0;
+    const entries = [];
+    for (const card of available) {
+      let weight = weights[card] || 1;
+      if (card === 'giant') {
+        const existingGiants = state.units.filter(u => u.owner === 'P2' && u.type === 'giant').length;
+        if (existingGiants > 0) weight *= 0.4;
+      }
+      total += weight;
+      entries.push({ card, weight, total });
+    }
+    const r = Math.random() * total;
+    return entries.find(entry => r <= entry.total)?.card || available[0];
+  }
+
+  function aiChooseLane(ai, owner) {
+    const enemyOwner = owner === 'P1' ? 'P2' : 'P1';
+    const lanes = [
+      { name: 'left', x: LANE_LEFT_X },
+      { name: 'right', x: LANE_RIGHT_X },
+    ];
+    let best = lanes[0];
+    let bestScore = -Infinity;
+    for (const lane of lanes) {
+      const friendly = countUnitsInLane(owner, lane.x);
+      const enemy = countUnitsInLane(enemyOwner, lane.x);
+      const enemyTower = findTower(enemyOwner, lane.name);
+      const friendlyTower = findTower(owner, lane.name);
+      const enemyTowerHp = enemyTower ? enemyTower.hp : 0;
+      const friendlyTowerHp = friendlyTower ? friendlyTower.hp : 0;
+      let score = enemy * 3 - friendly * 1.3;
+      if (!enemyTower || enemyTower.hp <= 0) score += 40;
+      if (enemyTower) score += (1 - enemyTowerHp / SIDE_TOWER_HP) * 40;
+      score -= (1 - Math.max(friendlyTowerHp, 1) / SIDE_TOWER_HP) * 20;
+      score += Math.random() * 15;
+      if (score > bestScore) {
+        bestScore = score;
+        best = lane;
+      }
+    }
+    return best;
+  }
+
+  function findTower(owner, laneName) {
+    const laneX = laneName === 'left' ? LANE_LEFT_X : LANE_RIGHT_X;
+    return state.towers
+      .filter(t => t.owner === owner && t.kind === 'side')
+      .find(t => Math.abs(t.pos.x - laneX) < 40);
+  }
+
+  function countUnitsInLane(owner, laneX) {
+    return state.units.filter(u => u.owner === owner && Math.abs(u.laneX - laneX) < 40).length;
+  }
+
+  function getAiSpawnY(owner, cardKey) {
+    if (owner === 'P2') {
+      const min = FIELD.top + 70;
+      const max = Math.max(min + 10, MID_Y - NO_SPAWN_MARGIN - 40);
+      if (cardKey === 'giant') return Math.min(max, min + 40);
+      return min + Math.random() * (max - min);
+    } else {
+      const max = FIELD.bottom - 70;
+      const min = Math.min(max - 10, MID_Y + NO_SPAWN_MARGIN + 40);
+      if (cardKey === 'giant') return Math.max(min, max - 40);
+      return min + Math.random() * (max - min);
+    }
+  }
+
+  function aiAttemptFireball(ai) {
+    const owner = 'P2';
+    const enemy = 'P1';
+    const targets = ['left', 'right', 'king'];
+    let bestKey = null;
+    let bestScore = -Infinity;
+    for (const key of targets) {
+      const point = getFireballTarget(owner, key);
+      if (!point) continue;
+      const score = evaluateFireballTarget(owner, enemy, point);
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = key;
+      }
+    }
+    if (!bestKey) return false;
+    const threshold = ai.config.fireballThreshold || 200;
+    if (bestScore < threshold) return false;
+    const result = castSpell(owner, 'fireball', bestKey);
+    return result.ok;
+  }
+
+  function evaluateFireballTarget(owner, enemyOwner, point) {
+    let enemyValue = 0;
+    let friendlyPenalty = 0;
+    for (const unit of state.units) {
+      const dist = Math.hypot(unit.pos.x - point.x, unit.pos.y - point.y);
+      if (dist <= FIREBALL_RADIUS) {
+        const dmg = Math.min(unit.hp, FIREBALL_UNIT_DAMAGE);
+        if (unit.owner === enemyOwner) enemyValue += dmg;
+        else if (unit.owner === owner) friendlyPenalty += dmg;
+      }
+    }
+    for (const tower of state.towers) {
+      const dist = Math.hypot(tower.pos.x - point.x, tower.pos.y - point.y);
+      if (dist <= FIREBALL_RADIUS) {
+        const dmg = tower.kind === 'king' ? FIREBALL_KING_DAMAGE : FIREBALL_TOWER_DAMAGE;
+        if (tower.owner === enemyOwner) enemyValue += dmg * 1.3;
+        else if (tower.owner === owner) friendlyPenalty += dmg * 1.5;
+      }
+    }
+    return enemyValue - friendlyPenalty;
   }
 
   // Canvas pointer handling
@@ -585,12 +858,20 @@
   }
 
   // ---- Simulation ----
-  function startMatch() {
+  function startMatch(config = gameConfig) {
+    const mode = config.mode || 'pvp';
+    const difficulty = config.difficulty || 'easy';
+    gameConfig.mode = mode;
+    gameConfig.difficulty = difficulty;
+    state.mode = mode;
+    state.difficulty = difficulty;
+    state.ai = mode === 'ai' ? createAiState(difficulty) : null;
     // Reset
     state.timeLeft = MATCH_SECONDS;
     state.phase = 'playing';
+    state.paused = false;
     state.p1.mana = 5; state.p1.selected = 'knight';
-    state.p2.mana = 5; state.p2.selected = 'knight';
+    state.p2.mana = 5; state.p2.selected = mode === 'ai' ? 'knight' : 'knight';
     for (const key of cardKeys) {
       state.p1.cooldowns[key] = 0;
       state.p2.cooldowns[key] = 0;
@@ -601,28 +882,99 @@
     state.effects = [];
     state.projectiles = [];
     state.spellQueue = [];
-    state.projectiles = [];
     initTowers();
     setActiveCardFor('P1','knight');
     setActiveCardFor('P2','knight');
     updateManaBars();
+    updateSpellOptionsForPlayer('P1');
+    updateSpellOptionsForPlayer('P2');
     resultTitle.textContent = 'Game Over';
+    startOverlay.hidden = true;
+    pauseOverlay.hidden = true;
     endOverlay.hidden = true;
     state.lastTick = performance.now();
-    loop();
+    ensureLoop();
+    fitBoardToViewport();
+    if (pauseBtn) pauseBtn.disabled = false;
+  }
+
+  function goToMainMenu() {
+    state.phase = 'menu';
+    state.paused = false;
+    stopLoop();
+    pauseOverlay.hidden = true;
+    endOverlay.hidden = true;
+    startOverlay.hidden = false;
+    modeInputs.forEach(input => { input.checked = input.value === gameConfig.mode; });
+    difficultyInputs.forEach(input => { input.checked = input.value === gameConfig.difficulty; });
+    statusEl.textContent = 'Tap a card, then tap your half to deploy.';
+    toggleDifficultySection(getSelectedMode());
+    fitBoardToViewport();
+    if (pauseBtn) pauseBtn.disabled = true;
+    state.ai = null;
+    state.units = [];
+    state.projectiles = [];
+    state.spellQueue = [];
+    state.timeLeft = MATCH_SECONDS;
+    state.mode = gameConfig.mode;
+    state.difficulty = gameConfig.difficulty;
+    initTowers();
+    timeEl.textContent = '03:00';
+    state.p1.mana = 5; state.p2.mana = 5;
+    updateManaBars();
+    render();
+  }
+
+  function enterPause() {
+    if (state.phase !== 'playing') return;
+    state.phase = 'paused';
+    state.paused = true;
+    pauseOverlay.hidden = false;
+    state.lastTick = performance.now();
+    ensureLoop();
+    if (pauseBtn) pauseBtn.disabled = true;
+  }
+
+  function exitPause() {
+    if (state.phase !== 'paused') return;
+    state.phase = 'playing';
+    state.paused = false;
+    pauseOverlay.hidden = true;
+    state.lastTick = performance.now();
+    ensureLoop();
+    if (pauseBtn) pauseBtn.disabled = false;
+  }
+
+  function ensureLoop() {
+    if (loopHandle === null) {
+      loopHandle = requestAnimationFrame(loop);
+    }
+  }
+
+  function stopLoop() {
+    if (loopHandle !== null) {
+      cancelAnimationFrame(loopHandle);
+      loopHandle = null;
+    }
   }
 
   function loop() {
-    // Fixed-step sim at TICK_MS
+    loopHandle = null;
     const now = performance.now();
-    let dt = now - state.lastTick;
-    if (dt >= TICK_MS) {
-      const steps = Math.floor(dt / TICK_MS);
-      for (let i=0;i<steps;i++) tick(TICK_MS/1000);
-      state.lastTick += steps * TICK_MS;
+    if (state.phase === 'playing') {
+      let dt = now - state.lastTick;
+      if (dt >= TICK_MS) {
+        const steps = Math.min(5, Math.floor(dt / TICK_MS));
+        for (let i = 0; i < steps; i++) tick(TICK_MS / 1000);
+        state.lastTick += steps * TICK_MS;
+      }
+    } else {
+      state.lastTick = now;
     }
     render();
-    if (state.phase === 'playing') requestAnimationFrame(loop);
+    if (state.phase === 'playing' || state.phase === 'paused') {
+      ensureLoop();
+    }
   }
 
   function tick(dt) {
@@ -650,6 +1002,8 @@
     for (const k of cardKeys) state.p2.cooldowns[k] = Math.max(0, state.p2.cooldowns[k]-dt);
     state.p1.deployCd = Math.max(0, (state.p1.deployCd || 0) - dt);
     state.p2.deployCd = Math.max(0, (state.p2.deployCd || 0) - dt);
+
+    if (state.mode === 'ai' && state.ai) updateAi(dt);
 
     // towers acquire & fire
     for (const tw of state.towers) {
@@ -846,9 +1200,12 @@
 
   function endGame(result) {
     state.phase = 'ended';
+    state.paused = false;
     resultTitle.textContent = result;
     endOverlay.hidden = false;
+    pauseOverlay.hidden = true;
     audio.play('victory', { volume: 0.35 });
+    if (pauseBtn) pauseBtn.disabled = true;
   }
 
   // ---- Rendering ----
@@ -1167,37 +1524,37 @@
   updateManaBars();
   initTowers();
   fitBoardToViewport();
+  render();
 
   function fitBoardToViewport() {
-    const marginX = window.innerWidth <= 640 ? 12 : 40;
     const isCompact = window.innerWidth <= 640;
-    const bufferY = isCompact ? 12 : 72;
+    const marginX = isCompact ? 12 : 32;
+    const bufferY = isCompact ? 16 : 28;
     const topRect = handP2 ? handP2.getBoundingClientRect() : null;
     const bottomRect = handP1 ? handP1.getBoundingClientRect() : null;
     const topHeight = topRect ? topRect.height : 0;
     const bottomHeight = bottomRect ? bottomRect.height : 0;
 
     const availW = Math.max(240, window.innerWidth - marginX);
-    const rawAvailH = window.innerHeight - topHeight - bottomHeight - bufferY;
-    const effectiveAvailH = Math.max(isCompact ? 240 : 200, rawAvailH);
+    const topBound = topHeight + bufferY;
+    const bottomBound = window.innerHeight - bottomHeight - bufferY;
+    const availableHeight = Math.max(isCompact ? 260 : 360, bottomBound - topBound);
     const scaleX = availW / W;
-    const scaleY = effectiveAvailH / H;
+    const scaleY = availableHeight / H;
     const scale = Math.min(1, scaleX, scaleY);
 
     const scaledH = H * scale;
-    const centerY = window.innerHeight / 2;
-    const topLimit = topHeight + bufferY * 0.5;
-    const bottomLimit = window.innerHeight - bottomHeight - bufferY * 0.5;
-    let offset = 0;
+    const windowCenter = window.innerHeight / 2;
+    let offset = bottomBound - (windowCenter + scaledH / 2);
 
-    let topEdge = centerY + offset - scaledH / 2;
-    if (topEdge < topLimit) {
-      offset += (topLimit - topEdge);
-      topEdge = topLimit;
+    let topEdge = windowCenter + offset - scaledH / 2;
+    if (topEdge < topBound) {
+      offset += (topBound - topEdge);
+      topEdge = topBound;
     }
-    let bottomEdge = centerY + offset + scaledH / 2;
-    if (bottomEdge > bottomLimit) {
-      offset -= (bottomEdge - bottomLimit);
+    let bottomEdge = windowCenter + offset + scaledH / 2;
+    if (bottomEdge > bottomBound) {
+      offset -= (bottomEdge - bottomBound);
     }
 
     const translateBeforeScale = scale === 0 ? 0 : offset / scale;
