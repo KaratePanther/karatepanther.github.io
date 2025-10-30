@@ -199,11 +199,48 @@ html, body { height:100%; margin:0; background:#0b1020; color:#e8ecff; font:16px
     order: 20;
     margin-top: 4px;
   }
+  .floating-menu {
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    padding: 8px 10px;
+    font-size: 18px;
+  }
 }
 
-#hud { position: fixed; left: 50%; transform: translateX(-50%); top: 50%; margin-top: -12px; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; }
+#hud { position: fixed; left: 50%; transform: translateX(-50%); top: clamp(16px, 12vh, 120px); margin-top: 0; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; }
 #hud .timer { background:#121932; border:1px solid #233055; padding:6px 10px; border-radius:12px; }
 #hud .status { color:#aab3d9; font-size: 14px; }
+
+.floating-menu {
+  position: fixed;
+  top: 50%;
+  right: clamp(8px, 3vw, 24px);
+  transform: translateY(-50%);
+  appearance: none;
+  border: 1px solid #2c3a66;
+  background: rgba(18,25,50,.82);
+  color:#e8ecff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .15s;
+  pointer-events: auto;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+.floating-menu:disabled {
+  opacity: .6;
+  cursor: default;
+}
+.floating-menu:not(:disabled):hover { border-color:#6ea8fe; }
+.floating-menu:not(:disabled):active { transform: translateY(-50%) scale(0.95); }
 
 .overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.55);

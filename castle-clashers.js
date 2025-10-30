@@ -20,7 +20,7 @@
   const pauseOverlay = document.getElementById('pause-overlay');
   const startBtn = document.getElementById('startBtn');
   const restartBtn = document.getElementById('restartBtn');
-  const pauseBtn = document.getElementById('pauseBtn');
+  const menuBtn = document.getElementById('menuBtn');
   const resumeBtn = document.getElementById('resumeBtn');
   const pauseRestartBtn = document.getElementById('pauseRestartBtn');
   const pauseMenuBtn = document.getElementById('pauseMenuBtn');
@@ -34,7 +34,12 @@
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const difficultyInputs = Array.from(document.querySelectorAll('input[name="difficulty"]'));
   const difficultySection = document.getElementById('difficultySection');
-  if (pauseBtn) pauseBtn.disabled = true;
+  if (menuBtn) menuBtn.disabled = true;
+  function updateMenuButtonVisibility() {
+    if (!menuBtn) return;
+    const show = state.phase === 'playing';
+    menuBtn.style.display = show ? 'flex' : 'none';
+  }
 
   // ---- Constants ----
   const W = canvas.width;
@@ -96,6 +101,21 @@
 
   const gameConfig = { mode: 'ai', difficulty: 'medium' };
   let loopHandle = null;
+
+  // Prevent pinch-zoom and double-tap zoom on mobile browsers
+  if (typeof window !== 'undefined') {
+    const preventGesture = (e) => e.preventDefault();
+    ['gesturestart','gesturechange','gestureend'].forEach(evt => window.addEventListener(evt, preventGesture, { passive: false }));
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) e.preventDefault();
+      lastTouchEnd = now;
+    }, { passive: false });
+  }
 
   function getSelectedMode() {
     const selected = modeInputs.find(input => input.checked);
@@ -479,11 +499,12 @@
     audio.unlock();
     startMatch(gameConfig);
   });
-  if (pauseBtn) {
-    pauseBtn.addEventListener('click', () => {
+  if (menuBtn) {
+    menuBtn.addEventListener('click', () => {
       audio.unlock();
       enterPause();
     });
+    updateMenuButtonVisibility();
   }
   if (resumeBtn) {
     resumeBtn.addEventListener('click', () => {
@@ -895,7 +916,8 @@
     state.lastTick = performance.now();
     ensureLoop();
     fitBoardToViewport();
-    if (pauseBtn) pauseBtn.disabled = false;
+    if (menuBtn) menuBtn.disabled = false;
+    updateMenuButtonVisibility();
   }
 
   function goToMainMenu() {
@@ -910,7 +932,8 @@
     statusEl.textContent = 'Tap a card, then tap your half to deploy.';
     toggleDifficultySection(getSelectedMode());
     fitBoardToViewport();
-    if (pauseBtn) pauseBtn.disabled = true;
+    if (menuBtn) menuBtn.disabled = true;
+    updateMenuButtonVisibility();
     state.ai = null;
     state.units = [];
     state.projectiles = [];
@@ -932,7 +955,8 @@
     pauseOverlay.hidden = false;
     state.lastTick = performance.now();
     ensureLoop();
-    if (pauseBtn) pauseBtn.disabled = true;
+    if (menuBtn) menuBtn.disabled = true;
+    updateMenuButtonVisibility();
   }
 
   function exitPause() {
@@ -942,7 +966,8 @@
     pauseOverlay.hidden = true;
     state.lastTick = performance.now();
     ensureLoop();
-    if (pauseBtn) pauseBtn.disabled = false;
+    if (menuBtn) menuBtn.disabled = false;
+    updateMenuButtonVisibility();
   }
 
   function ensureLoop() {
@@ -1205,7 +1230,7 @@
     endOverlay.hidden = false;
     pauseOverlay.hidden = true;
     audio.play('victory', { volume: 0.35 });
-    if (pauseBtn) pauseBtn.disabled = true;
+    if (menuBtn) menuBtn.disabled = true;
   }
 
   // ---- Rendering ----
@@ -1538,9 +1563,11 @@
     const availW = Math.max(240, window.innerWidth - marginX);
     const topBound = topHeight + bufferY;
     const bottomBound = window.innerHeight - bottomHeight - bufferY;
-    const availableHeight = Math.max(isCompact ? 260 : 360, bottomBound - topBound);
+    const rawHeight = Math.max(220, bottomBound - topBound);
+    const targetHeight = Math.max(isCompact ? 280 : 380, rawHeight - (isCompact ? 8 : 24));
+    const effectiveHeight = Math.min(rawHeight, targetHeight);
     const scaleX = availW / W;
-    const scaleY = availableHeight / H;
+    const scaleY = effectiveHeight / H;
     const scale = Math.min(1, scaleX, scaleY);
 
     const scaledH = H * scale;
