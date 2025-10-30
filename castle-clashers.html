@@ -53,7 +53,6 @@
     <!-- Overlay UI -->
     <div id="hud">
       <div class="timer"><span id="time">03:00</span></div>
-      <div class="status" id="status">Tap a card, then tap your half to deploy.</div>
     </div>
     <button id="menuBtn" class="floating-menu" aria-label="Game menu"><span aria-hidden="true">☰</span></button>
 
@@ -87,6 +86,31 @@
           <label class="menu-option">
             <input type="radio" name="difficulty" value="hard" />
             Hard — aggressive pushes & smart spell usage
+          </label>
+        </section>
+
+        <section class="menu-section" id="cardSelectionSection" aria-labelledby="cardSelectionTitle">
+          <h2 id="cardSelectionTitle">Card Loadout</h2>
+          <p class="menu-hint">Choose which cards appear in both players' hands.</p>
+          <label class="menu-option card-toggle">
+            <input type="checkbox" name="card-pool" value="knight" checked />
+            Knight — front-line melee bruiser.
+          </label>
+          <label class="menu-option card-toggle">
+            <input type="checkbox" name="card-pool" value="archer" checked />
+            Archer — ranged attacker that stays behind tanks.
+          </label>
+          <label class="menu-option card-toggle">
+            <input type="checkbox" name="card-pool" value="goblin" checked />
+            Goblin — speedy melee unit for quick pressure.
+          </label>
+          <label class="menu-option card-toggle">
+            <input type="checkbox" name="card-pool" value="giant" checked />
+            Giant — sturdy siege unit that targets buildings.
+          </label>
+          <label class="menu-option card-toggle">
+            <input type="checkbox" name="card-pool" value="fireball" />
+            Fireball — spell that scorches clustered foes.
           </label>
         </section>
 

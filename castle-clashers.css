@@ -200,6 +200,14 @@ button { touch-action: manipulation; }
     order: 20;
     margin-top: 4px;
   }
+  #hud {
+    left: auto;
+    right: calc(clamp(8px, 3vw, 24px) + 56px);
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: center;
+    gap: 0;
+  }
   .floating-menu {
     top: 50%;
     right: 10px;
@@ -211,7 +219,6 @@ button { touch-action: manipulation; }
 
 #hud { position: fixed; left: 50%; transform: translateX(-50%); top: clamp(16px, 12vh, 120px); margin-top: 0; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; }
 #hud .timer { background:#121932; border:1px solid #233055; padding:6px 10px; border-radius:12px; }
-#hud .status { color:#aab3d9; font-size: 14px; }
 
 .floating-menu {
   position: fixed;
@@ -280,6 +287,17 @@ button { touch-action: manipulation; }
   margin: 0 0 6px 0;
   font-size: 16px;
   color:#d0dafb;
+}
+.menu-hint {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color:#94a3d9;
+}
+.card-toggle {
+  align-items: center;
+}
+.card-toggle input {
+  margin-top: 0;
 }
 .info-section ul {
   margin: 0;

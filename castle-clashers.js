@@ -12,7 +12,6 @@
   const manaBarP2 = document.getElementById('manaP2');
   const deployStatusP1 = document.getElementById('deployStatusP1');
   const deployStatusP2 = document.getElementById('deployStatusP2');
-  const statusEl = document.getElementById('status');
   const timeEl = document.getElementById('time');
 
   const startOverlay = document.getElementById('start-overlay');
@@ -33,6 +32,7 @@
   };
   const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
   const difficultyInputs = Array.from(document.querySelectorAll('input[name="difficulty"]'));
+  const cardOptionInputs = Array.from(document.querySelectorAll('input[name="card-pool"]'));
   const difficultySection = document.getElementById('difficultySection');
   if (menuBtn) menuBtn.disabled = true;
   function updateMenuButtonVisibility() {
@@ -93,13 +93,14 @@
   const rnd = () => (rngSeed = (rngSeed * 1664525 + 1013904223) >>> 0) / 0xffffffff;
 
   const cardKeys = Object.keys(Cards);
+  const DEFAULT_DECK = ['knight', 'archer', 'goblin', 'giant'];
   const makeCooldowns = () => {
     const obj = {};
     for (const key of cardKeys) obj[key] = 0;
     return obj;
   };
 
-  const gameConfig = { mode: 'ai', difficulty: 'medium' };
+  const gameConfig = { mode: 'ai', difficulty: 'medium', enabledCards: [...DEFAULT_DECK] };
   let loopHandle = null;
 
   // Prevent pinch-zoom and double-tap zoom on mobile browsers
@@ -145,6 +146,32 @@
     });
   }
 
+  function normalizeDeck(list) {
+    const normalized = [];
+    const seen = new Set();
+    if (Array.isArray(list)) {
+      for (const key of list) {
+        if (!Cards[key] || seen.has(key)) continue;
+        normalized.push(key);
+        seen.add(key);
+      }
+    }
+    return normalized;
+  }
+
+  function getMenuSelectedCards() {
+    if (!cardOptionInputs.length) return [...(gameConfig.enabledCards || DEFAULT_DECK)];
+    const raw = cardOptionInputs.filter(input => input.checked).map(input => input.value);
+    return normalizeDeck(raw);
+  }
+
+  function deckHasTroop(deck) {
+    return deck.some(card => {
+      const def = Cards[card];
+      return def && !def.spell;
+    });
+  }
+
   const state = {
     timeLeft: MATCH_SECONDS,
     phase: 'menu', // 'menu' | 'playing' | 'paused' | 'ended'
@@ -168,6 +195,8 @@
     spellQueue: [],
     ai: null,
     nextId: 1,
+    allowedCards: new Set(DEFAULT_DECK),
+    allowedCardList: [...DEFAULT_DECK],
     lastTick: performance.now(),
   };
 
@@ -281,9 +310,44 @@
     return state.units.reduce((acc, u) => acc + (u.owner === owner ? 1 : 0), 0);
   }
 
+  function getFallbackCard(preferUnits = true) {
+    if (preferUnits) {
+      const unit = state.allowedCardList.find(card => {
+        const def = Cards[card];
+        return def && !def.spell;
+      });
+      if (unit) return unit;
+    }
+    const any = state.allowedCardList.find(card => Cards[card]);
+    if (any) return any;
+    return 'knight';
+  }
+
+  function applyDeckToHands(allowedList) {
+    const allowedSet = new Set(allowedList);
+    [handP1, handP2].forEach(hand => {
+      if (!hand) return;
+      hand.querySelectorAll('.card').forEach(btn => {
+        const enabled = allowedSet.has(btn.dataset.card);
+        btn.hidden = !enabled;
+        btn.disabled = !enabled;
+        if (!enabled) btn.classList.remove('active');
+      });
+    });
+    Object.values(spellOptionContainers).forEach(container => {
+      if (!container) return;
+      if (!allowedSet.has('fireball')) {
+        container.hidden = true;
+      }
+    });
+  }
+
   function canSpawn(owner, cardKey) {
     const card = Cards[cardKey];
     if (!card) return { ok: false, reason: 'invalid_card', card: null };
+    if (state.allowedCards && !state.allowedCards.has(cardKey)) {
+      return { ok: false, reason: 'disabled', card };
+    }
     const player = getPlayer(owner);
     const isSpell = !!card.spell;
     if (!isSpell && player.deployCd > 0) {
@@ -312,17 +376,19 @@
     const cardLabel = cardKey ? cardKey.charAt(0).toUpperCase() + cardKey.slice(1) : 'Unit';
     switch (result.reason) {
       case 'mana':
-        return `${label}: Need ${result.card ? result.card.cost : '?'} mana.`;
-      case 'card_cd':
-        return `${label}: ${cardLabel} cooling down.`;
-      case 'deploy_cd':
-        return `${label}: Deploy cooldown.`;
-      case 'unit_cap':
-        return `${label}: Unit cap reached.`;
-      case 'spell_only':
-        return `${label}: Tap a spell target to cast.`;
-      case 'invalid_target':
-        return `${label}: Invalid target for ${cardLabel}.`;
+      return `${label}: Need ${result.card ? result.card.cost : '?'} mana.`;
+    case 'card_cd':
+      return `${label}: ${cardLabel} cooling down.`;
+    case 'deploy_cd':
+      return `${label}: Deploy cooldown.`;
+    case 'unit_cap':
+      return `${label}: Unit cap reached.`;
+    case 'disabled':
+      return `${label}: Card not in loadout.`;
+    case 'spell_only':
+      return `${label}: Tap a spell target to cast.`;
+    case 'invalid_target':
+      return `${label}: Invalid target for ${cardLabel}.`;
       default:
         return `${label}: Cannot deploy.`;
     }
@@ -385,6 +451,9 @@
 
   // ---- Input / UI ----
   function setActiveCardFor(player, cardKey) {
+    if (!state.allowedCards.has(cardKey)) {
+      cardKey = getFallbackCard(true);
+    }
     const handEl = player === 'P1' ? handP1 : handP2;
     for (const btn of handEl.querySelectorAll('.card')) btn.classList.toggle('active', btn.dataset.card === cardKey);
     (player === 'P1' ? state.p1 : state.p2).selected = cardKey;
@@ -432,6 +501,13 @@
       const cardKey = btn.dataset.card;
       const card = Cards[cardKey];
       if (!card) continue;
+      const allowed = state.allowedCards.has(cardKey);
+      btn.hidden = !allowed;
+      btn.disabled = !allowed;
+      if (!allowed) {
+        btn.classList.remove('active');
+        continue;
+      }
       const cardCd = playerState.cooldowns[cardKey] || 0;
       const notEnoughMana = playerState.mana + 1e-3 < card.cost;
       const ratio = card.cooldown ? Math.min(1, Math.max(0, cardCd / card.cooldown)) : 0;
@@ -459,6 +535,10 @@
     const playerState = getPlayer(playerId);
     const selected = playerState.selected || 'knight';
     const card = Cards[selected];
+    if (!state.allowedCards.has(selected)) {
+      container.hidden = true;
+      return;
+    }
     const show = !!card && !!card.spell;
     container.hidden = !show;
     if (!show) return;
@@ -499,8 +579,18 @@
     audio.unlock();
     const mode = getSelectedMode();
     const difficulty = getSelectedDifficulty();
+    const deck = getMenuSelectedCards();
+    if (!deck.length) {
+      alert('Select at least one card before starting the match.');
+      return;
+    }
+    if (!deckHasTroop(deck)) {
+      alert('Select at least one troop card (non-spell) before starting the match.');
+      return;
+    }
     gameConfig.mode = mode;
     gameConfig.difficulty = difficulty;
+    gameConfig.enabledCards = [...deck];
     startMatch(gameConfig);
   });
   restartBtn.addEventListener('click', () => {
@@ -657,13 +747,31 @@
     return min + Math.random() * (max - min);
   }
 
-  function createAiState(difficulty) {
-    const cfg = AI_CONFIG[difficulty] || AI_CONFIG.medium;
+  function createAiState(difficulty, deckList) {
+    const baseCfg = AI_CONFIG[difficulty] || AI_CONFIG.medium;
+    const unitCards = deckList
+      .filter(card => {
+        const def = Cards[card];
+        return def && !def.spell;
+      });
+    const cardsForAi = unitCards.length ? unitCards : [...(baseCfg.cards || DEFAULT_DECK)];
+    const weights = {};
+    const baseWeights = baseCfg.weights || {};
+    for (const card of cardsForAi) {
+      weights[card] = baseWeights[card] ?? 1;
+    }
+    const fireballEnabled = deckList.includes('fireball') && !!baseCfg.fireball;
+    const config = {
+      ...baseCfg,
+      cards: cardsForAi,
+      weights,
+      fireball: fireballEnabled,
+    };
     return {
       difficulty,
-      config: cfg,
-      decisionTimer: randomRange(cfg.decisionRange[0], cfg.decisionRange[1]),
-      fireballTimer: cfg.fireball ? randomRange(cfg.fireballRange[0], cfg.fireballRange[1]) : Infinity,
+      config,
+      decisionTimer: randomRange(config.decisionRange[0], config.decisionRange[1]),
+      fireballTimer: fireballEnabled ? randomRange(config.fireballRange[0], config.fireballRange[1]) : Infinity,
     };
   }
 
@@ -883,25 +991,34 @@
   }
 
   function flashStatus(msg) {
-    statusEl.textContent = msg;
-    setTimeout(() => { statusEl.textContent = 'Tap a card, then tap your half to deploy.'; }, 900);
+    console.debug('[status]', msg);
   }
 
   // ---- Simulation ----
   function startMatch(config = gameConfig) {
     const mode = config.mode || 'pvp';
     const difficulty = config.difficulty || 'easy';
+    const deckFromConfig = Array.isArray(config.enabledCards) ? config.enabledCards : gameConfig.enabledCards;
+    const normalizedDeck = normalizeDeck(deckFromConfig);
+    const deckList = normalizedDeck.length ? normalizedDeck : [...DEFAULT_DECK];
     gameConfig.mode = mode;
     gameConfig.difficulty = difficulty;
+    gameConfig.enabledCards = [...deckList];
     state.mode = mode;
     state.difficulty = difficulty;
-    state.ai = mode === 'ai' ? createAiState(difficulty) : null;
+    state.allowedCardList = [...deckList];
+    state.allowedCards = new Set(deckList);
+    applyDeckToHands(deckList);
+    const startingCard = getFallbackCard(true);
+    state.ai = mode === 'ai' ? createAiState(difficulty, deckList) : null;
     // Reset
     state.timeLeft = MATCH_SECONDS;
     state.phase = 'playing';
     state.paused = false;
-    state.p1.mana = 5; state.p1.selected = 'knight';
-    state.p2.mana = 5; state.p2.selected = mode === 'ai' ? 'knight' : 'knight';
+    state.p1.mana = 5;
+    state.p2.mana = 5;
+    state.p1.selected = startingCard;
+    state.p2.selected = startingCard;
     for (const key of cardKeys) {
       state.p1.cooldowns[key] = 0;
       state.p2.cooldowns[key] = 0;
@@ -913,8 +1030,8 @@
     state.projectiles = [];
     state.spellQueue = [];
     initTowers();
-    setActiveCardFor('P1','knight');
-    setActiveCardFor('P2','knight');
+    setActiveCardFor('P1', startingCard);
+    setActiveCardFor('P2', startingCard);
     updateManaBars();
     updateSpellOptionsForPlayer('P1');
     updateSpellOptionsForPlayer('P2');
@@ -938,7 +1055,12 @@
     startOverlay.hidden = false;
     modeInputs.forEach(input => { input.checked = input.value === gameConfig.mode; });
     difficultyInputs.forEach(input => { input.checked = input.value === gameConfig.difficulty; });
-    statusEl.textContent = 'Tap a card, then tap your half to deploy.';
+    if (cardOptionInputs.length) {
+      const enabledSet = new Set(gameConfig.enabledCards || DEFAULT_DECK);
+      cardOptionInputs.forEach(input => {
+        input.checked = enabledSet.has(input.value);
+      });
+    }
     toggleDifficultySection(getSelectedMode());
     fitBoardToViewport();
     if (menuBtn) menuBtn.disabled = true;
@@ -1553,42 +1675,52 @@
   }
 
   // Initialize
-  setActiveCardFor('P1','knight');
-  setActiveCardFor('P2','knight');
+  state.allowedCardList = [...(gameConfig.enabledCards || DEFAULT_DECK)];
+  state.allowedCards = new Set(state.allowedCardList);
+  applyDeckToHands(state.allowedCardList);
+  const initialCard = getFallbackCard(true);
+  setActiveCardFor('P1', initialCard);
+  setActiveCardFor('P2', initialCard);
   updateManaBars();
   initTowers();
   fitBoardToViewport();
   render();
 
   function fitBoardToViewport() {
-    const isCompact = window.innerWidth <= 640;
-    const marginX = isCompact ? 12 : 32;
-    const bufferY = isCompact ? 16 : 28;
+    const viewport = window.visualViewport || null;
+    const viewportWidth = viewport ? viewport.width : window.innerWidth;
+    const viewportHeight = viewport ? viewport.height : window.innerHeight;
+    const viewportTop = viewport ? viewport.offsetTop : 0;
+    const viewportBottom = viewportTop + viewportHeight;
+    const isCompact = viewportWidth <= 768;
+    const marginX = isCompact ? 8 : 32;
+    const bufferY = isCompact ? 10 : 28;
     const topRect = handP2 ? handP2.getBoundingClientRect() : null;
     const bottomRect = handP1 ? handP1.getBoundingClientRect() : null;
     const topHeight = topRect ? topRect.height : 0;
     const bottomHeight = bottomRect ? bottomRect.height : 0;
 
-    const availW = Math.max(240, window.innerWidth - marginX);
-    const topBound = topHeight + bufferY;
-    const bottomBound = window.innerHeight - bottomHeight - bufferY;
-    const rawHeight = Math.max(220, bottomBound - topBound);
-    const targetHeight = Math.max(isCompact ? 280 : 380, rawHeight - (isCompact ? 8 : 24));
-    const effectiveHeight = Math.min(rawHeight, targetHeight);
+    const topAllowance = isCompact ? Math.min(topHeight, 48) : topHeight;
+    const bottomAllowance = isCompact ? Math.min(bottomHeight, 80) : bottomHeight;
+    const availW = Math.max(240, viewportWidth - (isCompact ? marginX * 2 : marginX));
+    const topBound = viewportTop + bufferY + topAllowance;
+    const bottomBound = viewportBottom - bottomAllowance - bufferY;
+    const rawHeight = Math.max(260, bottomBound - topBound);
+
     const scaleX = availW / W;
-    const scaleY = effectiveHeight / H;
+    const scaleY = rawHeight / H;
     const scale = Math.min(1, scaleX, scaleY);
 
     const scaledH = H * scale;
-    const windowCenter = window.innerHeight / 2;
-    let offset = bottomBound - (windowCenter + scaledH / 2);
+    const viewportCenter = viewportTop + viewportHeight / 2;
+    let offset = bottomBound - (viewportCenter + scaledH / 2);
 
-    let topEdge = windowCenter + offset - scaledH / 2;
+    let topEdge = viewportCenter + offset - scaledH / 2;
     if (topEdge < topBound) {
       offset += (topBound - topEdge);
       topEdge = topBound;
     }
-    let bottomEdge = windowCenter + offset + scaledH / 2;
+    let bottomEdge = viewportCenter + offset + scaledH / 2;
     if (bottomEdge > bottomBound) {
       offset -= (bottomEdge - bottomBound);
     }
@@ -1599,6 +1731,10 @@
   }
 
   window.addEventListener('resize', fitBoardToViewport);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitBoardToViewport);
+    window.visualViewport.addEventListener('scroll', fitBoardToViewport);
+  }
 
   // Show start overlay initially (audio unlock if you add sounds later)
   // Do not auto-start; wait for user gesture
