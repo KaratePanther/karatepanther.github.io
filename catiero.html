@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catiero — MVP v0.1</title>
+  <link rel="stylesheet" href="catiero.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="hud">
+      <div class="score">P1 Paw Points: <span id="p1Score">0</span> &nbsp;|&nbsp; P2 Paw Points: <span id="p2Score">0</span></div>
+      <div class="legend">
+        <span class="pill"><span class="p1dot"></span>P1: A/D move · W jump · F boop</span>
+        &nbsp;
+        <span class="pill"><span class="p2dot"></span>P2: ◀︎/▶︎ move · ▲ jump · L boop</span>
+        &nbsp;
+        <span class="pill">P pause · R reset</span>
+        &nbsp;
+        <span class="pill">Weapons — P1 1/2/3 · P2 7/8/9</span>
+      </div>
+    </div>
+    <canvas id="game" width="960" height="540"></canvas>
+    <div class="legend">Catiero v0.1 — Pick <b>Paw Boop</b>, <b>Sausage Bazooka</b>, or <b>Tuna Can Bomb</b>. Use your weapon to reduce rival's <b>Mood</b>; at 0 they <b>respawn</b> and you score a <b>Paw Point</b>. First to 5 wins.</div>
+    <div class="weapon-bar" role="region" aria-label="Weapon selection">
+      <div class="weapon-panel weapon-panel--p1">
+        <div class="weapon-panel__title">Player 1 Weapon (1/2/3)</div>
+        <div class="weapon-panel__buttons" role="group" aria-label="Player 1 weapon choices">
+          <button type="button" class="weapon-btn" data-player="p1" data-weapon-choice="paw" aria-pressed="false">Paw Boop</button>
+          <button type="button" class="weapon-btn" data-player="p1" data-weapon-choice="sausage" aria-pressed="false">Sausage Bazooka</button>
+          <button type="button" class="weapon-btn" data-player="p1" data-weapon-choice="tuna" aria-pressed="false">Tuna Can Bomb</button>
+        </div>
+      </div>
+      <div class="weapon-panel weapon-panel--p2">
+        <div class="weapon-panel__title">Player 2 Weapon (7/8/9)</div>
+        <div class="weapon-panel__buttons" role="group" aria-label="Player 2 weapon choices">
+          <button type="button" class="weapon-btn" data-player="p2" data-weapon-choice="paw" aria-pressed="false">Paw Boop</button>
+          <button type="button" class="weapon-btn" data-player="p2" data-weapon-choice="sausage" aria-pressed="false">Sausage Bazooka</button>
+          <button type="button" class="weapon-btn" data-player="p2" data-weapon-choice="tuna" aria-pressed="false">Tuna Can Bomb</button>
+        </div>
+      </div>
+    </div>
+    <div class="touch-controls" aria-hidden="true">
+      <div class="touch-group touch-group--left">
+        <div class="touch-row touch-row--weapons">
+          <button type="button" class="touch-weapon-btn weapon-btn" data-player="p1" data-weapon-choice="paw" aria-label="Player 1 Paw Boop">Paw</button>
+          <button type="button" class="touch-weapon-btn weapon-btn" data-player="p1" data-weapon-choice="sausage" aria-label="Player 1 Sausage Bazooka">Saus</button>
+          <button type="button" class="touch-weapon-btn weapon-btn" data-player="p1" data-weapon-choice="tuna" aria-label="Player 1 Tuna Can Bomb">Tuna</button>
+        </div>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" data-player="p1" data-action="left" aria-label="Player 1 move left">◀</button>
+          <button type="button" class="touch-btn" data-player="p1" data-action="right" aria-label="Player 1 move right">▶</button>
+        </div>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" data-player="p1" data-action="jump" aria-label="Player 1 jump">⤴</button>
+          <button type="button" class="touch-btn" data-player="p1" data-action="boop" aria-label="Player 1 boop">Boop</button>
+        </div>
+      </div>
+      <div class="touch-group touch-group--right">
+        <div class="touch-row touch-row--weapons">
+          <button type="button" class="touch-weapon-btn weapon-btn" data-player="p2" data-weapon-choice="paw" aria-label="Player 2 Paw Boop">Paw</button>
+          <button type="button" class="touch-weapon-btn weapon-btn" data-player="p2" data-weapon-choice="sausage" aria-label="Player 2 Sausage Bazooka">Saus</button>
+          <button type="button" class="touch-weapon-btn weapon-btn" data-player="p2" data-weapon-choice="tuna" aria-label="Player 2 Tuna Can Bomb">Tuna</button>
+        </div>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" data-player="p2" data-action="jump" aria-label="Player 2 jump">⤴</button>
+          <button type="button" class="touch-btn" data-player="p2" data-action="boop" aria-label="Player 2 boop">Boop</button>
+        </div>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" data-player="p2" data-action="left" aria-label="Player 2 move left">◀</button>
+          <button type="button" class="touch-btn" data-player="p2" data-action="right" aria-label="Player 2 move right">▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="catiero.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,259 @@
+/* ---- Reset & Layout ---- */
+:root {
+  --bg: #0c0f12;
+  --fg: #f0f4f8;
+  --accent: #ffdd57;
+  --p1: #64d2ff; /* cyan */
+  --p2: #ff8aa8; /* pink */
+  --bar-green: #37d67a;
+  --bar-yellow: #f5a623;
+  --bar-red: #f04f4f;
+  --ui: #1a1f24;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 12px 12px 24px;
+  display: grid;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 4px 0;
+  letter-spacing: 0.5px;
+}
+
+.hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ui);
+  border: 2px solid #2b323a;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 0 #0008;
+  image-rendering: pixelated; /* pixel vibe */
+}
+
+.score {
+  font-weight: 700;
+}
+
+.legend {
+  opacity: 0.9;
+  font-size: 12px;
+}
+
+canvas {
+  width: 100%;
+  height: auto;
+  border: 3px solid #2b323a;
+  border-radius: 10px;
+  background: #0b0e10;
+  image-rendering: pixelated;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #11161b;
+  border: 1px solid #2b323a;
+  font-size: 12px;
+}
+
+.p1dot,
+.p2dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.p1dot {
+  background: var(--p1);
+}
+
+.p2dot {
+  background: var(--p2);
+}
+
+.weapon-bar {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #11161b;
+  border: 1px solid #2b323a;
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.weapon-panel {
+  flex: 1 1 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weapon-panel__title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  opacity: 0.7;
+}
+
+.weapon-panel__buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.weapon-btn {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #2b323a;
+  background: #1a1f24;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.weapon-btn:hover {
+  background: #202830;
+}
+
+.weapon-btn.active {
+  background: var(--accent);
+  color: #111;
+  transform: translateY(1px);
+}
+
+.weapon-panel--p1 .weapon-btn.active {
+  background: var(--p1);
+  color: #111;
+}
+
+.weapon-panel--p2 .weapon-btn.active {
+  background: var(--p2);
+  color: #111;
+}
+
+.weapon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.touch-controls {
+  display: none;
+  position: fixed;
+  inset: auto 0 12px 0;
+  padding: 0 16px;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.touch-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-group--right {
+  align-items: flex-end;
+}
+
+.touch-row {
+  display: flex;
+  gap: 12px;
+}
+
+.touch-row--weapons {
+  justify-content: center;
+}
+
+.touch-btn {
+  width: 64px;
+  height: 64px;
+  border: 2px solid #2b323a;
+  border-radius: 16px;
+  background: rgba(17, 22, 27, 0.88);
+  color: var(--fg);
+  font-size: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+  touch-action: none;
+}
+
+.touch-btn:active,
+.touch-btn.active {
+  background: rgba(255, 221, 87, 0.75);
+  color: #111;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  transform: translateY(2px);
+}
+
+.touch-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.touch-weapon-btn {
+  width: 56px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid #2b323a;
+  border-radius: 14px;
+  background: rgba(17, 22, 27, 0.88);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.touch-group--left .touch-weapon-btn.active {
+  background: var(--p1);
+  color: #111;
+}
+
+.touch-group--right .touch-weapon-btn.active {
+  background: var(--p2);
+  color: #111;
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  .touch-controls {
+    display: flex;
+  }
+  .weapon-bar {
+    margin-bottom: 76px;
+  }
+}
