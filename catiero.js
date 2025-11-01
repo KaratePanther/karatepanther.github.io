@@ -267,13 +267,19 @@ window.addEventListener('visibilitychange', () => {
 });
 
 function applyTouchUIMode() {
+  if (!document.body) return;
   const coarseQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
   const isCoarse = coarseQuery.matches;
   const hasTouchPoints =
     (navigator.maxTouchPoints ?? 0) > 0 ||
     (navigator.msMaxTouchPoints ?? 0) > 0 ||
     'ontouchstart' in window;
-  const isTouch = isCoarse || hasTouchPoints;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints ?? 0) > 1);
+  const isAndroid = /Android/.test(ua);
+  const isTouch = isCoarse || hasTouchPoints || isIOS || isAndroid;
   document.body.classList.toggle('is-touch', isTouch);
   if (!isTouch) clearTouchStates();
 }
@@ -292,6 +298,9 @@ window.addEventListener(
   },
   { once: true }
 );
+
+window.addEventListener('resize', applyTouchUIMode);
+window.addEventListener('orientationchange', applyTouchUIMode);
 
 function updateWeaponButtonState() {
   weaponButtons.forEach((btn) => {
