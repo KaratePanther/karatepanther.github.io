@@ -194,6 +194,11 @@ canvas {
   justify-content: center;
 }
 
+.touch-row--joystick {
+  align-items: center;
+  justify-content: center;
+}
+
 .touch-btn {
   width: 64px;
   height: 64px;
@@ -223,6 +228,54 @@ canvas {
   outline-offset: 2px;
 }
 
+.touch-btn--wide {
+  width: 80px;
+}
+
+.touch-joystick {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 2px solid #2b323a;
+  background: rgba(17, 22, 27, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.touch-joystick__base {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+}
+
+.touch-joystick__stick {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 221, 87, 0.75);
+  border: 2px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.1s ease;
+}
+
+.touch-joystick.active .touch-joystick__stick {
+  transition: none;
+}
+
+.touch-group--right .touch-joystick {
+  margin-left: 12px;
+}
+
+.touch-group--left .touch-joystick {
+  margin-right: 12px;
+}
+
 .touch-weapon-btn {
   width: 56px;
   height: 48px;
@@ -249,11 +302,10 @@ canvas {
   color: #111;
 }
 
-@media (pointer: coarse), (max-width: 900px) {
-  .touch-controls {
-    display: flex;
-  }
-  .weapon-bar {
-    margin-bottom: 76px;
-  }
+body.is-touch .touch-controls {
+  display: flex;
+}
+
+body.is-touch .weapon-bar {
+  margin-bottom: 76px;
 }

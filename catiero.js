@@ -102,6 +102,119 @@ const touchStates = {
 
 const touchButtons = Array.from(document.querySelectorAll('.touch-btn'));
 const weaponButtons = Array.from(document.querySelectorAll('[data-weapon-choice]'));
+const joystickElements = Array.from(document.querySelectorAll('.touch-joystick'));
+
+const joysticks = joystickElements.map((el) => ({
+  el,
+  stick: el.querySelector('.touch-joystick__stick'),
+  player: el.dataset.player,
+  pointerId: null,
+  centerX: 0,
+  centerY: 0,
+  radius: 0,
+  limit: 0
+}));
+
+function resetJoystick(js) {
+  if (!js) return;
+  js.pointerId = null;
+  js.el.classList.remove('active');
+  if (js.stick) {
+    js.stick.style.transform = 'translate3d(0, 0, 0)';
+  }
+  const state = touchStates[js.player];
+  if (state) {
+    state.left = false;
+    state.right = false;
+    state.jump = false;
+  }
+}
+
+function updateJoystickFromPointer(js, clientX, clientY) {
+  if (!js || !js.stick) return;
+  if (!js.radius || !js.limit) {
+    const rect = js.el.getBoundingClientRect();
+    js.radius = rect.width / 2;
+    const stickRect = js.stick.getBoundingClientRect();
+    js.limit = Math.max(0, (rect.width - stickRect.width) / 2);
+    js.centerX = rect.left + rect.width / 2;
+    js.centerY = rect.top + rect.height / 2;
+  }
+
+  const dx = clientX - js.centerX;
+  const dy = clientY - js.centerY;
+  const radius = js.radius || 1;
+  let normX = dx / radius;
+  let normY = dy / radius;
+  const magnitude = Math.hypot(normX, normY);
+  if (magnitude > 1) {
+    normX /= magnitude;
+    normY /= magnitude;
+  }
+  if (magnitude < 0.1) {
+    normX = 0;
+    normY = 0;
+  }
+
+  const limit = js.limit || 0;
+  js.stick.style.transform = `translate(${normX * limit}px, ${normY * limit}px)`;
+
+  const state = touchStates[js.player];
+  if (!state) return;
+  const MOVE_THRESHOLD = 0.35;
+  const JUMP_THRESHOLD = 0.4;
+  state.left = normX < -MOVE_THRESHOLD;
+  state.right = normX > MOVE_THRESHOLD;
+  state.jump = normY < -JUMP_THRESHOLD;
+}
+
+joysticks.forEach((js) => {
+  if (!js.el || !js.stick) return;
+
+  const handlePointerDown = (e) => {
+    e.preventDefault();
+    const rect = js.el.getBoundingClientRect();
+    js.centerX = rect.left + rect.width / 2;
+    js.centerY = rect.top + rect.height / 2;
+    js.radius = rect.width / 2;
+    js.limit = Math.max(0, (rect.width - js.stick.getBoundingClientRect().width) / 2);
+    js.pointerId = e.pointerId;
+    js.el.classList.add('active');
+    if (js.el.setPointerCapture) {
+      try {
+        js.el.setPointerCapture(e.pointerId);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    updateJoystickFromPointer(js, e.clientX, e.clientY);
+  };
+
+  const handlePointerMove = (e) => {
+    if (js.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    updateJoystickFromPointer(js, e.clientX, e.clientY);
+  };
+
+  const handlePointerEnd = (e) => {
+    if (js.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    if (js.el.releasePointerCapture) {
+      try {
+        js.el.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    resetJoystick(js);
+  };
+
+  js.el.addEventListener('pointerdown', handlePointerDown);
+  js.el.addEventListener('pointermove', handlePointerMove);
+  js.el.addEventListener('pointerup', handlePointerEnd);
+  js.el.addEventListener('pointercancel', handlePointerEnd);
+  js.el.addEventListener('pointerleave', handlePointerEnd);
+});
 
 function setTouchState(player, action, isActive, el) {
   const state = touchStates[player];
@@ -143,6 +256,7 @@ function clearTouchStates() {
     }
   }
   touchButtons.forEach((btn) => btn.classList.remove('active'));
+  joysticks.forEach((js) => resetJoystick(js));
 }
 
 window.addEventListener('blur', clearTouchStates);
@@ -151,6 +265,33 @@ window.addEventListener('visibilitychange', () => {
     clearTouchStates();
   }
 });
+
+function applyTouchUIMode() {
+  const coarseQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
+  const isCoarse = coarseQuery.matches;
+  const hasTouchPoints =
+    (navigator.maxTouchPoints ?? 0) > 0 ||
+    (navigator.msMaxTouchPoints ?? 0) > 0 ||
+    'ontouchstart' in window;
+  const isTouch = isCoarse || hasTouchPoints;
+  document.body.classList.toggle('is-touch', isTouch);
+  if (!isTouch) clearTouchStates();
+}
+
+const coarsePointerQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
+if (typeof coarsePointerQuery.addEventListener === 'function') {
+  coarsePointerQuery.addEventListener('change', applyTouchUIMode);
+} else if (typeof coarsePointerQuery.addListener === 'function') {
+  coarsePointerQuery.addListener(applyTouchUIMode);
+}
+
+window.addEventListener(
+  'touchstart',
+  () => {
+    applyTouchUIMode();
+  },
+  { once: true }
+);
 
 function updateWeaponButtonState() {
   weaponButtons.forEach((btn) => {
@@ -214,6 +355,8 @@ let p1 = makePlayer(true);
 let p2 = makePlayer(false);
 
 updateWeaponButtonState();
+joysticks.forEach((js) => resetJoystick(js));
+applyTouchUIMode();
 
 let game = {
   paused: false,
