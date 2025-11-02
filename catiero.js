@@ -68,6 +68,44 @@ const WEAPONS = {
   tuna: { id: 'tuna', label: 'Tuna Can Bomb', projectile: TUNA }
 };
 
+const AI_LEVELS = {
+  easy: {
+    decisionInterval: 450,
+    variance: 140,
+    boopAggro: 0.55,
+    boopRange: 12,
+    jumpChance: 0.22,
+    useWeapons: true,
+    sausageRange: 32,
+    tunaChance: 0,
+    attackInterval: 900
+  },
+  medium: {
+    decisionInterval: 320,
+    variance: 110,
+    boopAggro: 0.72,
+    boopRange: 14,
+    jumpChance: 0.35,
+    useWeapons: true,
+    sausageRange: 38,
+    tunaChance: 0.15,
+    attackInterval: 720
+  },
+  hard: {
+    decisionInterval: 200,
+    variance: 90,
+    boopAggro: 0.88,
+    boopRange: 16,
+    jumpChance: 0.52,
+    useWeapons: true,
+    sausageRange: 44,
+    tunaChance: 0.25,
+    attackInterval: 540
+  }
+};
+
+let game;
+
 // Platforms (pixel rectangles)
 // Each: x, y, w, h in world (WIDTH x HEIGHT)
 const platforms = [
@@ -83,15 +121,26 @@ const spawns = [{ x: 24, y: 152 }, { x: 276, y: 152 }];
 // Input state
 const keys = new Set();
 document.addEventListener('keydown', (e) => {
+  const menuVisible = $menuOverlay && !$menuOverlay.classList.contains('hidden');
+  if (menuVisible || (game && (!game.started || game.menuOpen))) {
+    if ((e.key === 'Enter' || e.key === ' ') && menuVisible) {
+      e.preventDefault();
+      $menuStartBtn?.click();
+    }
+    return;
+  }
+
   keys.add(e.key);
   if (e.key === 'p' || e.key === 'P') togglePause();
   if (e.key === 'r' || e.key === 'R') resetMatch();
   if (e.key === '1') setPlayerWeapon('p1', 'paw');
   if (e.key === '2') setPlayerWeapon('p1', 'sausage');
   if (e.key === '3') setPlayerWeapon('p1', 'tuna');
-  if (e.key === '7') setPlayerWeapon('p2', 'paw');
-  if (e.key === '8') setPlayerWeapon('p2', 'sausage');
-  if (e.key === '9') setPlayerWeapon('p2', 'tuna');
+  if (!game || !game.aiEnabled) {
+    if (e.key === '7') setPlayerWeapon('p2', 'paw');
+    if (e.key === '8') setPlayerWeapon('p2', 'sausage');
+    if (e.key === '9') setPlayerWeapon('p2', 'tuna');
+  }
 });
 document.addEventListener('keyup', (e) => keys.delete(e.key));
 
@@ -114,6 +163,30 @@ const joysticks = joystickElements.map((el) => ({
   radius: 0,
   limit: 0
 }));
+
+const $p1Score = document.getElementById('p1Score');
+const $p2Score = document.getElementById('p2Score');
+const $menuOverlay = document.getElementById('menuOverlay');
+const $menuStartBtn = document.getElementById('menuStartBtn');
+const modeRadios = Array.from(document.querySelectorAll('input[name="cat-mode"]'));
+const difficultyRadios = Array.from(document.querySelectorAll('input[name="cat-difficulty"]'));
+const $difficultySection = document.getElementById('aiDifficultySection');
+
+if ($menuOverlay) {
+  $menuOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function getCheckedValue(nodes, fallback) {
+  const found = nodes.find((el) => el.checked);
+  return found ? found.value : fallback;
+}
+
+function updateDifficultySectionVisibility() {
+  const mode = getCheckedValue(modeRadios, 'ai');
+  if ($difficultySection) {
+    $difficultySection.style.display = mode === 'ai' ? 'flex' : 'none';
+  }
+}
 
 function resetJoystick(js) {
   if (!js) return;
@@ -257,6 +330,12 @@ function clearTouchStates() {
   }
   touchButtons.forEach((btn) => btn.classList.remove('active'));
   joysticks.forEach((js) => resetJoystick(js));
+  if (p2 && p2.aiControl) {
+    p2.aiControl.left = false;
+    p2.aiControl.right = false;
+    p2.aiControl.jump = false;
+    p2.aiControl.attack = false;
+  }
 }
 
 window.addEventListener('blur', clearTouchStates);
@@ -329,6 +408,17 @@ weaponButtons.forEach((btn) => {
   });
 });
 
+modeRadios.forEach((radio) => radio.addEventListener('change', updateDifficultySectionVisibility));
+updateDifficultySectionVisibility();
+
+if ($menuStartBtn) {
+  $menuStartBtn.addEventListener('click', () => {
+    const mode = getCheckedValue(modeRadios, 'ai');
+    const difficulty = getCheckedValue(difficultyRadios, 'medium');
+    startMatchFromMenu(mode, difficulty);
+  });
+}
+
 // Helper
 const now = () => performance.now();
 
@@ -354,7 +444,10 @@ function makePlayer(isP1, overrides = {}) {
       boopStart: 0,
       scored: 0,
       activeWeapon: 'sausage',
-      weaponCooldownUntil: 0
+      weaponCooldownUntil: 0,
+      aiControl: { left: false, right: false, jump: false, attack: false },
+      nextAIDecision: 0,
+      nextAIAttack: 0
     },
     overrides
   );
@@ -367,14 +460,37 @@ updateWeaponButtonState();
 joysticks.forEach((js) => resetJoystick(js));
 applyTouchUIMode();
 
-let game = {
+game = {
   paused: false,
   shakeTime: 0,
-  winner: null
+  winner: null,
+  started: false,
+  menuOpen: true,
+  mode: 'ai',
+  aiEnabled: true,
+  aiDifficulty: 'medium'
 };
 
-const $p1Score = document.getElementById('p1Score');
-const $p2Score = document.getElementById('p2Score');
+function startMatchFromMenu(mode, difficulty) {
+  game.mode = mode;
+  game.aiEnabled = mode === 'ai';
+  game.aiDifficulty = difficulty;
+  game.menuOpen = false;
+  game.started = true;
+  game.winner = null;
+  game.paused = false;
+  if ($menuOverlay) {
+    $menuOverlay.classList.add('hidden');
+    $menuOverlay.setAttribute('aria-hidden', 'true');
+  }
+  if (p1) p1.activeWeapon = 'sausage';
+  if (p2) p2.activeWeapon = 'sausage';
+  resetMatch();
+  if (game.aiEnabled && p2) {
+    p2.nextAIDecision = 0;
+    p2.nextAIAttack = 0;
+  }
+}
 
 function resetRound(deadPlayer, killer) {
   // screen shake a bit
@@ -395,10 +511,16 @@ function resetRound(deadPlayer, killer) {
   p2.scored = $p2Score.textContent | 0;
   projectiles = [];
   impactFlashes = [];
+  if (game.aiEnabled) {
+    p2.nextAIDecision = 0;
+    p2.nextAIAttack = 0;
+  }
+  clearTouchStates();
   updateWeaponButtonState();
 }
 
 function resetMatch() {
+  if (!game.started) return;
   const p1Weapon = p1.activeWeapon;
   const p2Weapon = p2.activeWeapon;
   p1 = makePlayer(true, { activeWeapon: p1Weapon });
@@ -408,9 +530,17 @@ function resetMatch() {
   game.winner = null;
   game.paused = false;
   game.shakeTime = 0;
+  game.menuOpen = false;
   projectiles = [];
   impactFlashes = [];
   updateScoreHUD();
+  clearTouchStates();
+  keys.clear();
+  if (game.aiEnabled) {
+    setPlayerWeapon('p2', p2.activeWeapon || 'sausage');
+    p2.nextAIDecision = 0;
+    p2.nextAIAttack = 0;
+  }
   updateWeaponButtonState();
 }
 
@@ -420,6 +550,7 @@ function updateScoreHUD() {
 }
 
 function togglePause() {
+  if (!game.started || game.menuOpen || game.winner) return;
   game.paused = !game.paused;
 }
 
@@ -542,16 +673,19 @@ function collidePlatforms(pl) {
 }
 
 function controlPlayer(pl) {
-  const touch = touchStates[pl.isP1 ? 'p1' : 'p2'];
-  const leftKey = pl.isP1 ? keys.has('a') || keys.has('A') : keys.has('ArrowLeft');
-  const rightKey = pl.isP1 ? keys.has('d') || keys.has('D') : keys.has('ArrowRight');
-  const jumpKey = pl.isP1 ? keys.has('w') || keys.has('W') : keys.has('ArrowUp');
-  const boopKey = pl.isP1 ? keys.has('f') : keys.has('l') || keys.has('L');
+  const isAI = game.aiEnabled && !pl.isP1;
+  const touch = isAI ? null : touchStates[pl.isP1 ? 'p1' : 'p2'];
+  const ai = isAI ? pl.aiControl : null;
 
-  const left = leftKey || (touch && touch.left);
-  const right = rightKey || (touch && touch.right);
-  const jump = jumpKey || (touch && touch.jump);
-  const boopK = boopKey || (touch && touch.boop);
+  const leftKey = pl.isP1 ? keys.has('a') || keys.has('A') : (!isAI && (keys.has('ArrowLeft')));
+  const rightKey = pl.isP1 ? keys.has('d') || keys.has('D') : (!isAI && (keys.has('ArrowRight')));
+  const jumpKey = pl.isP1 ? keys.has('w') || keys.has('W') : (!isAI && keys.has('ArrowUp'));
+  const boopKey = pl.isP1 ? keys.has('f') : (!isAI && (keys.has('l') || keys.has('L')));
+
+  const left = !!leftKey || !!(touch && touch.left) || !!(ai && ai.left);
+  const right = !!rightKey || !!(touch && touch.right) || !!(ai && ai.right);
+  const jump = !!jumpKey || !!(touch && touch.jump) || !!(ai && ai.jump);
+  const boopK = !!boopKey || !!(touch && touch.boop) || !!(ai && ai.attack);
 
   if (left) {
     pl.vx = -MOVE_SPEED;
@@ -597,6 +731,11 @@ function controlPlayer(pl) {
   // gravity
   pl.vy += GRAVITY;
   if (pl.vy > MAX_FALL) pl.vy = MAX_FALL;
+
+  if (isAI && pl.aiControl) {
+    pl.aiControl.jump = false;
+    pl.aiControl.attack = false;
+  }
 }
 
 function resolveBoops(attacker, defender) {
@@ -632,6 +771,61 @@ function resolveBoops(attacker, defender) {
         game.shakeTime = Math.max(game.shakeTime, 80);
       }
     }
+  }
+}
+
+function updateAIControl(ai, target) {
+  if (!game.started || !game.aiEnabled || !ai || !target) return;
+  const cfg = AI_LEVELS[game.aiDifficulty] || AI_LEVELS.medium;
+  const t = now();
+  if (t < ai.nextAIDecision) return;
+  const control = ai.aiControl;
+  if (!control) return;
+
+  ai.nextAIDecision = t + cfg.decisionInterval + Math.random() * (cfg.variance || 0);
+
+  control.left = false;
+  control.right = false;
+  control.attack = false;
+  control.jump = false;
+
+  const centerAx = ai.x + ai.w / 2;
+  const centerTx = target.x + target.w / 2;
+  const dx = centerTx - centerAx;
+  const absDx = Math.abs(dx);
+  if (absDx > 6) {
+    control.left = dx < -6;
+    control.right = dx > 6;
+  }
+
+  const dy = target.y - ai.y;
+  const closeVertical = Math.abs((target.y + target.h / 2) - (ai.y + ai.h / 2)) < 12;
+  const boopRange = cfg.boopRange ?? 14;
+  const wantsBoop = absDx < boopRange && closeVertical && Math.random() < cfg.boopAggro;
+
+  if (wantsBoop) {
+    if (ai.activeWeapon !== 'paw') setPlayerWeapon('p2', 'paw');
+    control.attack = true;
+  } else if (cfg.useWeapons) {
+    if (absDx > (cfg.sausageRange ?? 36)) {
+      if (ai.activeWeapon !== 'sausage') setPlayerWeapon('p2', 'sausage');
+      if (t >= ai.nextAIAttack) {
+        control.attack = true;
+        ai.nextAIAttack = t + cfg.attackInterval;
+      }
+    } else if (cfg.tunaChance && absDx > 18 && Math.random() < cfg.tunaChance && t >= ai.nextAIAttack) {
+      setPlayerWeapon('p2', 'tuna');
+      control.attack = true;
+      ai.nextAIAttack = t + cfg.attackInterval * 1.2;
+    } else if (ai.activeWeapon !== 'paw') {
+      setPlayerWeapon('p2', 'paw');
+    }
+  } else if (ai.activeWeapon !== 'paw') {
+    setPlayerWeapon('p2', 'paw');
+  }
+
+  if (dy < -14 && ai.onGround && Math.random() < cfg.jumpChance) {
+    control.jump = true;
   }
 }
 
@@ -863,7 +1057,10 @@ function step() {
   dtMs = Math.min(50, t - last);
   last = t;
 
-  if (!game.paused && !game.winner) {
+  const playing = game.started && !game.paused && !game.winner;
+
+  if (playing) {
+    if (game.aiEnabled) updateAIControl(p2, p1);
     // Control & physics
     controlPlayer(p1);
     controlPlayer(p2);
@@ -880,7 +1077,7 @@ function step() {
     if (p1.mood <= 0) resetRound(p1, p2);
     if (p2.mood <= 0) resetRound(p2, p1);
   }
-  if (game.paused || game.winner) {
+  if (!playing) {
     updateImpactFlashes();
   }
 

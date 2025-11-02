@@ -72,6 +72,55 @@
     </div>
   </div>
 
+  <div id="menuOverlay" class="menu-overlay" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+    <div class="menu-panel">
+      <h1 id="menuTitle">Catiero Arena</h1>
+      <p class="menu-tagline">Choose who you’re booping before the match begins.</p>
+
+      <section class="menu-section" aria-labelledby="modeHeading">
+        <h2 id="modeHeading">Game Mode</h2>
+        <label class="menu-option">
+          <input type="radio" name="cat-mode" value="pvp" />
+          Two players on the same device
+        </label>
+        <label class="menu-option">
+          <input type="radio" name="cat-mode" value="ai" checked />
+          Player vs Computer
+        </label>
+      </section>
+
+      <section class="menu-section" id="aiDifficultySection" aria-labelledby="difficultyHeading">
+        <h2 id="difficultyHeading">Computer Difficulty</h2>
+        <label class="menu-option">
+          <input type="radio" name="cat-difficulty" value="easy" />
+          Easy — chill cat, rarely boops first
+        </label>
+        <label class="menu-option">
+          <input type="radio" name="cat-difficulty" value="medium" checked />
+          Medium — balanced paw pressure
+        </label>
+        <label class="menu-option">
+          <input type="radio" name="cat-difficulty" value="hard" />
+          Hard — aggressive strafes and ranged shots
+        </label>
+      </section>
+
+      <section class="menu-section menu-hints" aria-labelledby="controlsHeading">
+        <h2 id="controlsHeading">Controls</h2>
+        <ul>
+          <li>P1: A/D move, W jump, F attack</li>
+          <li>P2: ◀/▶ move, ▲ jump, L attack</li>
+          <li>Mobile: Thumb joysticks & Boop buttons</li>
+          <li>P pause · R reset match</li>
+        </ul>
+      </section>
+
+      <div class="menu-actions">
+        <button id="menuStartBtn">Start Match</button>
+      </div>
+    </div>
+  </div>
+
   <script src="catiero.js" defer></script>
 </body>
 </html>
