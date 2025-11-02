@@ -1692,28 +1692,37 @@
     const viewportHeight = viewport ? viewport.height : window.innerHeight;
     const viewportTop = viewport ? viewport.offsetTop : 0;
     const viewportBottom = viewportTop + viewportHeight;
+    const viewportCenter = viewportTop + viewportHeight / 2;
     const isCompact = viewportWidth <= 768;
     const marginX = isCompact ? 8 : 32;
-    const bufferY = isCompact ? 10 : 28;
+    const bufferY = isCompact ? 12 : 28;
     const topRect = handP2 ? handP2.getBoundingClientRect() : null;
     const bottomRect = handP1 ? handP1.getBoundingClientRect() : null;
-    const topHeight = topRect ? topRect.height : 0;
-    const bottomHeight = bottomRect ? bottomRect.height : 0;
+    const topOccupied = topRect
+      ? Math.min(viewportBottom, Math.max(viewportTop, topRect.bottom))
+      : viewportTop;
+    const bottomOccupied = bottomRect
+      ? Math.max(viewportTop, Math.min(viewportBottom, bottomRect.top))
+      : viewportBottom;
 
-    const topAllowance = isCompact ? Math.min(topHeight, 48) : topHeight;
-    const bottomAllowance = isCompact ? Math.min(bottomHeight, 80) : bottomHeight;
+    let topBound = topOccupied + bufferY;
+    let bottomBound = bottomOccupied - bufferY;
+
+    if (bottomBound <= topBound) {
+      topBound = viewportTop + bufferY;
+      bottomBound = viewportBottom - bufferY;
+    }
+
     const availW = Math.max(240, viewportWidth - (isCompact ? marginX * 2 : marginX));
-    const topBound = viewportTop + bufferY + topAllowance;
-    const bottomBound = viewportBottom - bottomAllowance - bufferY;
-    const rawHeight = Math.max(260, bottomBound - topBound);
+    const verticalSpace = Math.max(0, bottomBound - topBound);
 
     const scaleX = availW / W;
-    const scaleY = rawHeight / H;
+    const scaleY = verticalSpace / H;
     const scale = Math.min(1, scaleX, scaleY);
 
     const scaledH = H * scale;
-    const viewportCenter = viewportTop + viewportHeight / 2;
-    let offset = bottomBound - (viewportCenter + scaledH / 2);
+    const targetCenter = (topBound + bottomBound) / 2;
+    let offset = targetCenter - viewportCenter;
 
     let topEdge = viewportCenter + offset - scaledH / 2;
     if (topEdge < topBound) {
