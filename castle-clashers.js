@@ -1283,7 +1283,8 @@
           u.atkCd = u.atkInterval;
           const hitColor = u.owner === 'P1' ? '#6ea8fe' : '#f59e0b';
           const finalizeHit = () => {
-            target.hp -= u.dps * dt; // using dps * dt gives smooth damage; could quantize
+            const damagePerHit = u.dps * (u.atkInterval || dt); // align hit damage with card stats
+            target.hp -= damagePerHit;
             const splashRadius = u.melee ? Math.max(18, (target.radius || 16) + 4) : 24;
             const targetPos = target.pos || { x: u.pos.x, y: u.pos.y };
             addHitEffect(targetPos.x, targetPos.y, hitColor, splashRadius);
