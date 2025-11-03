@@ -201,12 +201,12 @@ button { touch-action: manipulation; }
     margin-top: 4px;
   }
   #hud {
-    left: auto;
-    right: calc(clamp(8px, 3vw, 24px) + 56px);
+    left: clamp(8px, 3vw, 24px);
+    right: auto;
     top: 50%;
     transform: translateY(-50%);
-    align-items: center;
-    gap: 0;
+    align-items: flex-start;
+    gap: 4px;
   }
   .floating-menu {
     top: 50%;
