@@ -644,6 +644,12 @@
   });
   updateSoundButtons();
 
+  function clampPointToField(x, y) {
+    const clampedX = Math.min(Math.max(x, FIELD.left), FIELD.right);
+    const clampedY = Math.min(Math.max(y, FIELD.top), FIELD.bottom);
+    return { x: clampedX, y: clampedY };
+  }
+
   function handleSpellOption(player, targetKey) {
     if (state.phase !== 'playing') return;
     const playerLabel = player === 'P1' ? 'Player 1' : 'Player 2';
@@ -660,14 +666,16 @@
     }
   }
 
-  function castSpell(player, cardKey, targetKey) {
+  function castSpell(player, cardKey, targetKey, targetPoint = null) {
     const card = Cards[cardKey];
     if (!card || !card.spell) return { ok: false, reason: 'invalid_card', card };
     const validation = canSpawn(player, cardKey);
     if (!validation.ok) return validation;
     let spellData = null;
     if (cardKey === 'fireball') {
-      const target = getFireballTarget(player, targetKey);
+      const target = targetPoint
+        ? clampPointToField(targetPoint.x, targetPoint.y)
+        : getFireballTarget(player, targetKey);
       if (!target) return { ok: false, reason: 'invalid_target', card };
       spellData = { target };
     }
@@ -965,6 +973,21 @@
 
   function tryPlace(player, x, y) {
     if (state.phase !== 'playing') return;
+    const playerState = getPlayer(player);
+    const selectedCard = (playerState && playerState.selected) || 'knight';
+    const selectedDef = Cards[selectedCard];
+
+    if (selectedDef && selectedDef.spell) {
+      if (selectedCard === 'fireball') {
+        const result = castSpell(player, selectedCard, null, { x, y });
+        if (!result.ok) {
+          flashStatus(describeSpawnFailure(player, selectedCard, result));
+        }
+      } else {
+        flashStatus(`${player === 'P1' ? 'Player 1' : 'Player 2'}: Cannot cast this spell here.`);
+      }
+      return;
+    }
     // Must place on own half
     if (player === 'P1' && y < MID_Y + NO_SPAWN_MARGIN) return;
     if (player === 'P2' && y > MID_Y - NO_SPAWN_MARGIN) return;
@@ -972,12 +995,8 @@
     // Snap x to lane
     const laneX = Math.abs(x - LANE_LEFT_X) < Math.abs(x - LANE_RIGHT_X) ? LANE_LEFT_X : LANE_RIGHT_X;
 
-    const card = (player === 'P1' ? state.p1.selected : state.p2.selected) || 'knight';
-    const cardDef = Cards[card];
-    if (cardDef && cardDef.spell) {
-      flashStatus(`${player === 'P1' ? 'Player 1' : 'Player 2'}: Tap a spell target to cast.`);
-      return;
-    }
+    const card = selectedCard;
+    const cardDef = selectedDef;
     const validation = canSpawn(player, card);
     if (!validation.ok) {
       flashStatus(describeSpawnFailure(player, card, validation));
