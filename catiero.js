@@ -196,6 +196,8 @@ const AI_LEVELS = {
 };
 
 let game;
+let p1;
+let p2;
 
 // Platforms (pixel rectangles)
 // Each: x, y, w, h in world (WIDTH x HEIGHT)
@@ -405,6 +407,7 @@ function updateMenuUI() {
   if (game) {
     applyOpponentUIState(game.aiEnabled);
   }
+  fitGameToViewport();
 }
 
 function openMenu() {
@@ -608,6 +611,52 @@ function clearTouchStates() {
   }
 }
 
+function fitGameToViewport() {
+  if (!canvas) return;
+  const wrap = document.querySelector('.wrap');
+  if (!wrap) return;
+
+  const aspect = canvas.width && canvas.height ? canvas.width / canvas.height : WIDTH / HEIGHT;
+  canvas.style.width = '';
+  canvas.style.height = '';
+  canvas.style.maxWidth = '100%';
+
+  const viewport = window.visualViewport;
+  const viewportHeight = viewport ? viewport.height : window.innerHeight;
+  const rect = canvas.getBoundingClientRect();
+  const topOffset = rect.top - (viewport ? viewport.offsetTop : 0);
+
+  const touchControls = document.querySelector('.touch-controls');
+  let bottomReserve = 16;
+  if (touchControls) {
+    const style = window.getComputedStyle(touchControls);
+    if (style.display !== 'none') {
+      bottomReserve = touchControls.getBoundingClientRect().height + 16;
+    }
+  }
+
+  const availableHeight = Math.max(180, viewportHeight - topOffset - bottomReserve);
+  if (availableHeight <= 0) return;
+
+  const currentHeight = rect.height;
+  const wrapRect = wrap.getBoundingClientRect();
+  const maxWidth = wrapRect.width;
+
+  if (availableHeight < currentHeight - 0.5) {
+    const targetHeight = Math.max(180, availableHeight);
+    let targetWidth = targetHeight * aspect;
+    if (targetWidth > maxWidth) {
+      targetWidth = maxWidth;
+    }
+    const adjustedHeight = targetWidth / aspect;
+    canvas.style.width = `${targetWidth}px`;
+    canvas.style.height = `${adjustedHeight}px`;
+  } else {
+    canvas.style.width = '100%';
+    canvas.style.height = '';
+  }
+}
+
 window.addEventListener('blur', clearTouchStates);
 window.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
@@ -631,6 +680,7 @@ function applyTouchUIMode() {
   const isTouch = isCoarse || hasTouchPoints || isIOS || isAndroid;
   document.body.classList.toggle('is-touch', isTouch);
   if (!isTouch) clearTouchStates();
+  fitGameToViewport();
 }
 
 const coarsePointerQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
@@ -650,6 +700,12 @@ window.addEventListener(
 
 window.addEventListener('resize', applyTouchUIMode);
 window.addEventListener('orientationchange', applyTouchUIMode);
+window.addEventListener('resize', fitGameToViewport);
+window.addEventListener('orientationchange', fitGameToViewport);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fitGameToViewport);
+  window.visualViewport.addEventListener('scroll', fitGameToViewport);
+}
 
 function updateWeaponButtonState() {
   weaponButtons.forEach((btn) => {
@@ -782,8 +838,8 @@ function makePlayer(isP1, overrides = {}) {
   );
 }
 
-let p1 = makePlayer(true);
-let p2 = makePlayer(false);
+p1 = makePlayer(true);
+p2 = makePlayer(false);
 
 updateWeaponButtonState();
 joysticks.forEach((js) => resetJoystick(js));
@@ -1528,6 +1584,7 @@ function step() {
 // Initialize
 updateScoreHUD();
 requestAnimationFrame(step);
+fitGameToViewport();
 
 // Accessibility: prevent arrow keys from scrolling page
 window.addEventListener(
@@ -1538,3 +1595,46 @@ window.addEventListener(
   },
   { passive: false }
 );
+
+function preventViewportZoom() {
+  const blockGesture = (event) => {
+    event.preventDefault();
+  };
+
+  window.addEventListener(
+    'wheel',
+    (event) => {
+      if (event.ctrlKey) {
+        event.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  window.addEventListener('gesturestart', blockGesture, { passive: false });
+  window.addEventListener('gesturechange', blockGesture, { passive: false });
+  window.addEventListener('gestureend', blockGesture, { passive: false });
+
+  let lastTouchEnd = 0;
+  window.addEventListener(
+    'touchend',
+    (event) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 350) {
+        event.preventDefault();
+      }
+      lastTouchEnd = now;
+    },
+    { passive: false }
+  );
+
+  window.addEventListener(
+    'dblclick',
+    (event) => {
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+}
+
+preventViewportZoom();
