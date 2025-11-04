@@ -8,20 +8,30 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="hud">
-      <div class="score">P1 Paw Points: <span id="p1Score">0</span> &nbsp;|&nbsp; P2 Paw Points: <span id="p2Score">0</span></div>
-      <div class="legend">
-        <span class="pill"><span class="p1dot"></span>P1: A/D move · W jump · F boop</span>
-        &nbsp;
-        <span class="pill"><span class="p2dot"></span>P2: ◀︎/▶︎ move · ▲ jump · L boop</span>
-        &nbsp;
-        <span class="pill">P pause · R reset</span>
-        &nbsp;
-        <span class="pill">Weapons — P1 1/2/3 · P2 7/8/9</span>
+    <header class="hud">
+      <button
+        type="button"
+        id="menuToggleBtn"
+        class="hud-menu-btn"
+        aria-haspopup="dialog"
+        aria-controls="menuOverlay"
+        aria-expanded="true"
+      >
+        <span class="hud-menu-btn__icon" aria-hidden="true">☰</span>
+        <span class="hud-menu-btn__label">Menu</span>
+      </button>
+      <div class="scoreboard" aria-live="polite">
+        <div class="scoreboard__item scoreboard__item--p1">
+          <span class="scoreboard__label" id="p1Label">Player 1</span>
+          <span class="scoreboard__score" id="p1Score">0</span>
+        </div>
+        <div class="scoreboard__item scoreboard__item--p2">
+          <span class="scoreboard__label" id="p2Label">Player 2</span>
+          <span class="scoreboard__score" id="p2Score">0</span>
+        </div>
       </div>
-    </div>
+    </header>
     <canvas id="game" width="960" height="540"></canvas>
-    <div class="legend">Catiero v0.1 — Pick <b>Paw Boop</b>, <b>Sausage Bazooka</b>, or <b>Tuna Can Bomb</b>. Use your weapon to reduce rival's <b>Mood</b>; at 0 they <b>respawn</b> and you score a <b>Paw Point</b>. First to 5 wins.</div>
     <div class="weapon-bar" role="region" aria-label="Weapon selection">
       <div class="weapon-panel weapon-panel--p1">
         <div class="weapon-panel__title">Player 1 Weapon (1/2/3)</div>
@@ -74,8 +84,11 @@
 
   <div id="menuOverlay" class="menu-overlay" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
     <div class="menu-panel">
-      <h1 id="menuTitle">Catiero Arena</h1>
-      <p class="menu-tagline">Choose who you’re booping before the match begins.</p>
+      <div class="menu-header">
+        <h1 id="menuTitle">Catiero Arena</h1>
+        <button type="button" id="menuCloseBtn" class="menu-close-btn" aria-label="Close menu">×</button>
+      </div>
+      <p class="menu-tagline">Queue up your cats, weapons, and vibes before the match.</p>
 
       <section class="menu-section" aria-labelledby="modeHeading">
         <h2 id="modeHeading">Game Mode</h2>
@@ -105,6 +118,31 @@
         </label>
       </section>
 
+      <section class="menu-section" aria-labelledby="soundHeading">
+        <h2 id="soundHeading">Sound</h2>
+        <label class="menu-option menu-option--inline">
+          <input type="checkbox" id="soundToggle" checked />
+          Enable crunchy arcade sound effects
+        </label>
+      </section>
+
+      <section class="menu-section" id="weaponRulesSection" aria-labelledby="weaponHeading">
+        <h2 id="weaponHeading">Active Weapons</h2>
+        <p class="menu-helper">Only checked weapons will appear in this match.</p>
+        <label class="menu-option menu-option--inline">
+          <input type="checkbox" name="cat-weapon" value="paw" checked disabled />
+          Paw Boop — the classic close range slap (always enabled)
+        </label>
+        <label class="menu-option menu-option--inline">
+          <input type="checkbox" name="cat-weapon" value="sausage" checked />
+          Sausage Bazooka — mid range launcher
+        </label>
+        <label class="menu-option menu-option--inline">
+          <input type="checkbox" name="cat-weapon" value="tuna" checked />
+          Tuna Can Bomb — bouncy area denial
+        </label>
+      </section>
+
       <section class="menu-section menu-hints" aria-labelledby="controlsHeading">
         <h2 id="controlsHeading">Controls</h2>
         <ul>
@@ -116,7 +154,8 @@
       </section>
 
       <div class="menu-actions">
-        <button id="menuStartBtn">Start Match</button>
+        <button id="menuPrimaryBtn">Start Match</button>
+        <button id="menuRestartBtn" class="menu-secondary-btn" type="button">Restart Match</button>
       </div>
     </div>
   </div>
