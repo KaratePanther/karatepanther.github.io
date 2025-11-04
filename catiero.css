@@ -22,6 +22,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  overflow: hidden;
 }
 
 .wrap {
@@ -30,6 +31,13 @@ body {
   padding: 12px 12px 24px;
   display: grid;
   gap: 12px;
+  min-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  .wrap {
+    min-height: 100dvh;
+  }
 }
 
 h1 {
@@ -38,7 +46,7 @@ h1 {
   letter-spacing: 0.5px;
 }
 
-.hud {
+header.hud {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,13 +58,80 @@ h1 {
   image-rendering: pixelated; /* pixel vibe */
 }
 
-.score {
+.hud-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #2b323a;
+  background: #11161b;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.hud-menu-btn:hover {
+  background: #1c232b;
+}
+
+.hud-menu-btn:active {
+  transform: translateY(1px);
+}
+
+.hud-menu-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hud-menu-btn__icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.hud-menu-btn__label {
+  letter-spacing: 0.5px;
+}
+
+.scoreboard {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.scoreboard__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 82px;
+  background: rgba(17, 22, 27, 0.75);
+  border: 1px solid #2b323a;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.scoreboard__label {
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  opacity: 0.8;
+  text-transform: uppercase;
+}
+
+.scoreboard__score {
+  font-size: 20px;
   font-weight: 700;
 }
 
-.legend {
-  opacity: 0.9;
-  font-size: 12px;
+.scoreboard__item--p1 .scoreboard__score {
+  color: var(--p1);
+}
+
+.scoreboard__item--p2 .scoreboard__score {
+  color: var(--p2);
 }
 
 canvas {
@@ -66,33 +141,6 @@ canvas {
   border-radius: 10px;
   background: #0b0e10;
   image-rendering: pixelated;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #11161b;
-  border: 1px solid #2b323a;
-  font-size: 12px;
-}
-
-.p1dot,
-.p2dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.p1dot {
-  background: var(--p1);
-}
-
-.p2dot {
-  background: var(--p2);
 }
 
 .weapon-bar {
@@ -141,6 +189,12 @@ canvas {
 
 .weapon-btn:hover {
   background: #202830;
+}
+
+.weapon-btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .weapon-btn.active {
@@ -310,7 +364,23 @@ body.is-touch .touch-controls {
 }
 
 body.is-touch .weapon-bar {
-  margin-bottom: 76px;
+  display: none;
+}
+
+body.is-touch .wrap {
+  padding-bottom: 120px;
+}
+
+body.ai-opponent .weapon-panel--p2 {
+  display: none;
+}
+
+body.ai-opponent .touch-group--right {
+  display: none;
+}
+
+body.ai-opponent .touch-controls {
+  justify-content: flex-start;
 }
 
 .menu-overlay {
@@ -322,6 +392,7 @@ body.is-touch .weapon-bar {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  overflow-y: auto;
 }
 
 .menu-overlay.hidden {
@@ -338,12 +409,44 @@ body.is-touch .weapon-bar {
   flex-direction: column;
   gap: 18px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  max-height: min(620px, 92vh);
+  overflow-y: auto;
+}
+
+.menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .menu-panel h1 {
   margin: 0;
   font-size: 24px;
   letter-spacing: 0.6px;
+}
+
+.menu-close-btn {
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 26px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.menu-close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menu-close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .menu-tagline {
@@ -377,10 +480,20 @@ body.is-touch .weapon-bar {
   border-radius: 12px;
 }
 
+.menu-option--inline {
+  align-items: center;
+}
+
 .menu-option input[type="radio"],
 .menu-option input[type="checkbox"] {
   margin-top: 2px;
   accent-color: var(--accent);
+}
+
+.menu-helper {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.7;
 }
 
 .menu-hints ul {
@@ -395,6 +508,8 @@ body.is-touch .weapon-bar {
 .menu-actions {
   display: flex;
   justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .menu-actions button {
@@ -419,10 +534,30 @@ body.is-touch .weapon-bar {
   transform: translateY(1px);
 }
 
+.menu-secondary-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg);
+  border: 1px solid #2b323a;
+}
+
+#menuRestartBtn {
+  display: none;
+}
+
+.menu-secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.menu-secondary-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (max-width: 540px) {
   .menu-panel {
     gap: 16px;
     padding: 22px 20px;
+    width: min(520px, 96vw);
   }
 
   .menu-option {
@@ -431,5 +566,20 @@ body.is-touch .weapon-bar {
 
   .menu-actions button {
     width: 100%;
+  }
+
+  .hud-menu-btn {
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+
+  .hud-menu-btn__label {
+    display: none;
+  }
+}
+
+@media (min-width: 821px) {
+  .hud-menu-btn {
+    font-size: 13px;
   }
 }

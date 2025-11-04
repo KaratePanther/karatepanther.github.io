@@ -68,6 +68,97 @@ const WEAPONS = {
   tuna: { id: 'tuna', label: 'Tuna Can Bomb', projectile: TUNA }
 };
 
+let audioCtx = null;
+let masterGain = null;
+const AUDIO_GAIN = 0.25;
+
+function ensureAudioContext() {
+  if (!game || !game.soundEnabled) return null;
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  audioCtx = new Ctx();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = AUDIO_GAIN;
+  masterGain.connect(audioCtx.destination);
+  return audioCtx;
+}
+
+function playTone({ frequency = 440, duration = 0.2, type = 'sine', volume = 1, attack = 0.01, decay = 0.08 }) {
+  const ctx = ensureAudioContext();
+  if (!ctx || !masterGain) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = frequency;
+  const nowTime = ctx.currentTime;
+  const attackEnd = nowTime + attack;
+  gain.gain.setValueAtTime(0, nowTime);
+  gain.gain.linearRampToValueAtTime(volume, attackEnd);
+  gain.gain.exponentialRampToValueAtTime(0.0001, attackEnd + Math.max(decay, 0.01) + duration);
+  osc.connect(gain);
+  gain.connect(masterGain);
+  osc.start(nowTime);
+  osc.stop(attackEnd + duration + decay);
+}
+
+function playNoise({ duration = 0.25, volume = 0.4 }) {
+  const ctx = ensureAudioContext();
+  if (!ctx || !masterGain) return;
+  const bufferSize = Math.floor(ctx.sampleRate * duration);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  }
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const gain = ctx.createGain();
+  gain.gain.value = volume;
+  noise.connect(gain);
+  gain.connect(masterGain);
+  noise.start();
+  noise.stop(ctx.currentTime + duration);
+}
+
+function playSound(name) {
+  if (!game || !game.soundEnabled) return;
+  switch (name) {
+    case 'boopHit':
+      playTone({ frequency: 520, duration: 0.12, type: 'square', volume: 0.3 });
+      break;
+    case 'sausageFire':
+      playTone({ frequency: 320, duration: 0.18, type: 'sawtooth', volume: 0.28, attack: 0.01, decay: 0.1 });
+      break;
+    case 'tunaThrow':
+      playTone({ frequency: 260, duration: 0.16, type: 'triangle', volume: 0.24, attack: 0.02, decay: 0.12 });
+      break;
+    case 'tunaBounce':
+      playTone({ frequency: 180, duration: 0.14, type: 'sine', volume: 0.26, attack: 0.01, decay: 0.1 });
+      break;
+    case 'explosion':
+      playNoise({ duration: 0.32, volume: 0.22 });
+      break;
+    case 'score':
+      playTone({ frequency: 620, duration: 0.2, type: 'square', volume: 0.32 });
+      playTone({ frequency: 880, duration: 0.24, type: 'square', volume: 0.24, attack: 0.02, decay: 0.1 });
+      break;
+    case 'menuOpen':
+      playTone({ frequency: 480, duration: 0.12, type: 'triangle', volume: 0.22 });
+      break;
+    case 'menuClose':
+      playTone({ frequency: 360, duration: 0.1, type: 'triangle', volume: 0.2 });
+      break;
+    default:
+      break;
+  }
+}
+
 const AI_LEVELS = {
   easy: {
     decisionInterval: 450,
@@ -121,25 +212,43 @@ const spawns = [{ x: 24, y: 152 }, { x: 276, y: 152 }];
 // Input state
 const keys = new Set();
 document.addEventListener('keydown', (e) => {
-  const menuVisible = $menuOverlay && !$menuOverlay.classList.contains('hidden');
-  if (menuVisible || (game && (!game.started || game.menuOpen))) {
-    if ((e.key === 'Enter' || e.key === ' ') && menuVisible) {
-      e.preventDefault();
-      $menuStartBtn?.click();
+  const key = e.key;
+  if (key === 'p' || key === 'P') {
+    e.preventDefault();
+    togglePause();
+    return;
+  }
+
+  if (!game) return;
+
+  if (game.menuOpen || !game.started) {
+    if (game.menuOpen) {
+      if (key === 'Escape' && game.started) {
+        e.preventDefault();
+        closeMenu();
+      }
+      if (key === 'Enter' || key === ' ') {
+        e.preventDefault();
+        $menuPrimaryBtn?.click();
+      }
     }
     return;
   }
 
-  keys.add(e.key);
-  if (e.key === 'p' || e.key === 'P') togglePause();
-  if (e.key === 'r' || e.key === 'R') resetMatch();
-  if (e.key === '1') setPlayerWeapon('p1', 'paw');
-  if (e.key === '2') setPlayerWeapon('p1', 'sausage');
-  if (e.key === '3') setPlayerWeapon('p1', 'tuna');
-  if (!game || !game.aiEnabled) {
-    if (e.key === '7') setPlayerWeapon('p2', 'paw');
-    if (e.key === '8') setPlayerWeapon('p2', 'sausage');
-    if (e.key === '9') setPlayerWeapon('p2', 'tuna');
+  if (key === 'r' || key === 'R') {
+    e.preventDefault();
+    resetMatch();
+    return;
+  }
+
+  keys.add(key);
+  if (key === '1') setPlayerWeapon('p1', 'paw');
+  if (key === '2') setPlayerWeapon('p1', 'sausage');
+  if (key === '3') setPlayerWeapon('p1', 'tuna');
+  if (!game.aiEnabled) {
+    if (key === '7') setPlayerWeapon('p2', 'paw');
+    if (key === '8') setPlayerWeapon('p2', 'sausage');
+    if (key === '9') setPlayerWeapon('p2', 'tuna');
   }
 });
 document.addEventListener('keyup', (e) => keys.delete(e.key));
@@ -166,14 +275,64 @@ const joysticks = joystickElements.map((el) => ({
 
 const $p1Score = document.getElementById('p1Score');
 const $p2Score = document.getElementById('p2Score');
+const $p1Label = document.getElementById('p1Label');
+const $p2Label = document.getElementById('p2Label');
 const $menuOverlay = document.getElementById('menuOverlay');
-const $menuStartBtn = document.getElementById('menuStartBtn');
+const $menuToggleBtn = document.getElementById('menuToggleBtn');
+const $menuCloseBtn = document.getElementById('menuCloseBtn');
+const $menuPrimaryBtn = document.getElementById('menuPrimaryBtn');
+const $menuRestartBtn = document.getElementById('menuRestartBtn');
 const modeRadios = Array.from(document.querySelectorAll('input[name="cat-mode"]'));
 const difficultyRadios = Array.from(document.querySelectorAll('input[name="cat-difficulty"]'));
 const $difficultySection = document.getElementById('aiDifficultySection');
+const $soundToggle = document.getElementById('soundToggle');
+const weaponOptionInputs = Array.from(document.querySelectorAll('input[name="cat-weapon"]'));
 
 if ($menuOverlay) {
   $menuOverlay.setAttribute('aria-hidden', 'false');
+}
+
+let allowedWeapons = new Set(['paw', 'sausage', 'tuna']);
+let lastOpponentMode = null;
+
+function getDefaultWeapon() {
+  if (allowedWeapons.has('sausage')) return 'sausage';
+  if (allowedWeapons.has('tuna')) return 'tuna';
+  return 'paw';
+}
+
+function ensureWeaponAllowed(weaponId) {
+  if (allowedWeapons.has(weaponId)) return weaponId;
+  const fallbacks = ['sausage', 'tuna', 'paw'];
+  for (const option of fallbacks) {
+    if (allowedWeapons.has(option)) return option;
+  }
+  return 'paw';
+}
+
+function enforceAllowedWeapons() {
+  if (p1) {
+    p1.activeWeapon = ensureWeaponAllowed(p1.activeWeapon);
+  }
+  if (p2) {
+    p2.activeWeapon = ensureWeaponAllowed(p2.activeWeapon);
+  }
+}
+
+function getAllowedWeaponsFromMenu() {
+  if (!weaponOptionInputs.length) return Array.from(allowedWeapons);
+  const selected = weaponOptionInputs.filter((input) => input.checked).map((input) => input.value);
+  if (!selected.includes('paw')) selected.push('paw');
+  return selected;
+}
+
+function applyAllowedWeapons(newList) {
+  allowedWeapons = new Set(newList);
+  if (!allowedWeapons.has('paw')) {
+    allowedWeapons.add('paw');
+  }
+  enforceAllowedWeapons();
+  updateWeaponButtonState();
 }
 
 function getCheckedValue(nodes, fallback) {
@@ -185,6 +344,117 @@ function updateDifficultySectionVisibility() {
   const mode = getCheckedValue(modeRadios, 'ai');
   if ($difficultySection) {
     $difficultySection.style.display = mode === 'ai' ? 'flex' : 'none';
+  }
+}
+
+function updateSoundPreference(enabled) {
+  if (!game) return;
+  game.soundEnabled = !!enabled;
+  if (masterGain) {
+    masterGain.gain.value = game.soundEnabled ? AUDIO_GAIN : 0;
+  }
+  if ($soundToggle) {
+    $soundToggle.checked = game.soundEnabled;
+  }
+}
+
+function updatePlayerLabels() {
+  if ($p1Label) $p1Label.textContent = 'Player 1';
+  if ($p2Label) $p2Label.textContent = game && game.aiEnabled ? 'CPU' : 'Player 2';
+}
+
+function applyOpponentUIState(isAI) {
+  const flag = !!isAI;
+  document.body.classList.toggle('ai-opponent', flag);
+  if (lastOpponentMode !== flag) {
+    clearTouchStates();
+  }
+  lastOpponentMode = flag;
+  updatePlayerLabels();
+}
+
+function updateMenuUI() {
+  const open = !!(game && game.menuOpen);
+  if ($menuOverlay) {
+    $menuOverlay.classList.toggle('hidden', !open);
+    $menuOverlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+  }
+  if ($menuToggleBtn) {
+    $menuToggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if ($soundToggle) {
+    $soundToggle.checked = !!(game && game.soundEnabled);
+  }
+  if ($menuRestartBtn) {
+    $menuRestartBtn.style.display = game && game.started ? 'inline-flex' : 'none';
+  }
+  if ($menuPrimaryBtn && game) {
+    let action = 'start';
+    let label = 'Start Match';
+    if (game.started && !game.winner) {
+      action = 'continue';
+      label = 'Continue Match';
+    }
+    if (game.winner) {
+      action = 'new';
+      label = 'New Match';
+    }
+    $menuPrimaryBtn.textContent = label;
+    $menuPrimaryBtn.dataset.action = action;
+  }
+  if (game) {
+    applyOpponentUIState(game.aiEnabled);
+  }
+}
+
+function openMenu() {
+  if (!game) return;
+  game.menuOpen = true;
+  keys.clear();
+  if (game.started && !game.winner) {
+    game.paused = true;
+    playSound('menuOpen');
+  }
+  updateMenuUI();
+}
+
+function closeMenu() {
+  if (!game) return;
+  game.menuOpen = false;
+  if (game.started && !game.winner) {
+    game.paused = false;
+    playSound('menuClose');
+  }
+  updateMenuUI();
+}
+
+function startNewMatch() {
+  const mode = getCheckedValue(modeRadios, 'ai');
+  const difficulty = getCheckedValue(difficultyRadios, 'medium');
+  const selectedWeapons = getAllowedWeaponsFromMenu();
+  applyAllowedWeapons(selectedWeapons);
+  if (!game) return;
+  game.mode = mode;
+  game.aiEnabled = mode === 'ai';
+  game.aiDifficulty = difficulty;
+  game.started = true;
+  game.winner = null;
+  game.paused = false;
+  game.menuOpen = false;
+  updateSoundPreference(game.soundEnabled);
+  applyOpponentUIState(game.aiEnabled);
+  resetMatch({ resetWeaponsToDefault: true });
+  closeMenu();
+}
+
+function handlePrimaryButton() {
+  if (!$menuPrimaryBtn || !game) return;
+  const action = $menuPrimaryBtn.dataset.action;
+  if (action === 'continue') {
+    closeMenu();
+  } else {
+    ensureAudioContext();
+    startNewMatch();
   }
 }
 
@@ -387,8 +657,23 @@ function updateWeaponButtonState() {
     const weaponId = btn.dataset.weaponChoice;
     const player = playerKey === 'p1' ? p1 : p2;
     const isActive = !!player && player.activeWeapon === weaponId;
+    const allowed = allowedWeapons.has(weaponId);
+    const hideForAI = playerKey === 'p2' && game && game.aiEnabled;
     btn.classList.toggle('active', isActive);
     btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    btn.disabled = !allowed || hideForAI;
+    if (!allowed) {
+      btn.setAttribute('aria-hidden', 'true');
+    } else {
+      btn.removeAttribute('aria-hidden');
+    }
+    if (btn.classList.contains('touch-weapon-btn')) {
+      btn.style.display = allowed && !hideForAI ? '' : 'none';
+    } else if (!allowed) {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = '';
+    }
   });
 }
 
@@ -411,13 +696,57 @@ weaponButtons.forEach((btn) => {
 modeRadios.forEach((radio) => radio.addEventListener('change', updateDifficultySectionVisibility));
 updateDifficultySectionVisibility();
 
-if ($menuStartBtn) {
-  $menuStartBtn.addEventListener('click', () => {
-    const mode = getCheckedValue(modeRadios, 'ai');
-    const difficulty = getCheckedValue(difficultyRadios, 'medium');
-    startMatchFromMenu(mode, difficulty);
+modeRadios.forEach((radio) =>
+  radio.addEventListener('change', () => {
+    updateDifficultySectionVisibility();
+    if (!game || game.started) return;
+    const futureAI = getCheckedValue(modeRadios, 'ai') === 'ai';
+    document.body.classList.toggle('ai-opponent', futureAI);
+    if ($p2Label) $p2Label.textContent = futureAI ? 'CPU' : 'Player 2';
+  })
+);
+
+if ($menuToggleBtn) {
+  $menuToggleBtn.addEventListener('click', () => {
+    if (!game) return;
+    if (game.menuOpen) closeMenu();
+    else openMenu();
   });
 }
+
+if ($menuCloseBtn) {
+  $menuCloseBtn.addEventListener('click', () => {
+    closeMenu();
+  });
+}
+
+if ($menuPrimaryBtn) {
+  $menuPrimaryBtn.addEventListener('click', handlePrimaryButton);
+}
+
+if ($menuRestartBtn) {
+  $menuRestartBtn.addEventListener('click', () => {
+    if (!game || !game.started) return;
+    ensureAudioContext();
+    resetMatch({ resetWeaponsToDefault: true });
+    closeMenu();
+  });
+}
+
+if ($soundToggle) {
+  $soundToggle.addEventListener('change', (event) => {
+    updateSoundPreference(event.target.checked);
+  });
+}
+
+weaponOptionInputs.forEach((input) => {
+  if (input.disabled) return;
+  input.addEventListener('change', () => {
+    applyAllowedWeapons(getAllowedWeaponsFromMenu());
+  });
+});
+
+applyAllowedWeapons(getAllowedWeaponsFromMenu());
 
 // Helper
 const now = () => performance.now();
@@ -443,7 +772,7 @@ function makePlayer(isP1, overrides = {}) {
       booping: false,
       boopStart: 0,
       scored: 0,
-      activeWeapon: 'sausage',
+      activeWeapon: getDefaultWeapon(),
       weaponCooldownUntil: 0,
       aiControl: { left: false, right: false, jump: false, attack: false },
       nextAIDecision: 0,
@@ -468,29 +797,14 @@ game = {
   menuOpen: true,
   mode: 'ai',
   aiEnabled: true,
-  aiDifficulty: 'medium'
+  aiDifficulty: 'medium',
+  soundEnabled: true
 };
 
-function startMatchFromMenu(mode, difficulty) {
-  game.mode = mode;
-  game.aiEnabled = mode === 'ai';
-  game.aiDifficulty = difficulty;
-  game.menuOpen = false;
-  game.started = true;
-  game.winner = null;
-  game.paused = false;
-  if ($menuOverlay) {
-    $menuOverlay.classList.add('hidden');
-    $menuOverlay.setAttribute('aria-hidden', 'true');
-  }
-  if (p1) p1.activeWeapon = 'sausage';
-  if (p2) p2.activeWeapon = 'sausage';
-  resetMatch();
-  if (game.aiEnabled && p2) {
-    p2.nextAIDecision = 0;
-    p2.nextAIAttack = 0;
-  }
-}
+applyOpponentUIState(game.aiEnabled);
+updateSoundPreference(game.soundEnabled);
+updateMenuUI();
+updateWeaponButtonState();
 
 function resetRound(deadPlayer, killer) {
   // screen shake a bit
@@ -498,13 +812,14 @@ function resetRound(deadPlayer, killer) {
   // score
   if (killer) killer.scored++;
   updateScoreHUD();
+  playSound('score');
   if (killer && killer.scored >= WIN_POINTS) {
     game.winner = killer.isP1 ? 'Player 1' : 'Player 2';
     return;
   }
   // respawn both to reduce spawn camping
-  const p1Weapon = p1.activeWeapon;
-  const p2Weapon = p2.activeWeapon;
+  const p1Weapon = ensureWeaponAllowed(p1.activeWeapon);
+  const p2Weapon = ensureWeaponAllowed(p2.activeWeapon);
   p1 = makePlayer(true, { activeWeapon: p1Weapon });
   p1.scored = $p1Score.textContent | 0; // preserve
   p2 = makePlayer(false, { activeWeapon: p2Weapon });
@@ -519,10 +834,14 @@ function resetRound(deadPlayer, killer) {
   updateWeaponButtonState();
 }
 
-function resetMatch() {
+function resetMatch(options = {}) {
+  const { resetWeaponsToDefault = false } = options;
   if (!game.started) return;
-  const p1Weapon = p1.activeWeapon;
-  const p2Weapon = p2.activeWeapon;
+  const baseWeapon = getDefaultWeapon();
+  const prevP1Weapon = p1 ? p1.activeWeapon : baseWeapon;
+  const prevP2Weapon = p2 ? p2.activeWeapon : baseWeapon;
+  const p1Weapon = resetWeaponsToDefault ? baseWeapon : ensureWeaponAllowed(prevP1Weapon);
+  const p2Weapon = resetWeaponsToDefault ? baseWeapon : ensureWeaponAllowed(prevP2Weapon);
   p1 = makePlayer(true, { activeWeapon: p1Weapon });
   p1.scored = 0;
   p2 = makePlayer(false, { activeWeapon: p2Weapon });
@@ -537,11 +856,12 @@ function resetMatch() {
   clearTouchStates();
   keys.clear();
   if (game.aiEnabled) {
-    setPlayerWeapon('p2', p2.activeWeapon || 'sausage');
+    setPlayerWeapon('p2', p2.activeWeapon || baseWeapon);
     p2.nextAIDecision = 0;
     p2.nextAIAttack = 0;
   }
   updateWeaponButtonState();
+  updatePlayerLabels();
 }
 
 function updateScoreHUD() {
@@ -550,8 +870,9 @@ function updateScoreHUD() {
 }
 
 function togglePause() {
-  if (!game.started || game.menuOpen || game.winner) return;
-  game.paused = !game.paused;
+  if (!game.started || game.winner) return;
+  if (game.menuOpen) closeMenu();
+  else openMenu();
 }
 
 function setPlayerWeapon(playerKey, weaponId) {
@@ -559,6 +880,9 @@ function setPlayerWeapon(playerKey, weaponId) {
   if (!weapon) return;
   const player = playerKey === 'p1' ? p1 : p2;
   if (!player) return;
+  if (!allowedWeapons.has(weaponId)) {
+    weaponId = ensureWeaponAllowed(weaponId);
+  }
   if (player.activeWeapon === weaponId) {
     updateWeaponButtonState();
     return;
@@ -591,6 +915,7 @@ function fireSausage(pl) {
   });
   pl.weaponCooldownUntil = t + cfg.fireCooldown;
   pl.vx -= 0.6 * pl.facing;
+  playSound('sausageFire');
   return true;
 }
 
@@ -611,10 +936,13 @@ function throwTunaBomb(pl) {
     spawnAt: t,
     gravityScale: cfg.gravityScale,
     config: cfg,
-    active: true
+    active: true,
+    bounces: 0,
+    maxBounces: 4
   });
   pl.weaponCooldownUntil = t + cfg.fireCooldown;
   pl.vx -= 0.4 * pl.facing;
+  playSound('tunaThrow');
   return true;
 }
 
@@ -769,6 +1097,7 @@ function resolveBoops(attacker, defender) {
         defender.vy = BOOP.kbY;
         // tiny screen shake
         game.shakeTime = Math.max(game.shakeTime, 80);
+        playSound('boopHit');
       }
     }
   }
@@ -802,21 +1131,28 @@ function updateAIControl(ai, target) {
   const closeVertical = Math.abs((target.y + target.h / 2) - (ai.y + ai.h / 2)) < 12;
   const boopRange = cfg.boopRange ?? 14;
   const wantsBoop = absDx < boopRange && closeVertical && Math.random() < cfg.boopAggro;
+  const canUseSausage = allowedWeapons.has('sausage');
+  const canUseTuna = allowedWeapons.has('tuna');
 
   if (wantsBoop) {
     if (ai.activeWeapon !== 'paw') setPlayerWeapon('p2', 'paw');
     control.attack = true;
   } else if (cfg.useWeapons) {
-    if (absDx > (cfg.sausageRange ?? 36)) {
+    const shouldTuna =
+      canUseTuna &&
+      absDx > 20 &&
+      Math.random() < (cfg.tunaChance || 0) &&
+      t >= ai.nextAIAttack;
+    if (shouldTuna) {
+      setPlayerWeapon('p2', 'tuna');
+      control.attack = true;
+      ai.nextAIAttack = t + cfg.attackInterval * 1.3;
+    } else if (canUseSausage && absDx > (cfg.sausageRange ?? 36)) {
       if (ai.activeWeapon !== 'sausage') setPlayerWeapon('p2', 'sausage');
       if (t >= ai.nextAIAttack) {
         control.attack = true;
         ai.nextAIAttack = t + cfg.attackInterval;
       }
-    } else if (cfg.tunaChance && absDx > 18 && Math.random() < cfg.tunaChance && t >= ai.nextAIAttack) {
-      setPlayerWeapon('p2', 'tuna');
-      control.attack = true;
-      ai.nextAIAttack = t + cfg.attackInterval * 1.2;
     } else if (ai.activeWeapon !== 'paw') {
       setPlayerWeapon('p2', 'paw');
     }
@@ -825,6 +1161,8 @@ function updateAIControl(ai, target) {
   }
 
   if (dy < -14 && ai.onGround && Math.random() < cfg.jumpChance) {
+    control.jump = true;
+  } else if (dy > 18 && Math.random() < cfg.jumpChance * 0.4) {
     control.jump = true;
   }
 }
@@ -862,6 +1200,7 @@ function explodeProjectile(pr) {
     duration: cfg.flashDuration,
     weapon: pr.weapon
   });
+  playSound('explosion');
 }
 
 function updateProjectiles() {
@@ -874,21 +1213,96 @@ function updateProjectiles() {
     pr.y += pr.vy;
     pr.vy += GRAVITY * (pr.gravityScale ?? cfg.gravityScale ?? 0.08);
 
+    if (pr.weapon === 'tuna' && pr.active) {
+      const bounceLimit = pr.maxBounces ?? 4;
+      let bounced = false;
+      const dampX = 0.82;
+      const dampY = 0.7;
+      if (pr.x <= 0) {
+        pr.x = 0;
+        pr.vx = Math.abs(pr.vx) * dampX;
+        bounced = true;
+      } else if (pr.x + pr.w >= WIDTH) {
+        pr.x = WIDTH - pr.w;
+        pr.vx = -Math.abs(pr.vx) * dampX;
+        bounced = true;
+      }
+      if (pr.y <= 0) {
+        pr.y = 0;
+        pr.vy = Math.abs(pr.vy) * dampY;
+        bounced = true;
+      } else if (pr.y + pr.h >= HEIGHT) {
+        pr.y = HEIGHT - pr.h;
+        pr.vy = -Math.abs(pr.vy) * dampY;
+        bounced = true;
+      }
+      if (bounced) {
+        pr.bounces = (pr.bounces || 0) + 1;
+        playSound('tunaBounce');
+        if (Math.abs(pr.vx) < 0.4) {
+          pr.vx = 0.4 * Math.sign(pr.vx || (pr.owner ? pr.owner.facing : 1));
+        }
+        if (Math.abs(pr.vy) < 0.4) {
+          pr.vy = -0.45;
+        }
+        if (pr.bounces > bounceLimit) {
+          explodeProjectile(pr);
+          continue;
+        }
+      }
+    }
+
     if (t - pr.spawnAt > cfg.lifetime) {
       explodeProjectile(pr);
       continue;
     }
 
-    if (pr.x < -8 || pr.x > WIDTH + 8 || pr.y > HEIGHT + 8 || pr.y < -8) {
+    if (pr.x < -12 || pr.x > WIDTH + 12 || pr.y > HEIGHT + 12 || pr.y < -12) {
       pr.active = false;
       continue;
     }
 
     const hitbox = { x: pr.x, y: pr.y, w: pr.w, h: pr.h };
-    for (const pf of platforms) {
-      if (!pr.active) break;
-      if (aabb(hitbox, pf)) {
-        explodeProjectile(pr);
+    if (pr.weapon === 'tuna') {
+      for (const pf of platforms) {
+        if (!pr.active) break;
+        if (aabb(hitbox, pf)) {
+          const overlapLeft = hitbox.x + hitbox.w - pf.x;
+          const overlapRight = pf.x + pf.w - hitbox.x;
+          const overlapTop = hitbox.y + hitbox.h - pf.y;
+          const overlapBottom = pf.y + pf.h - hitbox.y;
+          const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+          const bounceLimit = pr.maxBounces ?? 4;
+          if (minOverlap === overlapLeft) {
+            pr.x = pf.x - pr.w;
+            pr.vx = -Math.abs(pr.vx) * 0.82;
+          } else if (minOverlap === overlapRight) {
+            pr.x = pf.x + pf.w;
+            pr.vx = Math.abs(pr.vx) * 0.82;
+          } else if (minOverlap === overlapTop) {
+            pr.y = pf.y - pr.h;
+            pr.vy = -Math.abs(pr.vy) * 0.7;
+          } else {
+            pr.y = pf.y + pf.h;
+            pr.vy = Math.abs(pr.vy) * 0.7;
+          }
+          pr.bounces = (pr.bounces || 0) + 1;
+          playSound('tunaBounce');
+          if (pr.bounces > bounceLimit) {
+            explodeProjectile(pr);
+            break;
+          }
+          hitbox.x = pr.x;
+          hitbox.y = pr.y;
+          break;
+        }
+      }
+    } else {
+      for (const pf of platforms) {
+        if (!pr.active) break;
+        if (aabb(hitbox, pf)) {
+          explodeProjectile(pr);
+        }
       }
     }
     if (!pr.active) continue;
