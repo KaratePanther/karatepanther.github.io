@@ -23,20 +23,64 @@ body {
   color: var(--fg);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  touch-action: manipulation;
 }
 
 .wrap {
   max-width: 980px;
+  max-height: 100vh;
   margin: 0 auto;
   padding: 12px 12px 24px;
   display: grid;
   gap: 12px;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 @supports (height: 100dvh) {
   .wrap {
     min-height: 100dvh;
+    max-height: 100dvh;
+  }
+}
+
+@media (max-height: 760px) {
+  .wrap {
+    gap: 8px;
+    padding: 10px 10px 16px;
+  }
+
+  header.hud {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .weapon-bar {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-height: 640px) {
+  .scoreboard__item {
+    min-width: 72px;
+    padding: 4px 8px;
+  }
+
+  .scoreboard__score {
+    font-size: 18px;
+  }
+
+  .weapon-panel__title {
+    font-size: 11px;
+  }
+
+  .weapon-btn {
+    padding: 6px 8px;
+    font-size: 11px;
   }
 }
 
@@ -135,12 +179,16 @@ header.hud {
 }
 
 canvas {
+  display: block;
   width: 100%;
   height: auto;
+  max-width: 100%;
+  margin: 0 auto;
   border: 3px solid #2b323a;
   border-radius: 10px;
   background: #0b0e10;
   image-rendering: pixelated;
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
 .weapon-bar {
