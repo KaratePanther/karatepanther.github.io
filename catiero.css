@@ -407,6 +407,34 @@ canvas {
   color: #111;
 }
 
+.touch-restart-btn {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 132px);
+  transform: translateX(-50%);
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(17, 22, 27, 0.92), rgba(12, 15, 18, 0.92));
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 18;
+  text-transform: uppercase;
+}
+
+.touch-restart-btn--visible {
+  display: inline-flex;
+  pointer-events: auto;
+}
+
 body.is-touch .touch-controls {
   display: flex;
 }
@@ -416,7 +444,16 @@ body.is-touch .weapon-bar {
 }
 
 body.is-touch .wrap {
-  padding-bottom: 120px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: calc(env(safe-area-inset-top) + 12px) 10px calc(132px + env(safe-area-inset-bottom));
+  gap: 16px;
+  max-width: none;
+  width: 100%;
 }
 
 body.ai-opponent .weapon-panel--p2 {
@@ -429,6 +466,145 @@ body.ai-opponent .touch-group--right {
 
 body.ai-opponent .touch-controls {
   justify-content: flex-start;
+}
+
+body.is-touch header.hud {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100% - 20px));
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  gap: 14px;
+  pointer-events: none;
+}
+
+body.is-touch header.hud > * {
+  pointer-events: auto;
+}
+
+body.is-touch .hud-menu-btn {
+  background: rgba(12, 15, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+  border-radius: 16px;
+  padding: 9px 14px;
+}
+
+body.is-touch .hud-menu-btn__label {
+  letter-spacing: 0.4px;
+}
+
+body.is-touch .scoreboard {
+  flex: 1 1 auto;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none;
+}
+
+body.is-touch .scoreboard__item {
+  background: rgba(17, 22, 27, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 6px 12px;
+  min-width: 82px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+body.is-touch .scoreboard__label {
+  font-size: 10px;
+  letter-spacing: 0.7px;
+}
+
+body.is-touch .scoreboard__score {
+  font-size: 20px;
+}
+
+body.is-touch canvas {
+  width: 100%;
+  max-width: min(960px, 100%);
+}
+
+body.is-touch .touch-controls {
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  padding: 0 14px;
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  body.is-touch .wrap {
+    padding: calc(env(safe-area-inset-top) + 10px) 8px calc(118px + env(safe-area-inset-bottom));
+    gap: 12px;
+  }
+
+  body.is-touch header.hud {
+    width: min(480px, calc(100% - 16px));
+  }
+
+  body.is-touch .hud-menu-btn {
+    padding: 8px 12px;
+  }
+
+  body.is-touch .touch-restart-btn {
+    bottom: calc(env(safe-area-inset-bottom) + 120px);
+    padding: 9px 18px;
+    font-size: 13px;
+  }
+
+  body.is-touch .touch-controls {
+    padding: 0 12px;
+  }
+
+  body.is-touch .touch-group {
+    gap: 8px;
+  }
+
+  body.is-touch .touch-row {
+    gap: 8px;
+  }
+
+  body.is-touch .touch-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    font-size: 18px;
+  }
+
+  body.is-touch .touch-btn--wide {
+    width: 70px;
+  }
+
+  body.is-touch .touch-joystick {
+    width: 96px;
+    height: 96px;
+    box-shadow: 0 8px 0 rgba(0, 0, 0, 0.45);
+  }
+
+  body.is-touch .touch-joystick__base {
+    inset: 9px;
+  }
+
+  body.is-touch .touch-joystick__stick {
+    width: 48px;
+    height: 48px;
+  }
+
+  body.is-touch .touch-group--left .touch-joystick {
+    margin-right: 10px;
+  }
+
+  body.is-touch .touch-group--right .touch-joystick {
+    margin-left: 10px;
+  }
+
+  body.is-touch .touch-weapon-btn {
+    width: 48px;
+    height: 42px;
+    font-size: 11px;
+  }
 }
 
 .menu-overlay {

@@ -284,6 +284,7 @@ const $menuToggleBtn = document.getElementById('menuToggleBtn');
 const $menuCloseBtn = document.getElementById('menuCloseBtn');
 const $menuPrimaryBtn = document.getElementById('menuPrimaryBtn');
 const $menuRestartBtn = document.getElementById('menuRestartBtn');
+const $touchRestartBtn = document.getElementById('touchRestartBtn');
 const modeRadios = Array.from(document.querySelectorAll('input[name="cat-mode"]'));
 const difficultyRadios = Array.from(document.querySelectorAll('input[name="cat-difficulty"]'));
 const $difficultySection = document.getElementById('aiDifficultySection');
@@ -293,6 +294,15 @@ const weaponOptionInputs = Array.from(document.querySelectorAll('input[name="cat
 if ($menuOverlay) {
   $menuOverlay.setAttribute('aria-hidden', 'false');
 }
+
+if ($touchRestartBtn) {
+  $touchRestartBtn.addEventListener('click', () => {
+    if (!game || !game.started) return;
+    resetMatch();
+  });
+}
+
+setTouchRestartVisibility(false);
 
 let allowedWeapons = new Set(['paw', 'sausage', 'tuna']);
 let lastOpponentMode = null;
@@ -358,6 +368,16 @@ function updateSoundPreference(enabled) {
   if ($soundToggle) {
     $soundToggle.checked = game.soundEnabled;
   }
+}
+
+function setTouchRestartVisibility(show) {
+  if (!$touchRestartBtn) return;
+  const isTouch = document.body?.classList?.contains('is-touch');
+  const visible = !!(show && isTouch);
+  $touchRestartBtn.classList.toggle('touch-restart-btn--visible', visible);
+  $touchRestartBtn.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  $touchRestartBtn.disabled = !visible;
+  fitGameToViewport();
 }
 
 function updatePlayerLabels() {
@@ -616,18 +636,72 @@ function fitGameToViewport() {
   const wrap = document.querySelector('.wrap');
   if (!wrap) return;
 
+  const isTouchMode = document.body?.classList?.contains('is-touch');
   const aspect = canvas.width && canvas.height ? canvas.width / canvas.height : WIDTH / HEIGHT;
+
+  if (!isTouchMode) {
+    canvas.style.width = '';
+    canvas.style.height = '';
+    canvas.style.maxWidth = '100%';
+
+    const viewport = window.visualViewport;
+    const viewportHeight = viewport ? viewport.height : window.innerHeight;
+    const rect = canvas.getBoundingClientRect();
+    const topOffset = rect.top - (viewport ? viewport.offsetTop : 0);
+
+    const touchControls = document.querySelector('.touch-controls');
+    let bottomReserve = 16;
+    if (touchControls) {
+      const style = window.getComputedStyle(touchControls);
+      if (style.display !== 'none') {
+        bottomReserve = touchControls.getBoundingClientRect().height + 16;
+      }
+    }
+
+    const availableHeight = Math.max(180, viewportHeight - topOffset - bottomReserve);
+    if (availableHeight <= 0) return;
+
+    const currentHeight = rect.height;
+    const wrapRect = wrap.getBoundingClientRect();
+    const maxWidth = wrapRect.width;
+
+    if (availableHeight < currentHeight - 0.5) {
+      const targetHeight = Math.max(180, availableHeight);
+      let targetWidth = targetHeight * aspect;
+      if (targetWidth > maxWidth) {
+        targetWidth = maxWidth;
+      }
+      const adjustedHeight = targetWidth / aspect;
+      canvas.style.width = `${targetWidth}px`;
+      canvas.style.height = `${adjustedHeight}px`;
+    } else {
+      canvas.style.width = '100%';
+      canvas.style.height = '';
+    }
+    return;
+  }
+
   canvas.style.width = '';
   canvas.style.height = '';
   canvas.style.maxWidth = '100%';
 
   const viewport = window.visualViewport;
   const viewportHeight = viewport ? viewport.height : window.innerHeight;
+  const viewportTop = viewport ? viewport.offsetTop : 0;
   const rect = canvas.getBoundingClientRect();
-  const topOffset = rect.top - (viewport ? viewport.offsetTop : 0);
+  let topOffset = rect.top - viewportTop;
+
+  const hud = document.querySelector('header.hud');
+  if (hud) {
+    const hudRect = hud.getBoundingClientRect();
+    const overlap = Math.max(0, hudRect.bottom + 12 - rect.top);
+    topOffset = Math.max(0, topOffset - overlap);
+  } else {
+    topOffset = Math.max(0, topOffset);
+  }
 
   const touchControls = document.querySelector('.touch-controls');
-  let bottomReserve = 16;
+  let bottomReserve = 20;
   if (touchControls) {
     const style = window.getComputedStyle(touchControls);
     if (style.display !== 'none') {
@@ -638,22 +712,28 @@ function fitGameToViewport() {
   const availableHeight = Math.max(180, viewportHeight - topOffset - bottomReserve);
   if (availableHeight <= 0) return;
 
-  const currentHeight = rect.height;
   const wrapRect = wrap.getBoundingClientRect();
   const maxWidth = wrapRect.width;
 
-  if (availableHeight < currentHeight - 0.5) {
-    const targetHeight = Math.max(180, availableHeight);
-    let targetWidth = targetHeight * aspect;
-    if (targetWidth > maxWidth) {
-      targetWidth = maxWidth;
+  const maxHeightFromWidth = maxWidth / aspect;
+  const targetHeight = Math.max(180, Math.min(availableHeight, maxHeightFromWidth));
+  const targetWidth = targetHeight * aspect;
+
+  canvas.style.width = `${targetWidth}px`;
+  canvas.style.height = `${targetHeight}px`;
+
+  // snap to integer pixels to keep crisp edges
+  if (canvas.style.width.endsWith('px')) {
+    const widthValue = parseFloat(canvas.style.width);
+    if (Number.isFinite(widthValue)) {
+      canvas.style.width = `${Math.round(widthValue)}px`;
     }
-    const adjustedHeight = targetWidth / aspect;
-    canvas.style.width = `${targetWidth}px`;
-    canvas.style.height = `${adjustedHeight}px`;
-  } else {
-    canvas.style.width = '100%';
-    canvas.style.height = '';
+  }
+  if (canvas.style.height.endsWith('px')) {
+    const heightValue = parseFloat(canvas.style.height);
+    if (Number.isFinite(heightValue)) {
+      canvas.style.height = `${Math.round(heightValue)}px`;
+    }
   }
 }
 
@@ -680,6 +760,7 @@ function applyTouchUIMode() {
   const isTouch = isCoarse || hasTouchPoints || isIOS || isAndroid;
   document.body.classList.toggle('is-touch', isTouch);
   if (!isTouch) clearTouchStates();
+  setTouchRestartVisibility(isTouch && game && game.winner);
   fitGameToViewport();
 }
 
@@ -871,6 +952,7 @@ function resetRound(deadPlayer, killer) {
   playSound('score');
   if (killer && killer.scored >= WIN_POINTS) {
     game.winner = killer.isP1 ? 'Player 1' : 'Player 2';
+    setTouchRestartVisibility(true);
     return;
   }
   // respawn both to reduce spawn camping
@@ -903,6 +985,7 @@ function resetMatch(options = {}) {
   p2 = makePlayer(false, { activeWeapon: p2Weapon });
   p2.scored = 0;
   game.winner = null;
+  setTouchRestartVisibility(false);
   game.paused = false;
   game.shakeTime = 0;
   game.menuOpen = false;
@@ -1223,35 +1306,45 @@ function updateAIControl(ai, target) {
   }
 }
 
-function explodeProjectile(pr) {
+function explodeProjectile(pr, options = {}) {
   if (!pr.active) return;
   pr.active = false;
+  const { directTarget = null } = options;
   const t = now();
   const weapon = WEAPONS[pr.weapon];
   const cfg = weapon && weapon.projectile ? weapon.projectile : SAUSAGE;
   const splashSq = cfg.splashRadius * cfg.splashRadius;
-  const cats = [p1, p2];
-  for (const cat of cats) {
-    if (cat === pr.owner) continue;
+  const px = pr.x + pr.w * 0.5;
+  const py = pr.y + pr.h * 0.5;
+
+  const tryHitCat = (cat, bypassRadius = false) => {
+    if (!cat || cat === pr.owner) return;
     const cx = cat.x + cat.w * 0.5;
     const cy = cat.y + cat.h * 0.5;
-    const dx = cx - pr.x;
-    const dy = cy - pr.y;
-    if (dx * dx + dy * dy <= splashSq) {
-      if (t - cat.lastHitAt > BOOP.iframes) {
-        cat.lastHitAt = t;
-        cat.mood -= cfg.moodDamage;
-        const dir = dx === 0 ? (pr.owner && pr.owner.facing) || 1 : Math.sign(dx);
-        cat.vx = dir * cfg.knockbackX;
-        cat.vy = cfg.knockbackY;
-      }
-    }
+    const dx = cx - px;
+    const dy = cy - py;
+    if (!bypassRadius && dx * dx + dy * dy > splashSq) return;
+    if (t - cat.lastHitAt <= BOOP.iframes) return;
+    cat.lastHitAt = t;
+    cat.mood -= cfg.moodDamage;
+    const dir = dx === 0 ? (pr.owner && pr.owner.facing) || 1 : Math.sign(dx);
+    cat.vx = dir * cfg.knockbackX;
+    cat.vy = cfg.knockbackY;
+  };
+
+  if (directTarget) {
+    tryHitCat(directTarget, true);
+  }
+
+  const cats = [p1, p2];
+  for (const cat of cats) {
+    tryHitCat(cat, false);
   }
   const shake = pr.weapon === 'tuna' ? 200 : 160;
   game.shakeTime = Math.max(game.shakeTime, shake);
   impactFlashes.push({
-    x: pr.x + pr.w * 0.5,
-    y: pr.y + pr.h * 0.5,
+    x: px,
+    y: py,
     created: t,
     duration: cfg.flashDuration,
     weapon: pr.weapon
@@ -1367,7 +1460,8 @@ function updateProjectiles() {
     for (const target of targets) {
       if (target === pr.owner) continue;
       if (aabb(hitbox, target)) {
-        explodeProjectile(pr);
+        const opts = pr.weapon === 'tuna' ? { directTarget: target } : undefined;
+        explodeProjectile(pr, opts);
         break;
       }
     }
@@ -1500,7 +1594,11 @@ function drawWinner() {
   ctx.fillStyle = '#fff';
   ctx.font = '16px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(`${game.winner} wins! Press R to reset`, WIDTH / 2, HEIGHT / 2 - 8);
+  const isTouch = document.body?.classList?.contains('is-touch');
+  const line1 = `${game.winner} wins!`;
+  const line2 = isTouch ? 'Tap Restart to play again' : 'Press R to reset';
+  ctx.fillText(line1, WIDTH / 2, HEIGHT / 2 - 12);
+  ctx.fillText(line2, WIDTH / 2, HEIGHT / 2 + 8);
   ctx.textAlign = 'left';
 }
 
