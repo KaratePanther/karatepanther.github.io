@@ -69,11 +69,34 @@ const diffSel   = document.getElementById('diffSel');
 const windSel   = document.getElementById('windSel');
 const timerSel  = document.getElementById('timerSel');
 const moveSel   = document.getElementById('moveSel');
+const waterSel  = document.getElementById('waterSel');
+const waterFloodChk = document.getElementById('waterFloodChk');
+const waterFloodSel = document.getElementById('waterFloodSel');
 // Live-toggle movement + joystick when menu option changes
 moveSel.addEventListener('change', () => {
   movementOn = (moveSel.value === 'on');
   if (isTouch && movementOn) showJoystick(); else hideJoystick();
 });
+if (waterSel) {
+  waterSel.addEventListener('change', () => {
+    readMenuSettings();
+    updateWaterConfig(true);
+    ensureWaterBelowPlayers();
+    drawMiniPreview();
+  });
+}
+if (waterFloodChk) {
+  waterFloodChk.addEventListener('change', () => {
+    readMenuSettings();
+  });
+}
+if (waterFloodSel) {
+  waterFloodSel.addEventListener('change', () => {
+    readMenuSettings();
+    updateWaterConfig(true);
+    drawMiniPreview();
+  });
+}
 const fallChk   = document.getElementById('fallChk');
 const ammoChk   = document.getElementById('ammoChk');
 const wShotgun  = document.getElementById('wShotgun');
@@ -151,6 +174,28 @@ function poof(){ const ctx=audio(), t=ctx.currentTime;
   o.frequency.setValueAtTime(600,t); o.frequency.exponentialRampToValueAtTime(240,t+0.15);
   g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
   o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.18);
+}
+function splash(){
+  const ctx = audio();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const dur = 0.28;
+  const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++){
+    const progress = i / data.length;
+    const decay = 1 - progress;
+    data[i] = (Math.random() * 2 - 1) * decay * 0.65 + Math.sin(progress * Math.PI * 6) * 0.18;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.28, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(g);
+  g.connect(ctx.destination);
+  src.start(t);
+  tone(520, 0.05, 'sine', 0.14);
 }
 function startChargeSound(){
   const ctx = audio();
@@ -376,8 +421,10 @@ function placePlayers(){
     }
   }
 
-  Object.assign(players[0], {x:leftSpawn.x, y:leftSpawn.y, vx:0, vy:0, facing:1, angle:45});
-  Object.assign(players[1], {x:rightSpawn.x, y:rightSpawn.y, vx:0, vy:0, facing:-1, angle:135});
+  Object.assign(players[0], {x:leftSpawn.x, y:leftSpawn.y, vx:0, vy:0, facing:1, angle:45, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null});
+  Object.assign(players[1], {x:rightSpawn.x, y:rightSpawn.y, vx:0, vy:0, facing:-1, angle:135, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null});
+
+  ensureWaterBelowPlayers();
 }
 
 // Helpers
@@ -410,15 +457,15 @@ const EMOJI   = { normal:'🚀', grenade:'💣', shotgun:'🔫', teleport:'🌀'
 const players = [
   { name:'P1', emoji:'😼', color:'#6ea8fe', x:0, y:0, vx:0, vy:0, hp:100, angle:45, facing:1,
     emote:null, emoteT:0, lastPower:50, lastWeapon:Weapons.NORMAL, fuse:5, // default 5s
-    ammo:{ shotgun:5, grenade:5, teleport:1 } },
+    ammo:{ shotgun:5, grenade:5, teleport:1 }, drowning:null, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null },
   { name:'P2', emoji:'😺', color:'#90c2ff', x:0, y:0, vx:0, vy:0, hp:100, angle:135, facing:-1,
     emote:null, emoteT:0, lastPower:50, lastWeapon:Weapons.NORMAL, fuse:5,
-    ammo:{ shotgun:5, grenade:5, teleport:1 } }
+    ammo:{ shotgun:5, grenade:5, teleport:1 }, drowning:null, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null }
 ];
 let turn = 0;
 let weapon = Weapons.NORMAL;
 
-let aiEnabled = false;
+let aiEnabled = true;
 let shot = null;
 let particles = [];
 let rings = [];
@@ -427,9 +474,18 @@ const stats = { shots:[0,0], hits:[0,0], bestHit:[0,0] };
 let placingTeleport = false;
 
 const aiMemory = { lastSolution: null };
+const aiState = {
+  moveTask: null,
+  pendingPlan: null
+};
+
+function resetAIState() {
+  aiState.moveTask = null;
+  aiState.pendingPlan = null;
+}
 
 // Movement options & state
-let movementOn = false;
+let movementOn = true;
 let bigMapOn = false;
 let hillierTerrainOn = false;
 let varySpawnHeights = false;
@@ -437,20 +493,237 @@ let scatterDebrisOn = false;
 const MOVE = {
   accel: 0.06,
   max: 0.8,
-  friction: 0.85,
+  friction: 0.965,
   jumpVy: -3.6,
   hopBoost: 1.2,
   jumpCooldown: 300,
   coyoteMs: 120,
   bufferMs: 120,
 };
+const WATER_MODES = {
+  off: { depthRatio: 0 },
+  shallow: { depthRatio: 0.1 },
+  medium: { depthRatio: 0.16 },
+  deep: { depthRatio: 0.22 }
+};
+const FLOOD_SPEED_MULTS = {
+  slow: 0.55,
+  normal: 1,
+  fast: 1.6
+};
+const WATER_MIN_DEPTH = 18;
+const WATER_FLOOD_RATIO = 0.035;
+const DROWN_DURATION = 1400;
+const RAGDOLL_MIN_MS = 520;
+const SHOTGUN_RAGDOLL_MS = 360;
+const FALL_STUN_THRESHOLD = 82;
+const FALL_STUN_DURATION = 900;
+const BLAST_STUN_DURATION = 750;
+const SLIDE_DECAY = 0.92;
+const SLIDE_BONUS_MAX = 8;
+let waterMode = 'shallow';
+let waterFloodEnabled = false;
+let waterFloodSpeed = 'normal';
+let waterLevelY = H + 999;
+let waterBaseLevelY = H + 999;
+let waterFloodStep = 0;
+let waterAnimT = 0;
 let allowInput = true; // blocked during projectile & menu
 let keys = {};
 let lastGroundedAt = [0,0];   // timestamps per player
 let lastJumpPressedAt = [0,0];
 let lastJumpAt = [ -9999, -9999 ];
+let pendingWinner = null;
 
 function now(){ return performance.now(); }
+
+function waterIsActive(){
+  return waterLevelY < H - 1;
+}
+
+function updateWaterConfig(resetLevel = false){
+  const cfg = WATER_MODES[waterMode] || WATER_MODES.off;
+  if (!cfg || cfg.depthRatio <= 0){
+    waterBaseLevelY = H + 999;
+    waterFloodStep = 0;
+    if (resetLevel) {
+      waterLevelY = H + 999;
+    }
+    return;
+  }
+  const depthPx = Math.max(WATER_MIN_DEPTH, Math.round(H * cfg.depthRatio));
+  const base = Math.max(PLAYER_R + 12, H - depthPx);
+  waterBaseLevelY = base;
+  const speedMult = waterFloodEnabled ? (FLOOD_SPEED_MULTS[waterFloodSpeed] ?? 1) : 0;
+  waterFloodStep = speedMult > 0 ? Math.max(4, Math.round(H * WATER_FLOOD_RATIO * speedMult)) : 0;
+  if (resetLevel || waterLevelY > H){
+    waterLevelY = base;
+  } else {
+    waterLevelY = Math.max(2, Math.min(waterLevelY, H));
+  }
+}
+
+function waterPenaltyForFeet(feetY){
+  if (!waterIsActive()) return 0;
+  const buffer = 18;
+  if (feetY + buffer < waterLevelY) return 0;
+  const depth = feetY + buffer - waterLevelY;
+  return depth * 14;
+}
+
+function isRagdollActive(p){
+  return !!(p && p.ragdoll && now() < p.ragdoll.until);
+}
+
+function clearRagdoll(p){
+  if (!p) return;
+  p.ragdoll = null;
+}
+
+function applyImpact(p, impulse = { vx:0, vy:0 }, opts = {}){
+  if (!p || p.drowning) return;
+  const nowTime = now();
+  const ragMs = opts.ragdollMs || RAGDOLL_MIN_MS;
+  const until = nowTime + ragMs;
+  const rag = p.ragdoll && p.ragdoll.until > nowTime ? p.ragdoll : { until, airDrag: opts.airDrag || 0.985 };
+  rag.until = Math.max(rag.until || 0, until);
+  rag.airDrag = opts.airDrag || rag.airDrag;
+  p.ragdoll = rag;
+  if (impulse.vx) p.vx += impulse.vx;
+  if (impulse.vy) p.vy += impulse.vy;
+  const boost = opts.slideBoost || Math.abs(impulse.vx || 0) * 0.7;
+  if (boost) p.slideBoost = Math.min(SLIDE_BONUS_MAX, Math.max(p.slideBoost || 0, boost));
+  if (opts.stunMs){
+    p.turnLockedUntil = Math.max(p.turnLockedUntil || 0, nowTime + opts.stunMs);
+    p.stunnedReason = opts.stunnedReason || null;
+  }
+}
+
+function spawnWaterSplash(x, strength = 1){
+  if (!waterIsActive()) return;
+  const sx = Math.max(10, Math.min(W - 10, x));
+  const sy = waterLevelY;
+  const count = 14 + Math.round(strength * 8);
+  for (let i = 0; i < count; i++){
+    const a = Math.random() * Math.PI - Math.PI / 2;
+    const speed = (0.7 + Math.random() * 1.4) * strength;
+    particles.push({
+      x: sx,
+      y: sy,
+      vx: Math.cos(a) * speed,
+      vy: Math.sin(a) * speed - (0.4 + Math.random() * 0.3),
+      life: 30 + Math.random() * 12,
+      smoke: false,
+      water: true
+    });
+  }
+  rings.push({ x: sx, y: sy, r: 6 + strength * 6, alpha: 0.5, water: true });
+}
+
+function startDrowning(idx){
+  if (!waterIsActive()) return false;
+  const p = players[idx];
+  if (!p || p.hp <= 0 || p.drowning) return false;
+  const nowTime = now();
+  splash();
+  spawnWaterSplash(p.x, 1.35);
+  p.emote = '💦';
+  p.emoteT = Math.round(DROWN_DURATION / 8);
+  p.drowning = {
+    start: nowTime,
+    duration: DROWN_DURATION,
+    lastSplash: nowTime
+  };
+  p.hp = 0;
+  p.vx = 0;
+  p.vy = 0;
+  p.slideBoost = 0;
+  clearRagdoll(p);
+  p.turnLockedUntil = 0;
+  p.stunnedReason = null;
+  updateHPPlates();
+  allowInput = false;
+  fireBtn.disabled = true;
+  placingTeleport = false;
+  pauseTimer();
+  resetAIState();
+  shot = null;
+  if (!pendingWinner){
+    pendingWinner = {
+      idx: 1 - idx,
+      reason: 'drowned',
+      triggerAt: nowTime + DROWN_DURATION + 150
+    };
+  }
+  return true;
+}
+
+function checkWaterDeath(i){
+  if (!waterIsActive()) return false;
+  const p = players[i];
+  if (!p || p.hp <= 0) return false;
+  const feet = p.y + PLAYER_R;
+  if (feet + 2 >= waterLevelY){
+    return startDrowning(i);
+  }
+  return false;
+}
+
+function advanceFlood(){
+  if (!waterFloodEnabled || !waterIsActive()) return;
+  const next = Math.max(2, waterLevelY - waterFloodStep);
+  if (next >= waterLevelY - 0.5) return;
+  waterLevelY = next;
+  spawnWaterSplash(players[0].x, 0.7);
+  spawnWaterSplash(players[1].x, 0.7);
+  checkWaterDeath(0);
+  checkWaterDeath(1);
+  drawMiniPreview();
+}
+
+function ensureWaterBelowPlayers(){
+  if (!waterIsActive()) return;
+  const margin = 24;
+  let minAllowed = margin;
+  for (const p of players){
+    if (!p) continue;
+    minAllowed = Math.max(minAllowed, p.y + PLAYER_R + margin);
+  }
+  if (waterLevelY < minAllowed){
+    const clamped = Math.min(minAllowed, H);
+    waterLevelY = clamped;
+    waterBaseLevelY = Math.max(waterBaseLevelY, clamped);
+  }
+}
+
+function drawWaterLayer(ctx){
+  if (!waterIsActive()) return;
+  const surface = waterLevelY;
+  const amplitude = Math.max(6, H * 0.018);
+  const step = 18;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(0, surface);
+  for (let x = 0; x <= W; x += step){
+    const wave = Math.sin(x * 0.04 + waterAnimT * 2.4) * amplitude * 0.4;
+    ctx.lineTo(x, surface + wave);
+  }
+  ctx.lineTo(W, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, surface, 0, H);
+  grad.addColorStop(0, 'rgba(80, 150, 255, 0.38)');
+  grad.addColorStop(0.45, 'rgba(40, 90, 210, 0.32)');
+  grad.addColorStop(1, 'rgba(16, 32, 72, 0.28)');
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.stroke();
+  ctx.restore();
+}
 
 // Turn timer
 let turnTimerMs = 30000;     // menu-controlled; 0 means Off
@@ -545,6 +818,14 @@ function updateTurnUI(){
 function drawMiniPreview(){
   miniCtx.clearRect(0,0,mini.width,mini.height);
   miniCtx.fillStyle='#0b1020'; miniCtx.fillRect(0,0,mini.width,mini.height);
+  if (waterIsActive()){
+    const miniWaterY = Math.max(0, Math.min(mini.height, waterLevelY * (mini.height / H)));
+    const grad = miniCtx.createLinearGradient(0, miniWaterY, 0, mini.height);
+    grad.addColorStop(0, 'rgba(70,130,220,0.9)');
+    grad.addColorStop(1, 'rgba(25,50,110,0.95)');
+    miniCtx.fillStyle = grad;
+    miniCtx.fillRect(0, miniWaterY, mini.width, mini.height - miniWaterY);
+  }
   miniCtx.fillStyle='#18203a';
   for(let x=0;x<mini.width;x++){
     const wx = Math.floor(x * (W/mini.width));
@@ -638,6 +919,27 @@ function readMenuSettings(){
 
   const tv = timerSel.value;
   turnTimerMs = (tv==='off') ? 0 : parseInt(tv,10)*1000;
+
+  if (waterSel) {
+    waterMode = waterSel.value || 'off';
+  }
+  if (waterFloodChk) {
+    waterFloodEnabled = !!waterFloodChk.checked;
+  } else {
+    waterFloodEnabled = false;
+  }
+  if (waterFloodSel) {
+    waterFloodSpeed = waterFloodSel.value || 'normal';
+  }
+  updateWaterConfig(false);
+  updateFloodControls();
+}
+
+function updateFloodControls(){
+  if (!waterFloodSel) return;
+  const disabled = !waterFloodEnabled;
+  waterFloodSel.disabled = disabled;
+  waterFloodSel.parentElement?.classList?.toggle('disabled', disabled);
 }
 
 function pickNewSeedAndPreview(){
@@ -645,6 +947,7 @@ function pickNewSeedAndPreview(){
   seedTxt.value = mapSeed;
   srand(mapSeed);
   readMenuSettings();
+  updateWaterConfig(true);
   generateTerrain();
   updateAll();
   drawMiniPreview();
@@ -722,6 +1025,8 @@ fuseMini.addEventListener('click',(e)=>{
 let charging=false, chargePower=1, chargeInterval=null;
 function startCharge(){
   if (!allowInput || shot || placingTeleport || charging) return;
+  const current = players[turn];
+  if (current && isRagdollActive(current)) return;
   if (weapon==='shotgun'){ launchShot(60); return; }
   charging=true; chargePower=1; startChargeSound(); chargeBar.style.width='0%';
   chargeInterval = setInterval(()=>{
@@ -788,6 +1093,7 @@ function lockInputsForShot(){
 
 function endShot(){
   shot=null;
+  resetAIState();
   if (players[0].hp>0 && players[1].hp>0){
     // Switch turn
     turn = 1 - turn;
@@ -798,12 +1104,28 @@ function endShot(){
     updateTurnUI();
     wind = Math.max(-WIND_MAX, Math.min(WIND_MAX, wind + (Math.random()*0.06 - 0.03)));
     updateWindUI();
+    advanceFlood();
+    if (players[0].hp<=0 || players[1].hp<=0) return;
     players[turn].emote = ['😼','😹','😾','😺','😸'][Math.floor(Math.random()*5)];
     players[turn].emoteT = 80;
     ensureAmmoOrSwitch();
 
     // Prep next turn timer & inputs
     resetTurnTimer();
+
+    const current = players[turn];
+    if (current){
+      if (current.turnLockedUntil && now() < current.turnLockedUntil){
+        const emote = current.stunnedReason === 'winded' ? '😵' : '💫';
+        current.emote = emote; current.emoteT = 80;
+        toast(`P${turn+1} is recovering`);
+        current.turnLockedUntil = 0;
+        current.stunnedReason = null;
+        setTimeout(()=> endShot(), 420);
+        return;
+      }
+      current.stunnedReason = null;
+    }
 
     const playerTurn = !aiEnabled || turn === 0;
     allowInput = playerTurn;
@@ -817,13 +1139,17 @@ function endShot(){
 // = Damage & Physics   =
 // ======================
 function floatDmg(x,y,val){ dmgNums.push({x,y,val,life:40}); }
-function applyDamage(index, dmg, direct=false){
+function applyDamage(index, dmg, direct=false, opts = {}){
   const pl = players[index];
   pl.hp = Math.max(0, pl.hp - dmg);
+  if (opts.impact){
+    applyImpact(pl, opts.impact, opts);
+  }
   updateHPPlates();
   if (pl.hp<=0){ announceWinner(1-index, direct ? 'direct hit!' : 'boom!'); }
 }
 function announceWinner(idx, reason){
+  pendingWinner = null;
   fireBtn.disabled=true; placingTeleport=false;
   turnEl.textContent=`P${idx+1} wins 🎉`;
   players[idx].emote='😼✨'; players[idx].emoteT=120;
@@ -840,16 +1166,27 @@ function applySplashDamage(cx,cy,r, excludeIdx = -1){
     if (d2<r2){
       const d=Math.sqrt(d2), scale=Math.max(0,1-d/r);
       const dmg=Math.round(scale*60);
+      const nx = (pl.x - cx) / Math.max(1, d);
+      const ny = (pl.y - cy) / Math.max(1, d);
+      const impulse = {
+        vx: nx * (5.4 * scale),
+        vy: ny * (4.8 * scale) - 0.45
+      };
       if (dmg>0){
-        applyDamage(i,dmg,false);
+        applyDamage(i,dmg,false, {
+          impact: impulse,
+          ragdollMs: RAGDOLL_MIN_MS + Math.round(220 * scale),
+          slideBoost: 6 * scale
+        });
         floatDmg(pl.x, pl.y-PLAYER_R-8, -dmg);
         stats.bestHit[turn]=Math.max(stats.bestHit[turn], dmg);
         stats.hits[turn]++;
+      } else {
+        applyImpact(pl, impulse, {
+          ragdollMs: RAGDOLL_MIN_MS * 0.8,
+          slideBoost: 3 * scale
+        });
       }
-      const k = 3.4*scale;
-      const nx = (pl.x - cx) / Math.max(1, d);
-      const ny = (pl.y - cy) / Math.max(1, d);
-      pl.vx += nx * k; pl.vy += ny * k - 0.3;
     }
   }
 }
@@ -997,13 +1334,24 @@ function stepShot(){
     s.vx += wind; s.vy += G; s.x += s.vx; s.y += s.vy;
     s.trail.push({x:s.x,y:s.y}); if (s.trail.length>200) s.trail.shift();
 
+    if (waterIsActive() && s.y >= waterLevelY){
+      spawnWaterSplash(s.x, 0.6);
+      splash();
+      endShot({ water: true });
+      return;
+    }
     if (s.x<0 || s.x>=W || s.y>=H){ endShot(null); return; }
 
     const opp = players[1-turn];
     const dx=s.x-opp.x, dy=s.y-opp.y;
     if (dx*dx + dy*dy <= (PLAYER_R*PLAYER_R)*0.9){
       const dmg = 50;
-      applyDamage(1-turn, dmg, true);
+      const impact = { vx: s.vx * 0.78, vy: s.vy * 0.55 - 0.4 };
+      applyDamage(1-turn, dmg, true, {
+        impact,
+        ragdollMs: RAGDOLL_MIN_MS + 240,
+        slideBoost: 5.2
+      });
       floatDmg(opp.x, opp.y-PLAYER_R-8, -dmg);
       spawnExplosion(s.x,s.y,EXPLOSION_R, 1 - turn);
       endShot(opp); return;
@@ -1020,6 +1368,12 @@ function stepShot(){
     s.trail.push({x:s.x,y:s.y}); if (s.trail.length>140) s.trail.shift();
     s.t--; if (s.t<=0){ spawnExplosion(s.x,s.y,EXPLOSION_R*1.05); endShot({terrain:true}); return; }
 
+    if (waterIsActive() && s.y >= waterLevelY){
+      spawnWaterSplash(s.x, 0.8);
+      splash();
+      endShot({ water: true });
+      return;
+    }
     if (s.x<0 || s.x>=W || s.y>=H){ endShot(null); return; }
 
     // simple bounce
@@ -1038,10 +1392,18 @@ function stepShot(){
 
   if (shot.kind==='shotgun'){
     const pellets = shot.pellets;
+    let waterHit = false;
+    let waterHitX = 0;
     for (let k=pellets.length-1;k>=0;k--){
       const p=pellets[k];
       p.vx += wind; p.vy += G; p.x += p.vx; p.y += p.vy;
       p.trail.push({x:p.x,y:p.y}); if (p.trail.length>80) p.trail.shift();
+      if (waterIsActive() && p.y >= waterLevelY){
+        waterHit = true;
+        waterHitX = p.x;
+        pellets.splice(k,1);
+        continue;
+      }
       if (p.x<0 || p.x>=W || p.y>=H){ pellets.splice(k,1); continue; }
       const ix=p.x|0, iy=p.y|0;
       const opp = players[1-turn];
@@ -1051,11 +1413,19 @@ function stepShot(){
         const left = Math.max(0, 50 - (shot.dealt||0));
         const hit = Math.min(perPellet, left);
         if (hit > 0){
-          applyDamage(1-turn, hit, true);
+          const d=Math.max(1,Math.hypot(dx,dy));
+          const pelletSpeed = Math.max(0.9, Math.hypot(p.vx, p.vy));
+          const impact = {
+            vx: (dx/d) * pelletSpeed * 0.55,
+            vy: (dy/d) * pelletSpeed * 0.35 - 0.15
+          };
+          applyDamage(1-turn, hit, true, {
+            impact,
+            ragdollMs: SHOTGUN_RAGDOLL_MS,
+            slideBoost: 3
+          });
           floatDmg(opp.x, opp.y-PLAYER_R-8, -hit);
           shot.dealt = (shot.dealt||0) + hit;
-          const d=Math.max(1,Math.hypot(dx,dy));
-          opp.vx += (dx/d)*0.6; opp.vy += (dy/d)*0.35-0.2;
         }
         pellets.splice(k,1);
         continue;
@@ -1070,7 +1440,16 @@ function stepShot(){
         pellets.splice(k,1);
       }
     }
-    if (pellets.length===0){ noiseBoom(0.2,0.2); endShot({terrain:true}); }
+    if (waterHit){
+      spawnWaterSplash(waterHitX, 0.5);
+      splash();
+    }
+    if (pellets.length===0){
+      if (!waterHit){
+        noiseBoom(0.2,0.2);
+      }
+      endShot(waterHit ? { water: true } : { terrain: true });
+    }
   }
 }
 
@@ -1131,10 +1510,11 @@ cvs.addEventListener('pointerdown', onAimPointer);
 cvs.addEventListener('pointermove', onAimPointer);
 function onAimPointer(e){
   if (shot || placingTeleport || !allowInput) return;
+  const p = players[turn];
+  if (p && isRagdollActive(p)) return;
   const rect=cvs.getBoundingClientRect();
   const px = (e.clientX - rect.left) * (W/rect.width);
   const py = (e.clientY - rect.top)  * (H/rect.height);
-  const p = players[turn];
   let angRad = Math.atan2(p.y - py, px - p.x);
   let deg = angRad * 180/Math.PI;
   if (deg < 0) deg += 360;
@@ -1311,10 +1691,51 @@ function endJoy(){
 const FALL_NO_DMG = 60;
 
 function setMoveForTurnPlayer(){
-  // called during step based on keys/joystick
+  const p = players[turn];
+
+  if (p && p.drowning){
+    p.vx *= 0.9;
+    return;
+  }
+
+  if (aiEnabled && turn === 1) {
+    const task = aiState.moveTask;
+    if (task) {
+      if (!movementOn) {
+        aiState.moveTask = null;
+        if (!shot) {
+          executeAIShot(task.fallbackDecision || task.decision);
+        }
+      } else {
+        const dx = task.targetX - p.x;
+        const dir = dx === 0 ? 0 : dx > 0 ? 1 : -1;
+        const absDx = Math.abs(dx);
+        const tolerance = task.tolerance || 4;
+
+        if (absDx <= tolerance) {
+          // close enough: bleed off horizontal speed
+          if (Math.abs(p.vx) > 0.25) {
+            p.vx *= 0.6;
+          } else {
+            p.vx = 0;
+          }
+        } else {
+          const desired = dir * Math.min(MOVE.max * 0.9, 0.4 + absDx * 0.015);
+          if (Math.abs(desired - p.vx) > MOVE.accel) {
+            p.vx += MOVE.accel * (desired > p.vx ? 1 : -1);
+          } else {
+            p.vx = desired;
+          }
+          p.facing = dir === 0 ? p.facing : dir;
+        }
+      }
+      return;
+    }
+  }
+
+  // called during step based on keys/joystick for human players (and AI when not moving)
   if (!movementOn || !allowInput) return;
 
-  const p = players[turn];
   const left  = keys['ArrowLeft'] || keys['KeyA'] || (isTouch && joyVec.x < -0.2);
   const right = keys['ArrowRight']|| keys['KeyD'] || (isTouch && joyVec.x >  0.2);
 
@@ -1358,8 +1779,26 @@ function stepPlayers(){
   for (let i=0;i<2;i++){
     const p=players[i];
 
+    if (p.ragdoll && now() >= p.ragdoll.until) {
+      p.ragdoll = null;
+    }
+
+    if (p.slideBoost) {
+      p.slideBoost *= SLIDE_DECAY;
+      if (p.slideBoost < 0.08) p.slideBoost = 0;
+    }
+
+    const ragActive = isRagdollActive(p);
+
+    if (p.drowning){
+      p.vx *= 0.92;
+      p.vy = 0;
+      p.y = Math.min(p.y, waterLevelY - PLAYER_R - 1.5);
+      continue;
+    }
+
     // Apply movement input for current turn player
-    if (i===turn) setMoveForTurnPlayer();
+    if (!ragActive && i===turn) setMoveForTurnPlayer();
 
     let onSolid = isGrounded(p);
     if (p.vy < 0) onSolid = false; // let jump impulse lift the cat off the ground
@@ -1368,6 +1807,9 @@ function stepPlayers(){
       p.vy += G;
       p.y += p.vy;
       p.x += p.vx;
+      if (ragActive && p.ragdoll){
+        p.vx *= p.ragdoll.airDrag || 0.985;
+      }
 
       if (p.vy < 0){
         let headHit = false;
@@ -1396,7 +1838,11 @@ function stepPlayers(){
         const prevVy = p.vy;
         p.y = gy - PLAYER_R;
         p.vy = 0;
-        p.vx *= 0.6;
+        if (ragActive){
+          p.vx *= 0.82;
+        } else {
+          p.vx *= 0.45;
+        }
 
         // landing puff
         if (Math.abs(prevVy) > 1.2){
@@ -1406,12 +1852,30 @@ function stepPlayers(){
           }
         }
 
+        const drop = Math.abs(prevVy*8 + over);
         if (fallChk.checked){
-          const drop = Math.abs(prevVy*8 + over);
           if (drop>FALL_NO_DMG){
             const dmg = Math.min(25, Math.round((drop - FALL_NO_DMG)/6));
-            if (dmg>0){ applyDamage(i, dmg, false); floatDmg(p.x, p.y-PLAYER_R-8, -dmg); }
+            if (dmg>0){
+              const impact = { vx: p.vx * 0.4, vy: -Math.abs(prevVy) * 0.3 };
+              applyDamage(i, dmg, false, {
+                impact,
+                ragdollMs: RAGDOLL_MIN_MS * 0.9,
+                slideBoost: Math.min(7, drop * 0.02),
+                stunMs: FALL_STUN_DURATION,
+                stunnedReason: 'winded'
+              });
+              floatDmg(p.x, p.y-PLAYER_R-8, -dmg);
+              if (i===turn && allowInput){
+                allowInput = false;
+                fireBtn.disabled = true;
+                setTimeout(() => endShot(), 320);
+              }
+            }
           }
+        }
+        if (drop > FALL_STUN_THRESHOLD * 0.6){
+          p.slideBoost = Math.min(SLIDE_BONUS_MAX, Math.max(p.slideBoost, drop * 0.015));
         }
         lastGroundedAt[i] = now();
       }
@@ -1424,8 +1888,9 @@ function stepPlayers(){
       const xl = Math.max(0, p.x-2|0), xr=Math.min(W-1, p.x+2|0);
       const sl = groundYAt(xl, p.y + PLAYER_R);
       const sr = groundYAt(xr, p.y + PLAYER_R);
+      let slope = 0;
       if (sl < H && sr < H){
-        const slope = (sr - sl) / 4;
+        slope = (sr - sl) / 4;
         if (Math.abs(slope) > 0.5) { p.x += slope * 0.25; }
       }
 
@@ -1437,8 +1902,26 @@ function stepPlayers(){
       }
 
       // Ground friction & zero vertical velocity
-      p.vx *= MOVE.friction;
+      let groundFriction = MOVE.friction;
+      if (Math.abs(slope) < 0.4){
+        groundFriction = Math.min(0.985, MOVE.friction + 0.02);
+      } else if (Math.abs(slope) < 0.9) {
+        groundFriction = Math.max(0.9, MOVE.friction - 0.05);
+      } else {
+        groundFriction = Math.max(0.82, MOVE.friction - 0.12);
+      }
+      if (p.slideBoost){
+        groundFriction = Math.max(0.58, groundFriction - 0.28);
+      }
+      if (ragActive){
+        groundFriction = Math.min(groundFriction, 0.8);
+      }
+      p.vx *= groundFriction;
       p.vy = 0;
+
+      if (ragActive && Math.abs(p.vx) < 0.24){
+        clearRagdoll(p);
+      }
 
       // Remember last time we were grounded (for coyote-time jumps)
       lastGroundedAt[i] = now();
@@ -1447,192 +1930,403 @@ function stepPlayers(){
     // Bounds
     p.x = Math.max(PLAYER_R, Math.min(W-PLAYER_R, p.x));
     p.y = Math.max(PLAYER_R, Math.min(H-PLAYER_R, p.y));
+
+    if (waterIsActive()) {
+      checkWaterDeath(i);
+    }
   }
 }
 
 // ======================
-// = AI (no walking)    =
+// = AI helpers & logic =
 // ======================
-function aiPlay(){
-  if (!aiEnabled || turn!==1 || shot) return;
-  const me = players[1], you = players[0];
-  const dx = you.x - me.x, dy = me.y - you.y;
-  const dist = Math.hypot(dx,dy);
-  const heightDiff = Math.abs(dy);
+function randomRange(min, max){
+  return min + Math.random() * (max - min);
+}
 
-  const diff = diffSel.value;
-  let angle = me.angle;
-  let power = Math.min(95, Math.max(30, me.lastPower||55));
+function clampShotAngle(angle){
+  return ((angle % 360) + 360) % 360;
+}
 
-  const canGrenade = wGrenade.checked && (!ammoChk.checked || me.ammo.grenade>0);
-  const canShotgun = wShotgun.checked && (!ammoChk.checked || me.ammo.shotgun>0);
+function clampShotPower(power){
+  return Math.max(20, Math.min(100, power));
+}
 
-  const windMag = Math.abs(wind);
-  const windRatio = WIND_MAX>0 ? windMag / WIND_MAX : 0;
-  const strongWind = windRatio >= 0.55;
-  const blockedLine = terrainBlocksDirectShot(me, you);
-  const bigHeightGap = heightDiff > 140;
-  const midRange = dist > 210 && dist < 540;
+function isPlanViable(plan){
+  return !!plan && Number.isFinite(plan.miss) && plan.angle !== undefined && plan.power !== undefined;
+}
 
-  let grenadeScore = 0;
-  if (strongWind) grenadeScore += 0.45;
-  if (blockedLine) grenadeScore += 0.4;
-  if (bigHeightGap) grenadeScore += 0.25;
-  grenadeScore = Math.min(1, grenadeScore);
+function clonePlan(plan){
+  return plan ? { ...plan } : null;
+}
 
-  const wantsShotgun = canShotgun && dist<180 && heightDiff<80;
+function computeFuseFromPlan(plan){
+  if (!plan || !plan.flight) return 3;
+  return Math.max(1, Math.min(5, Math.round(plan.flight / 60)));
+}
 
-  if (diff==='Easy'){
-    weapon = 'normal';
-    me.lastWeapon = weapon;
-    angle = 15 + Math.random()*330;
-    power = 30 + Math.random()*55;
-  } else if (diff==='Medium'){
-    const coarseStep = 8;
-    const powerStep  = 8;
-    let prefersGrenade = false;
-    if (canGrenade && midRange && grenadeScore>0.45){
-      const probeNormal = searchShotSolution(me, you, 'normal', coarseStep, powerStep);
-      const probeGren = searchShotSolution(me, you, 'grenade', coarseStep, powerStep);
-      const normalMiss = probeNormal ? probeNormal.miss : Infinity;
-      const grenadeMiss = probeGren ? probeGren.miss : Infinity;
-      const weighted = grenadeMiss - grenadeScore*60;
-      prefersGrenade = weighted + 10 < normalMiss;
-      if (prefersGrenade && probeGren){
-        weapon='grenade';
-        me.lastWeapon = weapon;
-        let best = refineShotSolution(me, you, weapon, probeGren, 3, 3) || probeGren;
-        if (!best || !isFinite(best.miss) || best.miss>260){
-          angle = 20 + Math.random()*320;
-          power = 35 + Math.random()*50;
-        } else {
-          angle = best.angle + (Math.random()*6 - 3);
-          power = Math.max(28, Math.min(98, best.power + (Math.random()*12 - 6)));
-          const fuseSeconds = Math.max(1, Math.min(5, Math.round(best.flight/60)));
-          me.fuse = fuseSeconds;
-        }
-        angle = ((angle%360)+360)%360;
-        power = Math.max(20, Math.min(100, power));
-        me.angle = Math.round(angle);
-        me.lastPower = power;
-        updateBadge();
-        if (weapon==='shotgun') launchShot(power);
-        else launchShot(power);
-        return;
-      }
+function scoreShotPlan(plan){
+  return isPlanViable(plan) ? plan.miss : Infinity;
+}
+
+function isWalkableRange(startX, endX, maxRise = 44){
+  if (startX === endX) return true;
+  const dir = startX < endX ? 1 : -1;
+  const step = 12 * dir;
+  let prev = groundYAt(startX);
+  if (prev >= H) return false;
+  for (let x = startX + step; dir > 0 ? x <= endX : x >= endX; x += step){
+    const gy = groundYAt(x);
+    if (gy >= H) return false;
+    if (Math.abs(gy - prev) > maxRise) return false;
+    prev = gy;
+  }
+  const end = groundYAt(endX);
+  return end < H;
+}
+
+function createDecisionFromPlan(plan, overrides = {}){
+  const copy = clonePlan(plan);
+  if (!copy) return null;
+  const decision = {
+    plan: copy,
+    jitter: overrides.jitter ?? null,
+    remember: overrides.remember ?? false,
+    fireDelay: overrides.fireDelay ?? (copy.weapon === Weapons.SHOTGUN ? 160 : 240)
+  };
+  if (copy.weapon === Weapons.GRENADE){
+    copy.fuse = overrides.fuse ?? computeFuseFromPlan(copy);
+  }
+  return decision;
+}
+
+function makeFallbackDecision(me, you){
+  const dx = you.x - me.x;
+  const dy = me.y - you.y;
+  let direct = Math.atan2(dy, dx);
+  if (direct < 0) direct += Math.PI * 2;
+  const angle = clampShotAngle((direct * 180) / Math.PI);
+  const dist = Math.hypot(dx, dy);
+  const power = clampShotPower(dist * 0.24 + 30);
+  return {
+    plan: {
+      weapon: Weapons.NORMAL,
+      angle,
+      power,
+      miss: Infinity
+    },
+    jitter: { angle: randomRange(-10, 10), power: randomRange(-14, 14) },
+    remember: false,
+    fireDelay: 240
+  };
+}
+
+function findHardMovement(me, you, currentPlan){
+  if (!movementOn || !isPlanViable(currentPlan)) return null;
+  const baseBlocked = terrainBlocksDirectShot(me, you);
+  const waterActive = waterIsActive();
+  const baseFeet = (currentPlan.originY !== undefined ? currentPlan.originY : me.y) + PLAYER_R;
+  const basePenalty = waterPenaltyForFeet(baseFeet);
+  let baseScore = scoreShotPlan(currentPlan) + basePenalty + (baseBlocked ? 60 : 0);
+  const offsets = [48, -48, 96, -96, 144, -144];
+  let best = null;
+
+  for (const offset of offsets){
+    const targetX = Math.max(PLAYER_R, Math.min(W - PLAYER_R, me.x + offset));
+    if (Math.abs(targetX - me.x) < 6) continue;
+    if (!isWalkableRange(me.x, targetX)) continue;
+    const ground = groundYAt(targetX);
+    if (ground >= H) continue;
+    const targetY = ground - PLAYER_R;
+    if (targetY < PLAYER_R || targetY >= H) continue;
+    if (Math.abs(targetY - me.y) > 115) continue;
+    if (waterActive && targetY + PLAYER_R >= waterLevelY - 4) continue;
+
+    const probe = { ...me, x: targetX, y: targetY };
+    const plan = computeShotPlan(probe, you, Weapons.NORMAL, 4, 4);
+    if (!isPlanViable(plan)) continue;
+    plan.weapon = Weapons.NORMAL;
+    plan.originX = targetX;
+    plan.originY = targetY;
+
+    const travel = Math.abs(targetX - me.x);
+    const travelPenalty = travel * 0.28;
+    const blocked = terrainBlocksDirectShot(probe, you);
+    const feet = targetY + PLAYER_R;
+    const waterPenalty = waterPenaltyForFeet(feet);
+    let score = plan.miss + travelPenalty + waterPenalty + (blocked ? 120 : 0);
+    if (baseBlocked && !blocked) score -= 45;
+    if (waterActive && waterPenalty <= 0) score -= 12;
+
+    if (!best || score < best.score){
+      best = {
+        score,
+        plan: clonePlan(plan),
+        targetX,
+        targetY,
+        blocked,
+        feet
+      };
     }
-    weapon = wantsShotgun ? 'shotgun' : 'normal';
-    me.lastWeapon = weapon;
-    const best = searchShotSolution(me, you, weapon, coarseStep, powerStep);
-    if (!best || !isFinite(best.miss) || best.miss>260){
-      angle = 20 + Math.random()*320;
-      power = 35 + Math.random()*50;
-    } else {
-      angle = best.angle;
-      power = Math.max(28, Math.min(98, best.power));
-      if (weapon==='grenade'){
-        const fuseSeconds = Math.max(1, Math.min(5, Math.round(best.flight/60)));
-        me.fuse = fuseSeconds;
-      }
-      angle += (Math.random()*6 - 3);
-      power += (Math.random()*12 - 6);
-    }
-  } else { // Hard
-    const coarseStep = 6;
-    const powerStep  = 5;
-    const normalPlan = computeShotPlan(me, you, 'normal', coarseStep, powerStep);
-    const grenadePlan = canGrenade ? computeShotPlan(me, you, 'grenade', coarseStep, powerStep) : null;
-    const shotgunPlan = wantsShotgun ? computeShotPlan(me, you, 'shotgun', coarseStep, powerStep) : null;
+  }
 
-    let chosenWeapon = 'normal';
-    let plan = normalPlan;
+  if (!best) return null;
+  const improvement = baseScore - best.score;
+  const baseUnsafe = waterActive && baseFeet >= waterLevelY - 6;
+  const candidateSafe = waterActive && best.feet + 8 < waterLevelY;
+  const shouldMove =
+    (baseUnsafe ? candidateSafe : false) ||
+    (!baseUnsafe && (!Number.isFinite(baseScore) ||
+    baseScore > 80 ||
+    improvement > 8 ||
+    (best.blocked === false && baseBlocked)));
 
-    if (wantsShotgun && shotgunPlan && isFinite(shotgunPlan.miss) && shotgunPlan.miss < 110){
-      chosenWeapon = 'shotgun';
-      plan = shotgunPlan;
-    } else {
-      const normalMiss = normalPlan ? normalPlan.miss : Infinity;
-      let weightedNormal = normalMiss;
-      if (!blockedLine) weightedNormal -= 12;
-      if (bigHeightGap) weightedNormal -= 8;
+  if (!shouldMove) return null;
 
-      if (grenadePlan && isFinite(grenadePlan.miss)){
-        let weightedGrenade = grenadePlan.miss - grenadeScore*80;
-        if (me.lastWeapon === 'grenade') weightedGrenade += 18;
-        if (blockedLine) weightedGrenade -= 12;
-        const wantsGrenade = grenadePlan.miss < normalMiss + 45 || (midRange && grenadeScore > 0.4);
-        if (weightedGrenade + 5 < weightedNormal || (wantsGrenade && grenadePlan.miss < normalMiss + 30)){
-          chosenWeapon = 'grenade';
-          plan = grenadePlan;
-        }
-      }
+  return {
+    targetX: best.targetX,
+    tolerance: 4,
+    settleMs: 220,
+    decisionPlan: best.plan,
+    fallbackPlan: clonePlan(currentPlan)
+  };
+}
 
-      if (!plan && grenadePlan){
-        chosenWeapon = 'grenade';
-        plan = grenadePlan;
-      }
-      if (!plan && normalPlan){
-        chosenWeapon = 'normal';
-        plan = normalPlan;
-      }
-    }
+function planEasyTurn(me, you){
+  const basePlan = computeShotPlan(me, you, Weapons.NORMAL, 14, 12);
+  const chosen = isPlanViable(basePlan) && basePlan.miss < 480 ? basePlan : {
+    weapon: Weapons.NORMAL,
+    angle: clampShotAngle(20 + Math.random() * 320),
+    power: clampShotPower(30 + Math.random() * 55),
+    miss: Infinity
+  };
 
-    weapon = chosenWeapon;
-    me.lastWeapon = weapon;
+  const decision = createDecisionFromPlan(chosen, {
+    jitter: { angle: randomRange(-14, 14), power: randomRange(-22, 22) },
+    remember: false,
+    fireDelay: 320 + Math.random() * 260
+  });
 
-    if (weapon === 'shotgun'){
-      if (plan && isFinite(plan.miss)){
-        angle = plan.angle;
-        power = Math.max(35, Math.min(90, plan.power));
-      } else {
-        let direct = Math.atan2(me.y - you.y, you.x - me.x);
-        if (direct < 0) direct += Math.PI*2;
-        angle = direct * 180/Math.PI;
-        power = Math.max(32, Math.min(80, dist*0.25 + 30));
-      }
-      aiMemory.lastSolution = null;
-    } else {
-      if (!plan || !isFinite(plan.miss) || plan.miss>300){
-        angle = 20 + Math.random()*320;
-        power = 35 + Math.random()*50;
-        aiMemory.lastSolution = null;
-      } else {
-        const baseAngle = plan.angle;
-        const basePower = Math.max(28, Math.min(98, plan.power));
-        angle = baseAngle + (Math.random()*3 - 1.5);
-        power = basePower + (Math.random()*4 - 2);
-        if (weapon === 'grenade'){
-          const fuseSeconds = Math.max(1, Math.min(5, Math.round(plan.flight/60)));
-          me.fuse = fuseSeconds;
-        }
-        aiMemory.lastSolution = {
-          weapon,
-          angle: baseAngle,
-          power: basePower,
-          miss: plan.miss,
-          score: plan.score,
-          flight: plan.flight,
-          targetX: you.x,
-          targetY: you.y,
-        };
+  return { decision, move: null };
+}
+
+function planMediumTurn(me, you){
+  const canGrenade = wGrenade.checked && (!ammoChk.checked || me.ammo.grenade > 0);
+  const coarseStep = 7;
+  const powerStep = 6;
+
+  const normalPlan = computeShotPlan(me, you, Weapons.NORMAL, coarseStep, powerStep);
+  let chosenPlan = normalPlan;
+
+  if (canGrenade){
+    const grenadePlan = computeShotPlan(me, you, Weapons.GRENADE, coarseStep + 1, powerStep + 1);
+    if (isPlanViable(grenadePlan)){
+      const normalMiss = scoreShotPlan(normalPlan);
+      const grenadeMiss = scoreShotPlan(grenadePlan);
+      if ((grenadeMiss + 25 < normalMiss && grenadeMiss < 220) || !Number.isFinite(normalMiss)){
+        chosenPlan = grenadePlan;
       }
     }
   }
 
-  angle = ((angle%360)+360)%360;
-  power = Math.max(20, Math.min(100, power));
+  if (!isPlanViable(chosenPlan)){
+    return { decision: makeFallbackDecision(me, you), move: null };
+  }
+
+  const decision = createDecisionFromPlan(chosenPlan, {
+    jitter: { angle: randomRange(-3.2, 3.2), power: randomRange(-7, 7) },
+    remember: false,
+    fireDelay: 250 + Math.random() * 180
+  });
+
+  return { decision, move: null };
+}
+
+function planHardTurn(me, you){
+  const dx = you.x - me.x;
+  const dy = me.y - you.y;
+  const dist = Math.hypot(dx, dy);
+  const heightDiff = Math.abs(dy);
+  const canShotgun = wShotgun.checked && (!ammoChk.checked || me.ammo.shotgun > 0);
+  const wantsShotgun = canShotgun && dist < 150 && heightDiff < 70;
+
+  const bazookaPlan = computeShotPlan(me, you, Weapons.NORMAL, 4, 4);
+  let chosenPlan = bazookaPlan;
+  let moveOption = null;
+
+  if (wantsShotgun){
+    const shotgunPlan = computeShotPlan(me, you, Weapons.SHOTGUN, 6, 5);
+    if (isPlanViable(shotgunPlan) && shotgunPlan.miss < 70){
+      chosenPlan = shotgunPlan;
+    }
+  }
+
+  if (!isPlanViable(chosenPlan)){
+    chosenPlan = computeShotPlan(me, you, Weapons.NORMAL, 6, 5) || bazookaPlan;
+  }
+
+  if (!isPlanViable(chosenPlan)){
+    return { decision: makeFallbackDecision(me, you), move: null };
+  }
+
+  chosenPlan.originX = me.x;
+  chosenPlan.originY = me.y;
+
+  if (chosenPlan.weapon === Weapons.NORMAL){
+    moveOption = findHardMovement(me, you, chosenPlan);
+    if (moveOption){
+      chosenPlan = moveOption.decisionPlan;
+    }
+  }
+
+  const decision = createDecisionFromPlan(chosenPlan, {
+    jitter: null,
+    remember: chosenPlan.weapon === Weapons.NORMAL,
+    fireDelay: chosenPlan.weapon === Weapons.SHOTGUN ? 160 : 200
+  });
+
+  return { decision, move: moveOption };
+}
+
+function beginAIMove(decision, move){
+  if (!move){
+    executeAIShot(decision);
+    return;
+  }
+  aiState.moveTask = {
+    targetX: Math.max(PLAYER_R, Math.min(W - PLAYER_R, move.targetX)),
+    tolerance: move.tolerance ?? 4,
+    settleMs: move.settleMs ?? 200,
+    start: now(),
+    maxDuration: 2200,
+    settleAt: null,
+    decision,
+    fallbackDecision: move.fallbackPlan
+      ? createDecisionFromPlan(move.fallbackPlan, {
+          jitter: null,
+          remember: move.fallbackPlan.weapon === Weapons.NORMAL,
+          fireDelay: decision.fireDelay
+        })
+      : decision,
+    lastX: players[1].x,
+    noProgressSince: now()
+  };
+}
+
+function executeAIShot(decision){
+  if (!decision || !decision.plan) return;
+  const me = players[1];
+  const plan = decision.plan;
+  aiState.moveTask = null;
+  aiState.pendingPlan = null;
+
+  let angle = plan.angle;
+  let power = plan.power;
+  if (decision.jitter){
+    angle += decision.jitter.angle || 0;
+    power += decision.jitter.power || 0;
+  }
+
+  angle = clampShotAngle(angle);
+  power = clampShotPower(power);
+
+  const choice = plan.weapon || Weapons.NORMAL;
+  weapon = choice;
+  me.lastWeapon = choice;
   me.angle = Math.round(angle);
   me.lastPower = power;
+
+  if (choice === Weapons.GRENADE){
+    me.fuse = plan.fuse ?? computeFuseFromPlan(plan);
+  }
+
   updateBadge();
 
-  if (weapon==='teleport' && wTeleport.checked && (!ammoChk.checked || me.ammo.teleport>0)){
-    const tx = (me.x*0.4 + you.x*0.6); const ty = groundYAt(tx)-PLAYER_R-2;
-    if (ammoChk.checked) me.ammo.teleport = Math.max(0, me.ammo.teleport-1);
-    whoosh(); me.x=tx; me.y=ty; poof(); updateBadge();
-    lockInputsForShot(); setTimeout(()=>endShot(),200); return;
+  const delay = decision.fireDelay ?? 220;
+  setTimeout(() => {
+    if (!shot && turn === 1) {
+      launchShot(power);
+    }
+  }, delay);
+
+  if (decision.remember){
+    aiMemory.lastSolution = {
+      weapon: choice,
+      angle: plan.angle,
+      power: plan.power,
+      miss: plan.miss,
+      score: plan.score,
+      flight: plan.flight,
+      targetX: plan.targetX,
+      targetY: plan.targetY
+    };
+  } else {
+    aiMemory.lastSolution = null;
   }
-  if (weapon==='shotgun') launchShot(power);
-  else launchShot(power);
+}
+
+function processAIState(){
+  if (!aiEnabled || turn !== 1 || shot) return;
+  const task = aiState.moveTask;
+  if (!task) return;
+
+  const me = players[1];
+  const currentTime = now();
+  const dx = task.targetX - me.x;
+  const absDx = Math.abs(dx);
+
+  if (absDx <= task.tolerance && Math.abs(me.vx) < 0.35){
+    if (!task.settleAt){
+      task.settleAt = currentTime;
+    }
+    if (currentTime - task.settleAt >= task.settleMs){
+      const decision = task.decision;
+      aiState.moveTask = null;
+      executeAIShot(decision);
+      return;
+    }
+  } else {
+    task.settleAt = null;
+  }
+
+  if (Math.abs(me.x - task.lastX) > 3){
+    task.lastX = me.x;
+    task.noProgressSince = currentTime;
+  } else if (currentTime - task.noProgressSince > 700){
+    const fallback = task.fallbackDecision || task.decision;
+    aiState.moveTask = null;
+    executeAIShot(fallback);
+    return;
+  }
+
+  if (currentTime - task.start > task.maxDuration){
+    const fallback = task.fallbackDecision || task.decision;
+    aiState.moveTask = null;
+    executeAIShot(fallback);
+  }
+}
+
+function aiPlay(){
+  if (!aiEnabled || turn !== 1 || shot) return;
+  resetAIState();
+  const me = players[1];
+  const you = players[0];
+  const diff = diffSel.value;
+
+  let payload;
+  if (diff === 'Easy') payload = planEasyTurn(me, you);
+  else if (diff === 'Medium') payload = planMediumTurn(me, you);
+  else payload = planHardTurn(me, you);
+
+  let decision = payload?.decision;
+  let move = payload?.move || null;
+
+  if (!decision){
+    decision = makeFallbackDecision(me, you);
+    move = null;
+  }
+
+  beginAIMove(decision, move);
 }
 
 function terrainBlocksDirectShot(from, to){
@@ -1784,6 +2478,8 @@ function draw(){
 
   // Smooth cam
   cam.scale += (cam.targetScale - cam.scale)*0.15;
+  waterAnimT += 0.013;
+  const frameNow = now();
 
   ctx.save();
   ctx.clearRect(0,0,W,H);
@@ -1795,31 +2491,62 @@ function draw(){
 
   ctx.drawImage(terrCanvas,0,0);
   ctx.drawImage(decalCanvas,0,0);
+  drawWaterLayer(ctx);
 
   // Players
   players.forEach((p,idx)=>{
-    ctx.fillStyle='rgba(0,0,0,.25)';
-    ctx.beginPath(); ctx.ellipse(p.x, p.y+PLAYER_R-2, PLAYER_R*0.8, 5, 0,0,Math.PI*2); ctx.fill();
+    const drown = p.drowning;
+    const ragActive = !drown && isRagdollActive(p);
+    let drawY = p.y;
+    let drawAlpha = 1;
+    if (drown){
+      const elapsed = frameNow - drown.start;
+      const t = Math.min(1, elapsed / drown.duration);
+      const sink = t * (PLAYER_R + 28);
+      const bob = Math.sin(t * Math.PI * 4) * (1 - t) * 3;
+      drawY = Math.min(p.y + sink + bob, waterLevelY + PLAYER_R + 6);
+      drawAlpha = Math.max(0.08, 1 - t * 0.92);
+      if (frameNow - drown.lastSplash > 200 && t < 0.85){
+        spawnWaterSplash(p.x + (Math.random() - 0.5) * 16, 0.26);
+        drown.lastSplash = frameNow;
+      }
+    } else if (ragActive && p.ragdoll){
+      if (!p.ragdoll.lastSpray || frameNow - p.ragdoll.lastSpray > 140){
+        spawnWaterSplash(p.x + (Math.random() - 0.5) * 18, 0.16);
+        p.ragdoll.lastSpray = frameNow;
+      }
+    }
 
+    const shadowAlpha = drawAlpha * 0.28;
+    const shadowY = drown ? Math.min(waterLevelY + 4, drawY + PLAYER_R - 2) : drawY + PLAYER_R - 2;
+    ctx.fillStyle=`rgba(0,0,0,${shadowAlpha})`;
+    ctx.beginPath(); ctx.ellipse(p.x, shadowY, PLAYER_R*0.8, 5, 0,0,Math.PI*2); ctx.fill();
+
+    ctx.save();
+    ctx.globalAlpha = drawAlpha;
     ctx.fillStyle = idx===0 ? '#6ea8fe' : '#90c2ff';
-    ctx.beginPath(); ctx.arc(p.x,p.y,PLAYER_R,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x,drawY,PLAYER_R,0,Math.PI*2); ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke();
 
     ctx.font='18px system-ui,emoji'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(p.emoji, p.x, p.y-1);
+    ctx.fillText(p.emoji, p.x, drawY-1);
+    ctx.restore();
 
-    if (idx===turn && !shot && !placingTeleport && allowInput){
+    if (!drown && !ragActive && idx===turn && !shot && !placingTeleport && allowInput){
       const ang=(p.angle*Math.PI)/180; const len=22;
-      const x2=p.x+Math.cos(ang)*len; const y2=p.y-Math.sin(ang)*len;
+      const x2=p.x+Math.cos(ang)*len; const y2=drawY-Math.sin(ang)*len;
       ctx.strokeStyle='#ffd166'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x,drawY); ctx.lineTo(x2,y2); ctx.stroke();
     }
 
     if (p.emoteT>0 && p.emote){
-      ctx.globalAlpha=Math.min(1, p.emoteT/30);
+      ctx.save();
+      const emoteAlpha = Math.min(1, p.emoteT/30) * drawAlpha;
+      ctx.globalAlpha = emoteAlpha;
       ctx.font='20px system-ui,emoji';
-      ctx.fillText(p.emote, p.x, p.y-PLAYER_R-12);
-      ctx.globalAlpha=1; p.emoteT--;
+      ctx.fillText(p.emote, p.x, drawY-PLAYER_R-12);
+      ctx.restore();
+      p.emoteT--;
     }
   });
 
@@ -1873,15 +2600,33 @@ function draw(){
   // Particles & rings
   for(let i=particles.length-1;i>=0;i--){
     const P=particles[i];
-    if (P.smoke){ P.vx += wind*0.5; P.vy += 0.05; } else { P.vx += wind; P.vy += G*0.6; }
+    if (P.water){
+      P.vx *= 0.96;
+      P.vy += 0.08;
+    } else if (P.smoke){
+      P.vx += wind*0.5;
+      P.vy += 0.05;
+    } else {
+      P.vx += wind;
+      P.vy += G*0.6;
+    }
     P.x += P.vx; P.y += P.vy; P.life--;
-    if (P.smoke){ ctx.globalAlpha=Math.max(0, (P.alpha??0.5) * P.life/70); ctx.fillStyle='#cbd5e1'; ctx.beginPath(); ctx.arc(P.x,P.y,3.5,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
-    else { ctx.fillStyle='#9aa5bf'; ctx.beginPath(); ctx.arc(P.x,P.y,2.2,0,Math.PI*2); ctx.fill(); }
-    if (P.life<=0) particles.splice(i,1);
+    if (P.water){
+      const alpha = Math.max(0, Math.min(1, P.life / 32));
+      ctx.fillStyle = `rgba(120,180,255,${alpha})`;
+      ctx.beginPath(); ctx.arc(P.x,P.y,2.4,0,Math.PI*2); ctx.fill();
+    } else if (P.smoke){
+      ctx.globalAlpha = Math.max(0, (P.alpha ?? 0.5) * P.life / 70);
+      ctx.fillStyle='#cbd5e1'; ctx.beginPath(); ctx.arc(P.x,P.y,3.5,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+    } else {
+      ctx.fillStyle='#9aa5bf'; ctx.beginPath(); ctx.arc(P.x,P.y,2.2,0,Math.PI*2); ctx.fill();
+    }
+    if (P.life<=0 || P.y > H + 24) particles.splice(i,1);
   }
   for(let i=rings.length-1;i>=0;i--){
-    const R=rings[i]; R.r+=2.6; R.alpha*=0.92;
-    ctx.strokeStyle=`rgba(255,255,255,${R.alpha})`; ctx.lineWidth=2;
+    const R=rings[i]; R.r+=2.4; R.alpha*=0.92;
+    const color = R.water ? `rgba(120,180,255,${R.alpha})` : `rgba(255,255,255,${R.alpha})`;
+    ctx.strokeStyle=color; ctx.lineWidth = R.water ? 1.6 : 2;
     ctx.beginPath(); ctx.arc(R.x,R.y,R.r,0,Math.PI*2); ctx.stroke();
     if (R.alpha<0.02) rings.splice(i,1);
   }
@@ -1902,12 +2647,26 @@ function draw(){
 
   // Step physics (after draw so aim arrow uses previous state)
   stepPlayers();
+  processAIState();
+  if (pendingWinner && frameNow >= pendingWinner.triggerAt){
+    const data = pendingWinner;
+    pendingWinner = null;
+    announceWinner(data.idx, data.reason);
+  }
 }
 
 function positionNameplate(el, p){
   const rect = cvs.getBoundingClientRect();
+  let drawY = p.y;
+  if (p.drowning){
+    const elapsed = now() - p.drowning.start;
+    const t = Math.min(1, elapsed / (p.drowning.duration || DROWN_DURATION));
+    const sink = t * (PLAYER_R + 28);
+    const bob = Math.sin(t * Math.PI * 4) * (1 - t) * 3;
+    drawY = Math.min(p.y + sink + bob, waterLevelY + PLAYER_R + 6);
+  }
   const sx = rect.left + (p.x * rect.width / W);
-  const sy = rect.top + (p.y * rect.height / H);
+  const sy = rect.top + (drawY * rect.height / H);
   el.style.left = sx + 'px';
   el.style.top  = (sy - 22) + 'px';
 }
@@ -1927,7 +2686,10 @@ function updateAll(){ updateHPPlates(); updateTurnUI(); updateWindUI(); }
 
 function resetGame(newMap){
   readMenuSettings();
+  updateWaterConfig(true);
   aiMemory.lastSolution = null;
+  resetAIState();
+  pendingWinner = null;
 
   // Stats reset
   stats.shots=[0,0]; stats.hits=[0,0]; stats.bestHit=[0,0];
@@ -1942,6 +2704,7 @@ function resetGame(newMap){
     };
     players[i].fuse = 5;
     if (newMap) players[i].lastWeapon = Weapons.NORMAL;
+    players[i].drowning = null;
     lastGroundedAt[i] = now();
     lastJumpPressedAt[i] = -9999;
     lastJumpAt[i]        = -9999;
@@ -1974,6 +2737,10 @@ menuPanel.style.display='block';
 mapSeed = Math.random().toString(36).slice(2,8);
 seedTxt.value = mapSeed;
 srand(mapSeed);
-generateTerrain(); updateAll(); (function loop(){draw();})();
+readMenuSettings();
+updateWaterConfig(true);
+generateTerrain();
+updateAll();
+(function loop(){draw();})();
 
 })();

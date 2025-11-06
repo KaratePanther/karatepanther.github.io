@@ -119,7 +119,7 @@
               <span>Mode</span>
               <select id="modeSel" class="sel" aria-label="Game mode">
                 <option value="pvp">🧍‍♂️ Player vs Player</option>
-                <option value="pvc">🤖 Player vs Computer</option>
+                <option value="pvc" selected>🤖 Player vs Computer</option>
               </select>
             </div>
 
@@ -155,8 +155,32 @@
             <div class="menuRow">
               <span>Movement controls</span>
               <select id="moveSel" class="sel" aria-label="Movement controls">
-                <option value="off" selected>Off</option>
-                <option value="on">On</option>
+                <option value="off">Off</option>
+                <option value="on" selected>On</option>
+              </select>
+            </div>
+
+            <div class="menuRow">
+              <span>Water level</span>
+              <select id="waterSel" class="sel" aria-label="Water hazard level">
+                <option value="off">Dry (off)</option>
+                <option value="shallow" selected>Shallow</option>
+                <option value="medium">Mid</option>
+                <option value="deep">Deep</option>
+              </select>
+            </div>
+
+            <div class="menuRow">
+              <span>Flood mode</span>
+              <label><input id="waterFloodChk" class="chk" type="checkbox"> Rising each turn</label>
+            </div>
+
+            <div class="menuRow">
+              <span>Flood speed</span>
+              <select id="waterFloodSel" class="sel" aria-label="Water flood speed">
+                <option value="slow">Slow</option>
+                <option value="normal" selected>Normal</option>
+                <option value="fast">Fast</option>
               </select>
             </div>
 
