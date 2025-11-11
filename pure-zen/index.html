@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calma</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" data-screen="home">
+    <header class="hero">
+      <h1 class="logo">Calma</h1>
+      <p class="tagline" data-i18n="tagline">Calm breathing. No hurry, no pause.</p>
+    </header>
+
+    <main>
+      <section class="screen screen--home" data-screen-id="home">
+        <button class="btn btn--primary start-btn" type="button" data-i18n-text="startLabel">Start 5-minute session</button>
+
+        <div class="chip-row" role="list">
+          <button class="chip" data-length="2" role="listitem">2m</button>
+          <button class="chip" data-length="5" role="listitem">5m</button>
+          <button class="chip" data-length="10" role="listitem">10m</button>
+        </div>
+
+        <div class="link-row">
+          <button class="link" type="button" data-sheet="length" data-i18n="changeLength">Change length</button>
+          <button class="link" type="button" data-sheet="technique" data-i18n="technique">Technique</button>
+        </div>
+
+        <dl class="summary">
+          <div>
+            <dt data-i18n="length">Length</dt>
+            <dd class="summary__value" data-summary="length"></dd>
+          </div>
+          <div>
+            <dt data-i18n="technique">Technique</dt>
+            <dd class="summary__value" data-summary="technique"></dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="screen screen--session" data-screen-id="session" aria-live="polite">
+        <div class="session-visual">
+          <svg class="progress-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="progress-ring__bg" cx="60" cy="60" r="54"></circle>
+            <circle class="progress-ring__progress" cx="60" cy="60" r="54"></circle>
+          </svg>
+          <div class="breath-circle" aria-hidden="true"></div>
+          <div class="session-readout">
+            <p class="time" data-time>05:00</p>
+            <p class="phase" data-phase>Inhale</p>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn btn--primary" type="button" data-action="pause" data-i18n="pause">Pause</button>
+          <button class="btn btn--ghost" type="button" data-action="end" data-i18n="end">End</button>
+          <button class="icon-btn" type="button" data-action="sound" aria-pressed="false" aria-label="Toggle sound">
+            <span class="icon-sound" aria-hidden="true"></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="screen screen--complete" data-screen-id="complete">
+        <h2 data-i18n="done">Done. Nice work.</h2>
+        <p class="streak" data-streak></p>
+        <div class="controls">
+          <button class="btn btn--primary" type="button" data-action="restart" data-i18n="restart">Restart</button>
+          <button class="btn btn--ghost" type="button" data-action="home" data-i18n="home">Home</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="sheet" data-sheet-id="length" role="dialog" aria-modal="true" aria-labelledby="length-sheet-title">
+    <div class="sheet__content">
+      <header class="sheet__header">
+        <h2 id="length-sheet-title" data-i18n="length">Length</h2>
+        <button class="icon-btn" type="button" data-action="close-sheet" aria-label="Close"></button>
+      </header>
+      <div class="sheet__body">
+        <div class="chip-row" role="list">
+          <button class="chip" data-length="2" role="listitem">2m</button>
+          <button class="chip" data-length="5" role="listitem">5m</button>
+          <button class="chip" data-length="10" role="listitem">10m</button>
+        </div>
+        <label class="slider-label">
+          <span data-i18n="length"></span>
+          <span class="slider-value" data-slider-value>5</span>
+        </label>
+        <input type="range" min="1" max="20" value="5" class="slider" data-length-slider />
+      </div>
+      <footer class="sheet__footer">
+        <button class="btn btn--primary" type="button" data-action="close-sheet" data-i18n="doneButton">Done</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="sheet" data-sheet-id="technique" role="dialog" aria-modal="true" aria-labelledby="technique-sheet-title">
+    <div class="sheet__content">
+      <header class="sheet__header">
+        <h2 id="technique-sheet-title" data-i18n="technique">Technique</h2>
+        <button class="icon-btn" type="button" data-action="close-sheet" aria-label="Close"></button>
+      </header>
+      <div class="sheet__body">
+        <fieldset class="radio-list">
+          <legend class="sr-only" data-i18n="technique">Technique</legend>
+          <label class="radio">
+            <input type="radio" name="technique" value="coherent" checked />
+            <span>
+              <strong>Coherent (5-5)</strong>
+              <small data-i18n="coherentInfo">Inhale 5s · Exhale 5s</small>
+            </span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="technique" value="box" />
+            <span>
+              <strong>Box (4-4-4-4)</strong>
+              <small data-i18n="boxInfo">Inhale 4s · Hold 4s · Exhale 4s · Hold 4s</small>
+            </span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="technique" value="478" />
+            <span>
+              <strong>4-7-8</strong>
+              <small data-i18n="478Info">Inhale 4s · Hold 7s · Exhale 8s</small>
+            </span>
+          </label>
+        </fieldset>
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" data-setting="sound" />
+            <span class="toggle__label" data-i18n="sound">Sound</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" data-setting="haptics" checked />
+            <span class="toggle__label" data-i18n="haptics">Haptics</span>
+          </label>
+        </div>
+        <label class="select">
+          <span data-i18n="language">Language</span>
+          <select data-setting="lang">
+            <option value="en">English</option>
+            <option value="it">Italiano</option>
+            <option value="ru">Русский</option>
+          </select>
+        </label>
+      </div>
+      <footer class="sheet__footer">
+        <button class="btn btn--primary" type="button" data-action="close-sheet" data-i18n="doneButton">Done</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="sheet__backdrop" hidden></div>
+
+  <div class="sr-only" aria-live="polite" data-live></div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
