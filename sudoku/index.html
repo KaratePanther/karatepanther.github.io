@@ -461,6 +461,13 @@
       if (cell){
         cell.classList.add('selected');
         highlightPeers(cell);
+        if (!cell.readOnly){
+          requestAnimationFrame(() => {
+            try{
+              cell.setSelectionRange(0, cell.value.length);
+            }catch(_){}
+          });
+        }
       }
     }
 
