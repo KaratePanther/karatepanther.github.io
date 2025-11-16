@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sudoku</title>
+<meta name="description" content="Quick, mobile-friendly Sudoku with tactile keypad controls.">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LN5WKNMNR1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-LN5WKNMNR1');
+</script>
+<style>
+  :root{
+    --bg:#050914;
+    --card:#0f172a;
+    --ink:#f8fbff;
+    --muted:#9aa5c7;
+    --line:#1f2842;
+    --accent:#67b2ff;
+    --danger:#f97373;
+    --radius:18px;
+    --tile:56px;
+    --gap:4px;
+    --safe-l:env(safe-area-inset-left,0px);
+    --safe-r:env(safe-area-inset-right,0px);
+  }
+
+  *{box-sizing:border-box}
+  html,body{
+    height:100%;
+    overflow:hidden;
+  }
+  body{
+    margin:0;
+    background:radial-gradient(circle at top,#0f1937,#050914 58%);
+    min-height:100vh;
+    font:16px/1.5 "Inter",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:var(--ink);
+    padding:24px clamp(16px,4vw,40px) 60px;
+    display:flex;
+    justify-content:center;
+  }
+
+  .card{
+    width:min(960px,100%);
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:24px;
+    box-shadow:0 12px 45px rgba(2,6,23,.45);
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+  }
+
+  h1{
+    margin:0;
+    font-size:28px;
+  }
+
+  p{
+    margin:4px 0 0;
+    color:var(--muted);
+  }
+
+  .top{
+    display:flex;
+    justify-content:space-between;
+    gap:20px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:flex-end;
+    align-items:center;
+  }
+
+  button,.select{
+    font:inherit;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:#111b33;
+    color:var(--ink);
+    padding:10px 14px;
+    cursor:pointer;
+    transition:background .15s,border-color .15s;
+  }
+  button:hover,.select:hover{border-color:#2b3b66;}
+  button.primary{
+    background:var(--accent);
+    color:#05142c;
+    border-color:transparent;
+    font-weight:600;
+  }
+  button.ghost{
+    background:transparent;
+    color:var(--muted);
+  }
+  button:disabled{
+    opacity:.6;
+    cursor:not-allowed;
+  }
+  .select{
+    appearance:none;
+    min-width:120px;
+  }
+
+  .board-wrap{
+    display:flex;
+    gap:26px;
+    flex-wrap:wrap;
+    align-items:flex-start;
+  }
+
+  #board{
+    --cols:9;
+    display:grid;
+    grid-template-columns:repeat(var(--cols),var(--tile));
+    gap:var(--gap);
+    background:#0a1224;
+    padding:var(--gap);
+    border:1px solid var(--line);
+    border-radius:16px;
+  }
+
+  #board input{
+    width:var(--tile);
+    height:var(--tile);
+    border-radius:12px;
+    border:1px solid #1c2642;
+    background:#0e152b;
+    color:var(--ink);
+    font-size:22px;
+    text-align:center;
+    font-weight:600;
+    caret-color:transparent;
+    outline:none;
+    transition:border-color .1s, background .1s, box-shadow .1s;
+  }
+  #board input::selection{background:transparent}
+  #board input.prefilled{
+    background:linear-gradient(180deg,#142341,#0c1228);
+    color:#b2c5ff;
+    border-color:#28365d;
+    font-weight:700;
+  }
+  #board input.selected{
+    border-color:var(--accent);
+    box-shadow:0 0 8px rgba(103,178,255,.6);
+  }
+  #board input.peer:not(.selected){
+    border-color:#2d3b60;
+    background:#101832;
+  }
+  #board input.error{
+    border-color:var(--danger);
+    background:rgba(249,115,115,.08);
+  }
+  #board.completed{
+    box-shadow:0 0 35px rgba(103,178,255,.4);
+  }
+
+  .status{
+    min-height:24px;
+    font-size:15px;
+    color:var(--muted);
+  }
+  .status.good{color:#34d399}
+  .status.warn{color:#f9a8d4}
+
+  @media (max-width:720px){
+    :root{--tile:44px}
+    .card{padding:20px}
+  }
+
+  @media (max-width:480px){
+    :root{--tile:38px}
+    body{padding:16px}
+    .board-wrap{flex-direction:column;align-items:center}
+    #board{margin:0 auto}
+  }
+
+  body.touch-mode{
+    min-height:100vh;
+    min-height:100dvh;
+    padding:14px;
+    overflow:hidden;
+  }
+  body.touch-mode .card{
+    height:100%;
+    max-height:100%;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  body.touch-mode .top{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:12px;
+  }
+  body.touch-mode .actions{
+    width:100%;
+    justify-content:center;
+    gap:8px;
+  }
+  body.touch-mode .actions .select,
+  body.touch-mode .actions button{
+    flex:1;
+    min-width:0;
+  }
+  body.touch-mode .board-wrap{
+    flex:1;
+    width:100%;
+    justify-content:center;
+    align-items:center;
+    gap:16px;
+  }
+  body.touch-mode #board{
+    margin:0 auto;
+  }
+  body.touch-mode .status{
+    text-align:center;
+  }
+
+  body.touch-mode.touch-landscape{
+    padding:10px;
+  }
+  body.touch-mode.touch-landscape .card{
+    flex-direction:row;
+    align-items:stretch;
+  }
+  body.touch-mode.touch-landscape .top{
+    width:240px;
+  }
+  body.touch-mode.touch-landscape .board-wrap{
+    flex:1;
+    justify-content:center;
+    align-items:center;
+  }
+  body.touch-mode.touch-landscape .status{
+    width:240px;
+    text-align:left;
+  }
+
+  #miniPicker{
+    position:fixed;
+    display:none;
+    grid-template-columns:repeat(3,minmax(48px,1fr));
+    gap:8px;
+    background:#0b1424;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:10px;
+    box-shadow:0 14px 38px rgba(3,8,24,.6);
+    z-index:50;
+  }
+  #miniPicker.visible{
+    display:grid;
+  }
+  #miniPicker button{
+    font:inherit;
+    border-radius:10px;
+    border:1px solid #26345c;
+    background:#141f3a;
+    color:var(--ink);
+    padding:10px;
+    font-size:18px;
+  }
+  #miniPicker button:hover{
+    border-color:var(--accent);
+  }
+  #miniPicker button.clear{
+    grid-column:1 / -1;
+    background:transparent;
+    border-color:#1f2842;
+    color:var(--muted);
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="top">
+      <div>
+        <h1>Sudoku</h1>
+        <p id="ruleText">Solve the grid so each row, column, and box uses digits 1‑9 exactly once.</p>
+      </div>
+      <div class="actions">
+        <select id="sizeSelect" class="select" aria-label="Grid size">
+          <option value="4">4×4</option>
+          <option value="6">6×6</option>
+          <option value="9" selected>9×9</option>
+        </select>
+        <select id="difficultySelect" class="select" aria-label="Difficulty">
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+        <button id="restartPuzzle" class="ghost" type="button">Start again</button>
+        <button id="check" class="ghost" type="button">Check</button>
+        <button id="newGame" class="primary" type="button">New puzzle</button>
+      </div>
+    </div>
+
+    <div class="board-wrap">
+      <div id="board" aria-label="Sudoku grid"></div>
+    </div>
+
+    <div class="status" id="status">Fill the empty cells — tap/click a cell to pick digits.</div>
+  </main>
+
+  <script>
+    const clueTargets = {
+      4: { easy: 10, medium: 8, hard: 6 },
+      6: { easy: 24, medium: 20, hard: 16 },
+      9: { easy: 40, medium: 32, hard: 26 }
+    };
+
+    const boxDefaults = {
+      4:{w:2,h:2},
+      6:{w:3,h:2},
+      9:{w:3,h:3}
+    };
+
+    const boardEl = document.getElementById('board');
+    const statusEl = document.getElementById('status');
+    const checkBtn = document.getElementById('check');
+    const restartBtn = document.getElementById('restartPuzzle');
+    const newBtn = document.getElementById('newGame');
+    const sizeSelect = document.getElementById('sizeSelect');
+    const difficultySelect = document.getElementById('difficultySelect');
+    const ruleText = document.getElementById('ruleText');
+
+    const coarsePointerQuery = window.matchMedia('(pointer:coarse)');
+    const hasNativeTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const boardWrap = document.querySelector('.board-wrap');
+    const cardEl = document.querySelector('.card');
+
+    let currentPuzzle = null;
+    let selectedInput = null;
+    let gridSize = 9;
+    let currentBox = boxDefaults[9];
+    let pickerTarget = null;
+    let pickerEl = null;
+    let touchLayout = false;
+
+    function computeTouchLayout(){
+      return hasNativeTouch || coarsePointerQuery.matches || window.innerWidth <= 720;
+    }
+
+    function applyInputMode(){
+      touchLayout = computeTouchLayout();
+      document.body.classList.toggle('touch-mode', touchLayout);
+      updateTouchOrientation();
+      hidePicker();
+      adjustTileSize(gridSize);
+    }
+
+    function updateTouchOrientation(){
+      const landscape = touchLayout && window.innerWidth > window.innerHeight;
+      document.body.classList.toggle('touch-landscape', landscape);
+    }
+
+    function init(){
+      sizeSelect.addEventListener('change', () => loadPuzzle());
+      difficultySelect.addEventListener('change', () => loadPuzzle());
+      newBtn.addEventListener('click', () => loadPuzzle());
+      checkBtn.addEventListener('click', checkBoard);
+      if (restartBtn) {
+        restartBtn.addEventListener('click', restartCurrentPuzzle);
+      }
+      const handleResize = () => applyInputMode();
+      window.addEventListener('resize', handleResize);
+      if (coarsePointerQuery.addEventListener) {
+        coarsePointerQuery.addEventListener('change', handleResize);
+      } else if (coarsePointerQuery.addListener) {
+        coarsePointerQuery.addListener(handleResize);
+      }
+      applyInputMode();
+      loadPuzzle();
+    }
+
+    function loadPuzzle(options = {}){
+      const { keepCurrent = false } = options;
+      gridSize = Number(sizeSelect.value);
+      currentBox = boxDefaults[gridSize];
+      const difficulty = difficultySelect.value;
+      boardEl.innerHTML = '';
+      boardEl.classList.remove('completed');
+      selectedInput = null;
+      hidePicker();
+      renderKeypad(gridSize);
+      adjustTileSize(gridSize);
+      boardEl.style.setProperty('--cols', gridSize);
+      updateRuleText();
+      if (!keepCurrent || !currentPuzzle || currentPuzzle.size !== gridSize || currentPuzzle.difficulty !== difficulty){
+        currentPuzzle = generatePuzzle(gridSize, difficulty);
+      }
+      if (!currentPuzzle){
+        statusEl.textContent = 'Could not generate puzzle. Please try again.';
+        statusEl.className = 'status warn';
+        return;
+      }
+      renderCurrentPuzzle();
+    }
+
+    function renderCurrentPuzzle(){
+      if (!currentPuzzle) return;
+      boardEl.innerHTML = '';
+      boardEl.classList.remove('completed');
+      selectedInput = null;
+      hidePicker();
+      statusEl.textContent = 'Fill the empty cells — tap or click a cell to pick digits.';
+      statusEl.className = 'status';
+
+      [...currentPuzzle.puzzle].forEach((value, idx) => {
+        const cell = document.createElement('input');
+        cell.type = 'text';
+        cell.inputMode = 'numeric';
+        cell.pattern = '[0-9]';
+        cell.maxLength = 1;
+        const row = Math.floor(idx / gridSize);
+        const col = idx % gridSize;
+        cell.dataset.index = idx;
+        cell.dataset.row = row;
+        cell.dataset.col = col;
+        const boxWidth = currentBox?.w || 3;
+        const boxHeight = currentBox?.h || 3;
+        const boxRow = Math.floor(row / boxHeight);
+        const boxCol = Math.floor(col / boxWidth);
+        cell.dataset.box = `${boxRow}-${boxCol}`;
+        if (value !== '0'){
+          cell.value = value;
+          cell.readOnly = true;
+          cell.classList.add('prefilled');
+        }
+        cell.addEventListener('focus', () => selectCell(cell));
+        cell.addEventListener('input', handleInput);
+        cell.addEventListener('keydown', handleKeydown);
+        cell.addEventListener('pointerdown', (event) => {
+          if (cell.readOnly) return;
+          event.preventDefault();
+          cell.focus();
+          showPicker(cell);
+        });
+        boardEl.appendChild(cell);
+      });
+      const firstEditable = boardEl.querySelector('input:not(.prefilled)');
+      if (firstEditable) firstEditable.focus();
+    }
+
+    function restartCurrentPuzzle(){
+      if (!currentPuzzle){
+        loadPuzzle();
+        return;
+      }
+      renderCurrentPuzzle();
+      hidePicker();
+      statusEl.textContent = 'Puzzle reset. Take another shot!';
+      statusEl.className = 'status';
+    }
+
+    function updateRuleText(){
+      const boxWidth = currentBox?.w || 3;
+      const boxHeight = currentBox?.h || 3;
+      ruleText.textContent = `Solve the ${gridSize}×${gridSize} grid so each row, column, and ${boxHeight}×${boxWidth} box uses digits 1-${gridSize} exactly once.`;
+    }
+
+    function adjustTileSize(size){
+      const root = document.documentElement;
+      const base = size <= 4 ? 72 : size <= 6 ? 58 : 48;
+      const gapVar = parseInt(getComputedStyle(root).getPropertyValue('--gap'), 10);
+      const gap = Number.isFinite(gapVar) ? gapVar : 4;
+      const padding = gap * 2;
+      const wrapWidth = boardWrap ? boardWrap.clientWidth : window.innerWidth - 32;
+      const horizontalAvailable = Math.max(160, wrapWidth - padding);
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 600;
+      const wrapRect = boardWrap ? boardWrap.getBoundingClientRect() : null;
+      const topOffset = wrapRect ? wrapRect.top : 0;
+      const bottomReserve = touchLayout ? 36 : 24;
+      const verticalAvailable = Math.max(160, viewportHeight - topOffset - bottomReserve - padding);
+      const maxByWidth = Math.floor((horizontalAvailable - gap * (size - 1)) / size);
+      const maxByHeight = Math.floor((verticalAvailable - gap * (size - 1)) / size);
+      let tile = base;
+      if (Number.isFinite(maxByWidth) && maxByWidth > 0) {
+        tile = Math.min(tile, maxByWidth);
+      }
+      if (Number.isFinite(maxByHeight) && maxByHeight > 0) {
+        tile = Math.min(tile, maxByHeight);
+      }
+      if (touchLayout) {
+        tile = Math.min(tile, base - 4);
+      }
+      tile = Math.max(tile, 24);
+      root.style.setProperty('--tile', `${tile}px`);
+    }
+
+    function renderKeypad(size){
+      buildPickerOptions(size);
+    }
+
+    function selectCell(cell){
+      if (selectedInput) selectedInput.classList.remove('selected');
+      selectedInput = cell;
+      if (cell){
+        cell.classList.add('selected');
+        highlightPeers(cell);
+      }
+    }
+
+    function highlightPeers(active){
+      const inputs = boardEl.querySelectorAll('input');
+      inputs.forEach(inp => inp.classList.remove('peer'));
+      if (!active) return;
+      inputs.forEach(inp => {
+        if (inp === active) return;
+        if (
+          inp.dataset.row === active.dataset.row ||
+          inp.dataset.col === active.dataset.col ||
+          inp.dataset.box === active.dataset.box
+        ){
+          inp.classList.add('peer');
+        }
+      });
+    }
+
+    function handleInput(e){
+      const cell = e.target;
+      if (cell.readOnly) return;
+      cell.value = sanitizeValue(cell.value);
+      cell.classList.remove('error');
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+    }
+
+    function sanitizeValue(value){
+      const cleaned = value.replace(/[^1-9]/g,'');
+      for (let i = cleaned.length - 1; i >= 0; i--){
+        const digit = cleaned[i];
+        if (Number(digit) >= 1 && Number(digit) <= gridSize){
+          return digit;
+        }
+      }
+      return '';
+    }
+
+    function handleKeydown(e){
+      const cell = e.target;
+      const index = Number(cell.dataset.index);
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+        e.preventDefault();
+        moveSelection(index, e.key);
+        return;
+      }
+      if ((e.key === 'Backspace' || e.key === 'Delete') && !cell.readOnly && !cell.value){
+        moveSelection(index, 'ArrowLeft');
+      }
+    }
+
+    function moveSelection(index, key){
+      const inputs = [...boardEl.querySelectorAll('input')];
+      let next = index;
+      if (key === 'ArrowUp') next = index - gridSize;
+      if (key === 'ArrowDown') next = index + gridSize;
+      if (key === 'ArrowLeft') next = index - 1;
+      if (key === 'ArrowRight') next = index + 1;
+      if (next < 0 || next >= inputs.length) return;
+      inputs[next].focus();
+    }
+
+    function useKeypad(e){
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const value = btn.dataset.value;
+      if (value === undefined) return;
+      if (!selectedInput || selectedInput.readOnly) return;
+      selectedInput.value = value;
+      selectedInput.classList.remove('error');
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+      selectedInput.focus();
+    }
+
+    function ensurePicker(){
+      if (!pickerEl){
+        pickerEl = document.createElement('div');
+        pickerEl.id = 'miniPicker';
+        pickerEl.setAttribute('role','dialog');
+        pickerEl.setAttribute('aria-label','Choose a number');
+        pickerEl.addEventListener('click', handlePickerSelect);
+        document.body.appendChild(pickerEl);
+        document.addEventListener('pointerdown', (event) => {
+          if (!pickerEl || !pickerEl.classList.contains('visible')) return;
+          if (pickerEl.contains(event.target)) return;
+          if (event.target.closest('#board input')) return;
+          hidePicker();
+        });
+        window.addEventListener('resize', hidePicker);
+      }
+      return pickerEl;
+    }
+
+    function buildPickerOptions(size){
+      const picker = ensurePicker();
+      if (!picker) return;
+      picker.innerHTML = '';
+      for (let i = 1; i <= size; i++){
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.value = String(i);
+        btn.textContent = i;
+        picker.appendChild(btn);
+      }
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.dataset.value = '';
+      clear.textContent = 'Clear';
+      clear.classList.add('clear');
+      picker.appendChild(clear);
+    }
+
+    function showPicker(cell){
+      if (cell.readOnly) return;
+      const picker = ensurePicker();
+      if (!picker) return;
+      pickerTarget = cell;
+      picker.classList.add('visible');
+      positionPicker(picker, cell);
+    }
+
+    function hidePicker(){
+      if (!pickerEl) return;
+      pickerEl.classList.remove('visible');
+      pickerTarget = null;
+    }
+
+    function positionPicker(picker, cell){
+      const rect = cell.getBoundingClientRect();
+      const pickerRect = picker.getBoundingClientRect();
+      let left = rect.left + rect.width / 2 - pickerRect.width / 2;
+      let top = rect.bottom + 10;
+      const maxLeft = window.innerWidth - pickerRect.width - 12;
+      if (left < 12) left = 12;
+      if (left > maxLeft) left = Math.max(12, maxLeft);
+      if (top + pickerRect.height > window.innerHeight - 12){
+        top = rect.top - pickerRect.height - 10;
+      }
+      if (top < 12){
+        top = (window.innerHeight - pickerRect.height) / 2;
+      }
+      picker.style.left = `${left}px`;
+      picker.style.top = `${top}px`;
+    }
+
+    function handlePickerSelect(event){
+      const btn = event.target.closest('button');
+      if (!btn || !pickerTarget || pickerTarget.readOnly) return;
+      const target = pickerTarget;
+      target.value = btn.dataset.value || '';
+      target.classList.remove('error');
+      statusEl.textContent = '';
+      statusEl.className = 'status';
+      hidePicker();
+      target.focus();
+    }
+
+    function generatePuzzle(size, difficulty){
+      const box = boxDefaults[size];
+      if (!box) return null;
+      const clueGoal = getClueTarget(size, difficulty);
+      for (let attempt = 0; attempt < 5; attempt++){
+        const solved = generateSolvedBoard(size, box);
+        if (!solved) continue;
+        const puzzleArr = carvePuzzleFromSolution(solved, size, box, clueGoal);
+        if (!puzzleArr) continue;
+        return {
+          puzzle: puzzleArr.join(''),
+          solution: solved.join(''),
+          size,
+          difficulty
+        };
+      }
+      return null;
+    }
+
+    function getClueTarget(size, difficulty){
+      const map = clueTargets[size] || clueTargets[9] || {};
+      return map[difficulty] || Math.max(Math.floor(size * size * 0.4), size * 2);
+    }
+
+    function generateSolvedBoard(size, box){
+      const board = new Array(size * size).fill(0);
+      const digits = Array.from({ length: size }, (_, i) => i + 1);
+      function fill(index){
+        if (index >= board.length) return true;
+        if (board[index] !== 0) return fill(index + 1);
+        const row = Math.floor(index / size);
+        const col = index % size;
+        const shuffled = shuffleArray(digits.slice());
+        for (const num of shuffled){
+          if (canPlace(board, row, col, num, size, box)){
+            board[index] = num;
+            if (fill(index + 1)) return true;
+            board[index] = 0;
+          }
+        }
+        return false;
+      }
+      return fill(0) ? board : null;
+    }
+
+    function carvePuzzleFromSolution(solution, size, box, clueGoal){
+      const puzzle = solution.slice();
+      const positions = shuffleArray([...Array(puzzle.length).keys()]);
+      let clues = puzzle.length;
+      for (const pos of positions){
+        if (clues <= clueGoal) break;
+        const backup = puzzle[pos];
+        puzzle[pos] = 0;
+        if (hasUniqueSolution(puzzle, size, box)){
+          clues--;
+        } else {
+          puzzle[pos] = backup;
+        }
+      }
+      return puzzle;
+    }
+
+    function hasUniqueSolution(puzzle, size, box){
+      const board = puzzle.slice();
+      let solutions = 0;
+      const digits = Array.from({ length: size }, (_, i) => i + 1);
+      function solve(){
+        const index = board.findIndex((n) => n === 0);
+        if (index === -1){
+          solutions++;
+          return solutions < 2;
+        }
+        const row = Math.floor(index / size);
+        const col = index % size;
+        for (const num of digits){
+          if (canPlace(board, row, col, num, size, box)){
+            board[index] = num;
+            if (!solve()) return false;
+            board[index] = 0;
+          }
+        }
+        return true;
+      }
+      solve();
+      return solutions === 1;
+    }
+
+    function canPlace(board, row, col, num, size, box){
+      for (let c = 0; c < size; c++){
+        if (board[row * size + c] === num) return false;
+      }
+      for (let r = 0; r < size; r++){
+        if (board[r * size + col] === num) return false;
+      }
+      const boxHeight = box.h;
+      const boxWidth = box.w;
+      const startRow = Math.floor(row / boxHeight) * boxHeight;
+      const startCol = Math.floor(col / boxWidth) * boxWidth;
+      for (let r = 0; r < boxHeight; r++){
+        for (let c = 0; c < boxWidth; c++){
+          if (board[(startRow + r) * size + (startCol + c)] === num) return false;
+        }
+      }
+      return true;
+    }
+
+    function shuffleArray(arr){
+      for (let i = arr.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function checkBoard(){
+      if (!currentPuzzle) return;
+      const inputs = [...boardEl.querySelectorAll('input')];
+      let mistakes = 0;
+      let blanks = 0;
+      inputs.forEach((cell) => {
+        if (cell.classList.contains('prefilled')) return;
+        cell.classList.remove('error');
+        const val = cell.value;
+        if (!val){
+          blanks++;
+          return;
+        }
+        const idx = Number(cell.dataset.index);
+        if (val !== currentPuzzle.solution[idx]){
+          mistakes++;
+          cell.classList.add('error');
+        }
+      });
+
+      if (mistakes === 0 && blanks === 0){
+        statusEl.textContent = 'Great job! Puzzle solved.';
+        statusEl.className = 'status good';
+        boardEl.classList.add('completed');
+      } else if (mistakes){
+        statusEl.textContent = mistakes === 1 ? 'One cell is incorrect — adjust and try again.' : `${mistakes} cells are incorrect — adjust and try again.`;
+        statusEl.className = 'status warn';
+        boardEl.classList.remove('completed');
+      } else {
+        statusEl.textContent = 'Looks good so far — keep filling the board.';
+        statusEl.className = 'status';
+        boardEl.classList.remove('completed');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
