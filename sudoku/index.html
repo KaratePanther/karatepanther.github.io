@@ -249,40 +249,6 @@
     width:240px;
     text-align:left;
   }
-
-  #miniPicker{
-    position:fixed;
-    display:none;
-    grid-template-columns:repeat(3,minmax(48px,1fr));
-    gap:8px;
-    background:#0b1424;
-    border:1px solid var(--line);
-    border-radius:16px;
-    padding:10px;
-    box-shadow:0 14px 38px rgba(3,8,24,.6);
-    z-index:50;
-  }
-  #miniPicker.visible{
-    display:grid;
-  }
-  #miniPicker button{
-    font:inherit;
-    border-radius:10px;
-    border:1px solid #26345c;
-    background:#141f3a;
-    color:var(--ink);
-    padding:10px;
-    font-size:18px;
-  }
-  #miniPicker button:hover{
-    border-color:var(--accent);
-  }
-  #miniPicker button.clear{
-    grid-column:1 / -1;
-    background:transparent;
-    border-color:#1f2842;
-    color:var(--muted);
-  }
 </style>
 </head>
 <body>
@@ -313,7 +279,7 @@
       <div id="board" aria-label="Sudoku grid"></div>
     </div>
 
-    <div class="status" id="status">Fill the empty cells — tap/click a cell to pick digits.</div>
+    <div class="status" id="status">Fill the empty cells — tap or click a cell to enter digits.</div>
   </main>
 
   <script>
@@ -347,8 +313,6 @@
     let selectedInput = null;
     let gridSize = 9;
     let currentBox = boxDefaults[9];
-    let pickerTarget = null;
-    let pickerEl = null;
     let touchLayout = false;
 
     function computeTouchLayout(){
@@ -359,7 +323,6 @@
       touchLayout = computeTouchLayout();
       document.body.classList.toggle('touch-mode', touchLayout);
       updateTouchOrientation();
-      hidePicker();
       adjustTileSize(gridSize);
     }
 
@@ -395,8 +358,6 @@
       boardEl.innerHTML = '';
       boardEl.classList.remove('completed');
       selectedInput = null;
-      hidePicker();
-      renderKeypad(gridSize);
       adjustTileSize(gridSize);
       boardEl.style.setProperty('--cols', gridSize);
       updateRuleText();
@@ -416,8 +377,7 @@
       boardEl.innerHTML = '';
       boardEl.classList.remove('completed');
       selectedInput = null;
-      hidePicker();
-      statusEl.textContent = 'Fill the empty cells — tap or click a cell to pick digits.';
+      statusEl.textContent = 'Fill the empty cells — tap or click a cell to enter digits.';
       statusEl.className = 'status';
 
       [...currentPuzzle.puzzle].forEach((value, idx) => {
@@ -444,12 +404,6 @@
         cell.addEventListener('focus', () => selectCell(cell));
         cell.addEventListener('input', handleInput);
         cell.addEventListener('keydown', handleKeydown);
-        cell.addEventListener('pointerdown', (event) => {
-          if (cell.readOnly) return;
-          event.preventDefault();
-          cell.focus();
-          showPicker(cell);
-        });
         boardEl.appendChild(cell);
       });
       const firstEditable = boardEl.querySelector('input:not(.prefilled)');
@@ -462,7 +416,6 @@
         return;
       }
       renderCurrentPuzzle();
-      hidePicker();
       statusEl.textContent = 'Puzzle reset. Take another shot!';
       statusEl.className = 'status';
     }
@@ -500,10 +453,6 @@
       }
       tile = Math.max(tile, 24);
       root.style.setProperty('--tile', `${tile}px`);
-    }
-
-    function renderKeypad(size){
-      buildPickerOptions(size);
     }
 
     function selectCell(cell){
@@ -573,102 +522,6 @@
       if (key === 'ArrowRight') next = index + 1;
       if (next < 0 || next >= inputs.length) return;
       inputs[next].focus();
-    }
-
-    function useKeypad(e){
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const value = btn.dataset.value;
-      if (value === undefined) return;
-      if (!selectedInput || selectedInput.readOnly) return;
-      selectedInput.value = value;
-      selectedInput.classList.remove('error');
-      statusEl.textContent = '';
-      statusEl.className = 'status';
-      selectedInput.focus();
-    }
-
-    function ensurePicker(){
-      if (!pickerEl){
-        pickerEl = document.createElement('div');
-        pickerEl.id = 'miniPicker';
-        pickerEl.setAttribute('role','dialog');
-        pickerEl.setAttribute('aria-label','Choose a number');
-        pickerEl.addEventListener('click', handlePickerSelect);
-        document.body.appendChild(pickerEl);
-        document.addEventListener('pointerdown', (event) => {
-          if (!pickerEl || !pickerEl.classList.contains('visible')) return;
-          if (pickerEl.contains(event.target)) return;
-          if (event.target.closest('#board input')) return;
-          hidePicker();
-        });
-        window.addEventListener('resize', hidePicker);
-      }
-      return pickerEl;
-    }
-
-    function buildPickerOptions(size){
-      const picker = ensurePicker();
-      if (!picker) return;
-      picker.innerHTML = '';
-      for (let i = 1; i <= size; i++){
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.value = String(i);
-        btn.textContent = i;
-        picker.appendChild(btn);
-      }
-      const clear = document.createElement('button');
-      clear.type = 'button';
-      clear.dataset.value = '';
-      clear.textContent = 'Clear';
-      clear.classList.add('clear');
-      picker.appendChild(clear);
-    }
-
-    function showPicker(cell){
-      if (cell.readOnly) return;
-      const picker = ensurePicker();
-      if (!picker) return;
-      pickerTarget = cell;
-      picker.classList.add('visible');
-      positionPicker(picker, cell);
-    }
-
-    function hidePicker(){
-      if (!pickerEl) return;
-      pickerEl.classList.remove('visible');
-      pickerTarget = null;
-    }
-
-    function positionPicker(picker, cell){
-      const rect = cell.getBoundingClientRect();
-      const pickerRect = picker.getBoundingClientRect();
-      let left = rect.left + rect.width / 2 - pickerRect.width / 2;
-      let top = rect.bottom + 10;
-      const maxLeft = window.innerWidth - pickerRect.width - 12;
-      if (left < 12) left = 12;
-      if (left > maxLeft) left = Math.max(12, maxLeft);
-      if (top + pickerRect.height > window.innerHeight - 12){
-        top = rect.top - pickerRect.height - 10;
-      }
-      if (top < 12){
-        top = (window.innerHeight - pickerRect.height) / 2;
-      }
-      picker.style.left = `${left}px`;
-      picker.style.top = `${top}px`;
-    }
-
-    function handlePickerSelect(event){
-      const btn = event.target.closest('button');
-      if (!btn || !pickerTarget || pickerTarget.readOnly) return;
-      const target = pickerTarget;
-      target.value = btn.dataset.value || '';
-      target.classList.remove('error');
-      statusEl.textContent = '';
-      statusEl.className = 'status';
-      hidePicker();
-      target.focus();
     }
 
     function generatePuzzle(size, difficulty){
