@@ -421,8 +421,8 @@ function placePlayers(){
     }
   }
 
-  Object.assign(players[0], {x:leftSpawn.x, y:leftSpawn.y, vx:0, vy:0, facing:1, angle:45, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null});
-  Object.assign(players[1], {x:rightSpawn.x, y:rightSpawn.y, vx:0, vy:0, facing:-1, angle:135, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null});
+  Object.assign(players[0], {x:leftSpawn.x, y:leftSpawn.y, vx:0, vy:0, facing:1, angle:45, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null, hasGroundInput:false});
+  Object.assign(players[1], {x:rightSpawn.x, y:rightSpawn.y, vx:0, vy:0, facing:-1, angle:135, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null, hasGroundInput:false});
 
   ensureWaterBelowPlayers();
 }
@@ -456,11 +456,13 @@ const EMOJI   = { normal:'🚀', grenade:'💣', shotgun:'🔫', teleport:'🌀'
 
 const players = [
   { name:'P1', emoji:'😼', color:'#6ea8fe', x:0, y:0, vx:0, vy:0, hp:100, angle:45, facing:1,
-    emote:null, emoteT:0, lastPower:50, lastWeapon:Weapons.NORMAL, fuse:5, // default 5s
-    ammo:{ shotgun:5, grenade:5, teleport:1 }, drowning:null, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null },
+    emote:null, emoteT:0, lastPower:50, lastWeapon:Weapons.NORMAL, fuse:5,
+    ammo:{ shotgun:5, grenade:5, teleport:1 }, drowning:null, ragdoll:null, slideBoost:0,
+    turnLockedUntil:0, stunnedReason:null, turnProtectionUntil:0, hasGroundInput:false },
   { name:'P2', emoji:'😺', color:'#90c2ff', x:0, y:0, vx:0, vy:0, hp:100, angle:135, facing:-1,
     emote:null, emoteT:0, lastPower:50, lastWeapon:Weapons.NORMAL, fuse:5,
-    ammo:{ shotgun:5, grenade:5, teleport:1 }, drowning:null, ragdoll:null, slideBoost:0, turnLockedUntil:0, stunnedReason:null }
+    ammo:{ shotgun:5, grenade:5, teleport:1 }, drowning:null, ragdoll:null, slideBoost:0,
+    turnLockedUntil:0, stunnedReason:null, turnProtectionUntil:0, hasGroundInput:false }
 ];
 let turn = 0;
 let weapon = Weapons.NORMAL;
@@ -492,7 +494,7 @@ let varySpawnHeights = false;
 let scatterDebrisOn = false;
 const MOVE = {
   accel: 0.06,
-  max: 0.8,
+  max: 0.57,
   friction: 0.965,
   jumpVy: -3.6,
   hopBoost: 1.2,
@@ -643,11 +645,11 @@ function startDrowning(idx){
   p.stunnedReason = null;
   updateHPPlates();
   allowInput = false;
-  fireBtn.disabled = true;
   placingTeleport = false;
   pauseTimer();
   resetAIState();
   shot = null;
+  updateFireButtonState();
   if (!pendingWinner){
     pendingWinner = {
       idx: 1 - idx,
@@ -749,8 +751,8 @@ function updateWindUI(){
 
 function updateHPPlates(){
   const p1 = players[0], p2 = players[1];
-  np1.textContent = `P1 — ${p1.hp}%`;
-  np2.textContent = (aiEnabled? 'P2 (CPU) — ' : 'P2 — ') + `${p2.hp}%`;
+  if (np1) np1.textContent = `P1 — ${p1.hp}%`;
+  if (np2) np2.textContent = (aiEnabled ? 'P2 (CPU) — ' : 'P2 — ') + `${p2.hp}%`;
 }
 
 function updateBadge(){
@@ -777,6 +779,7 @@ function updateBadge(){
 
   refreshWeaponOptions();
   [...weaponMenu.querySelectorAll('.opt')].forEach(o=>o.classList.toggle('active', o.dataset.w===weapon));
+  updateFireButtonState();
 }
 
 function refreshWeaponOptions(){
@@ -799,6 +802,10 @@ function refreshWeaponOptions(){
     weapon = 'normal';
     players[turn].lastWeapon = weapon;
   }
+}
+
+function updateFireButtonState(){
+  fireBtn.disabled = !allowInput || !!shot || !!placingTeleport;
 }
 
 function updateTurnUI(){
@@ -832,10 +839,13 @@ function drawMiniPreview(){
     const hy = heightmap[wx] * (mini.height/H);
     miniCtx.fillRect(x, hy, 1, mini.height-hy);
   }
-  miniCtx.fillStyle='#6ea8fe'; miniCtx.beginPath();
-  miniCtx.arc(players[0].x * (mini.width/W), players[0].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx.fill();
-  miniCtx.fillStyle='#90c2ff'; miniCtx.beginPath();
-  miniCtx.arc(players[1].x * (mini.width/W), players[1].y * (mini.height/H), 3, 0, Math.PI*2); miniCtx.fill();
+  players.forEach((p)=>{
+    if (!p) return;
+    miniCtx.fillStyle = p.color;
+    miniCtx.beginPath();
+    miniCtx.arc(p.x * (mini.width/W), p.y * (mini.height/H), 3, 0, Math.PI*2);
+    miniCtx.fill();
+  });
   miniCtx.fillStyle='#fff'; miniCtx.font='10px system-ui';
   const mag = Math.min(1, Math.abs(wind)/WIND_MAX || 0);
   const arrow = wind>0?'→'+Math.round(mag*100): wind<0 ? '←'+Math.round(mag*100) : '· 0';
@@ -904,7 +914,6 @@ seedTxt.addEventListener('change', ()=>{ if (seedTxt.value.trim()){ srand(seedTx
 
 function readMenuSettings(){
   aiEnabled = (modeSel.value==='pvc');
-
   const wv = windSel.value;
   WIND_MAX = (wv==='Off'?0 : wv==='Low'?0.02 : wv==='Normal'?0.05 : 0.09);
 
@@ -1009,9 +1018,17 @@ weaponMenu.addEventListener('click', (e)=>{
 
   if (weapon==='teleport'){
     const am = players[turn].ammo.teleport;
-    if (ammoChk.checked && am<=0){ toast('No teleport ammo'); weapon='normal'; players[turn].lastWeapon=weapon; }
-    else { placingTeleport = true; fireBtn.disabled=true; toast('Teleport: tap the map to choose destination'); }
-  } else { placingTeleport=false; fireBtn.disabled=false; }
+    if (ammoChk.checked && am<=0){
+      toast('No teleport ammo');
+      weapon='normal';
+      players[turn].lastWeapon=weapon;
+      placingTeleport = false;
+    }
+    else {
+      placingTeleport = true;
+      toast('Teleport: tap the map to choose destination');
+    }
+  } else { placingTeleport=false; }
   updateBadge();
   openWeaponMenu(false);
 });
@@ -1086,7 +1103,7 @@ function launchShot(power){
 
 function lockInputsForShot(){
   allowInput = false;
-  fireBtn.disabled = true;
+  updateFireButtonState();
   openWeaponMenu(false);
   pauseTimer(); // pause countdown during flight
 }
@@ -1129,7 +1146,7 @@ function endShot(){
 
     const playerTurn = !aiEnabled || turn === 0;
     allowInput = playerTurn;
-    fireBtn.disabled = playerTurn ? !!placingTeleport : true;
+    updateFireButtonState();
 
     if (aiEnabled && turn===1) setTimeout(aiPlay, 650);
   }
@@ -1142,6 +1159,10 @@ function floatDmg(x,y,val){ dmgNums.push({x,y,val,life:40}); }
 function applyDamage(index, dmg, direct=false, opts = {}){
   const pl = players[index];
   pl.hp = Math.max(0, pl.hp - dmg);
+  if (turn !== index){
+    const grace = now() + 1500;
+    pl.turnProtectionUntil = Math.max(pl.turnProtectionUntil || 0, grace);
+  }
   if (opts.impact){
     applyImpact(pl, opts.impact, opts);
   }
@@ -1150,7 +1171,9 @@ function applyDamage(index, dmg, direct=false, opts = {}){
 }
 function announceWinner(idx, reason){
   pendingWinner = null;
-  fireBtn.disabled=true; placingTeleport=false;
+  allowInput = false;
+  placingTeleport=false;
+  updateFireButtonState();
   turnEl.textContent=`P${idx+1} wins 🎉`;
   players[idx].emote='😼✨'; players[idx].emoteT=120;
   players[1-idx].emote='💀'; players[1-idx].emoteT=120;
@@ -1468,15 +1491,7 @@ stage.addEventListener('pointerdown', (e)=>{
   const {px,py} = screenToWorld(e);
   const pos = findTeleportDestination(px,py);
   if (!pos){ toast('Blocked — choose a free spot'); tone(180,0.08,'sine',0.12); return; }
-  if (ammoChk.checked) players[turn].ammo.teleport = Math.max(0, players[turn].ammo.teleport - 1);
-  whoosh();
-  players[turn].x = pos.x; players[turn].y = pos.y; players[turn].vx=0; players[turn].vy=0;
-  poof();
-  placingTeleport = false; fireBtn.disabled=false;
-  updateBadge();
-  // Teleport is a shot → end turn after effect
-  lockInputsForShot();
-  setTimeout(()=> endShot(), 200);
+  performTeleportTo(turn, pos);
 });
 
 function findTeleportDestination(x,y){
@@ -1486,6 +1501,28 @@ function findTeleportDestination(x,y){
   while(tries++<80 && terrainMask[(yy|0)*W+(x|0)]===SOLID){ yy--; }
   if (terrainMask[(yy|0)*W+(x|0)]===SOLID) return null;
   return {x, y:yy};
+}
+
+function performTeleportTo(idx, destination){
+  if (!destination) return false;
+  const player = players[idx];
+  if (!player) return false;
+  placingTeleport = false;
+  if (ammoChk.checked){
+    player.ammo.teleport = Math.max(0, player.ammo.teleport - 1);
+  }
+  whoosh();
+  player.x = destination.x;
+  player.y = destination.y;
+  player.vx = 0;
+  player.vy = 0;
+  poof();
+  updateBadge();
+  updateFireButtonState();
+  lockInputsForShot();
+  // Teleport is a shot → end turn after effect
+  setTimeout(()=> endShot(), 200);
+  return true;
 }
 
 // =====================
@@ -1601,7 +1638,7 @@ document.addEventListener('keyup', (e)=>{
   // --- NEW: Space to release fire ---
   if (e.code === 'Space') {
     e.preventDefault();
-    endChargeAndFire();
+    if (!placingTeleport) endChargeAndFire();
     return;
   }
 });
@@ -1620,7 +1657,9 @@ function cycleWeapon(dir){
   weapon = options[ni] || 'normal';
   players[turn].lastWeapon = weapon;
   placingTeleport = (weapon==='teleport');
-  fireBtn.disabled = placingTeleport || false;
+  if (placingTeleport && allowInput){
+    toast('Teleport: tap the map to choose destination');
+  }
   updateBadge();
 }
 
@@ -1692,6 +1731,7 @@ const FALL_NO_DMG = 60;
 
 function setMoveForTurnPlayer(){
   const p = players[turn];
+  if (p) p.hasGroundInput = false;
 
   if (p && p.drowning){
     p.vx *= 0.9;
@@ -1719,6 +1759,7 @@ function setMoveForTurnPlayer(){
           } else {
             p.vx = 0;
           }
+          p.hasGroundInput = false;
         } else {
           const desired = dir * Math.min(MOVE.max * 0.9, 0.4 + absDx * 0.015);
           if (Math.abs(desired - p.vx) > MOVE.accel) {
@@ -1727,6 +1768,7 @@ function setMoveForTurnPlayer(){
             p.vx = desired;
           }
           p.facing = dir === 0 ? p.facing : dir;
+          p.hasGroundInput = true;
         }
       }
       return;
@@ -1738,6 +1780,7 @@ function setMoveForTurnPlayer(){
 
   const left  = keys['ArrowLeft'] || keys['KeyA'] || (isTouch && joyVec.x < -0.2);
   const right = keys['ArrowRight']|| keys['KeyD'] || (isTouch && joyVec.x >  0.2);
+  if (p) p.hasGroundInput = left || right;
 
   if (left){ p.vx = Math.max(-MOVE.max, p.vx - MOVE.accel); p.facing = -1; }
   else if (right){ p.vx = Math.min(MOVE.max, p.vx + MOVE.accel); p.facing = +1; }
@@ -1778,6 +1821,10 @@ function queueJump(i, dir){
 function stepPlayers(){
   for (let i=0;i<2;i++){
     const p=players[i];
+    const nowTime = now();
+    if (p.turnProtectionUntil && nowTime >= p.turnProtectionUntil){
+      p.turnProtectionUntil = 0;
+    }
 
     if (p.ragdoll && now() >= p.ragdoll.until) {
       p.ragdoll = null;
@@ -1858,6 +1905,7 @@ function stepPlayers(){
             const dmg = Math.min(25, Math.round((drop - FALL_NO_DMG)/6));
             if (dmg>0){
               const impact = { vx: p.vx * 0.4, vy: -Math.abs(prevVy) * 0.3 };
+              const protectedLanding = p.turnProtectionUntil && now() < p.turnProtectionUntil;
               applyDamage(i, dmg, false, {
                 impact,
                 ragdollMs: RAGDOLL_MIN_MS * 0.9,
@@ -1867,9 +1915,13 @@ function stepPlayers(){
               });
               floatDmg(p.x, p.y-PLAYER_R-8, -dmg);
               if (i===turn && allowInput){
-                allowInput = false;
-                fireBtn.disabled = true;
-                setTimeout(() => endShot(), 320);
+                if (protectedLanding){
+                  p.turnProtectionUntil = 0;
+                } else {
+                  allowInput = false;
+                  updateFireButtonState();
+                  setTimeout(() => endShot(), 320);
+                }
               }
             }
           }
@@ -1891,7 +1943,10 @@ function stepPlayers(){
       let slope = 0;
       if (sl < H && sr < H){
         slope = (sr - sl) / 4;
-        if (Math.abs(slope) > 0.5) { p.x += slope * 0.25; }
+        const walking = !!p.hasGroundInput;
+        if ((p.slideBoost || ragActive || walking) && Math.abs(slope) > 0.5) {
+          p.x += slope * 0.25;
+        }
       }
 
       // Move horizontally while grounded
@@ -1902,6 +1957,7 @@ function stepPlayers(){
       }
 
       // Ground friction & zero vertical velocity
+      const walking = !!p.hasGroundInput;
       let groundFriction = MOVE.friction;
       if (Math.abs(slope) < 0.4){
         groundFriction = Math.min(0.985, MOVE.friction + 0.02);
@@ -1912,11 +1968,16 @@ function stepPlayers(){
       }
       if (p.slideBoost){
         groundFriction = Math.max(0.58, groundFriction - 0.28);
+      } else if (!walking && !ragActive){
+        groundFriction = Math.min(groundFriction, 0.72);
       }
       if (ragActive){
         groundFriction = Math.min(groundFriction, 0.8);
       }
       p.vx *= groundFriction;
+      if (!p.slideBoost && (!walking || !movementOn) && Math.abs(p.vx) < 0.08){
+        p.vx = 0;
+      }
       p.vy = 0;
 
       if (ragActive && Math.abs(p.vx) < 0.24){
@@ -2025,22 +2086,29 @@ function findHardMovement(me, you, currentPlan){
   if (!movementOn || !isPlanViable(currentPlan)) return null;
   const baseBlocked = terrainBlocksDirectShot(me, you);
   const waterActive = waterIsActive();
+  const floodBias = waterFloodEnabled ? 1.4 : 1;
   const baseFeet = (currentPlan.originY !== undefined ? currentPlan.originY : me.y) + PLAYER_R;
-  const basePenalty = waterPenaltyForFeet(baseFeet);
-  let baseScore = scoreShotPlan(currentPlan) + basePenalty + (baseBlocked ? 60 : 0);
-  const offsets = [48, -48, 96, -96, 144, -144];
+  const basePenalty = waterPenaltyForFeet(baseFeet) * floodBias;
+  const baseAnglePenalty = shotAlignmentPenalty(currentPlan, { x: me.x, y: me.y }, you);
+  let baseScore = scoreShotPlan(currentPlan) + basePenalty + baseAnglePenalty + (baseBlocked ? 60 : 0);
+  const offsets = [];
+  const maxOffset = Math.min(360, Math.max(192, Math.round(W * 0.18)));
+  for (let step = 48; step <= maxOffset; step += 48){
+    offsets.push(step, -step);
+  }
   let best = null;
 
   for (const offset of offsets){
     const targetX = Math.max(PLAYER_R, Math.min(W - PLAYER_R, me.x + offset));
     if (Math.abs(targetX - me.x) < 6) continue;
-    if (!isWalkableRange(me.x, targetX)) continue;
+    const riseTolerance = waterFloodEnabled ? 58 : 48;
+    if (!isWalkableRange(me.x, targetX, riseTolerance)) continue;
     const ground = groundYAt(targetX);
     if (ground >= H) continue;
     const targetY = ground - PLAYER_R;
     if (targetY < PLAYER_R || targetY >= H) continue;
-    if (Math.abs(targetY - me.y) > 115) continue;
-    if (waterActive && targetY + PLAYER_R >= waterLevelY - 4) continue;
+    if (Math.abs(targetY - me.y) > 150) continue;
+    if (waterActive && targetY + PLAYER_R >= waterLevelY - 3) continue;
 
     const probe = { ...me, x: targetX, y: targetY };
     const plan = computeShotPlan(probe, you, Weapons.NORMAL, 4, 4);
@@ -2050,13 +2118,18 @@ function findHardMovement(me, you, currentPlan){
     plan.originY = targetY;
 
     const travel = Math.abs(targetX - me.x);
-    const travelPenalty = travel * 0.28;
+    const travelPenalty = travel * 0.18;
     const blocked = terrainBlocksDirectShot(probe, you);
     const feet = targetY + PLAYER_R;
-    const waterPenalty = waterPenaltyForFeet(feet);
-    let score = plan.miss + travelPenalty + waterPenalty + (blocked ? 120 : 0);
-    if (baseBlocked && !blocked) score -= 45;
-    if (waterActive && waterPenalty <= 0) score -= 12;
+    const waterPenalty = waterPenaltyForFeet(feet) * floodBias;
+    const clearance = waterActive ? Math.max(0, waterLevelY - feet) : 80;
+    const heightGain = me.y - targetY;
+    const dropPenalty = heightGain < -24 ? Math.abs(heightGain) * 0.22 : 0;
+    const heightBonus = heightGain > 0 ? Math.min(40, heightGain * 0.25) : 0;
+    const anglePenalty = shotAlignmentPenalty(plan, { x: targetX, y: targetY }, you);
+    let score = plan.miss + travelPenalty + waterPenalty + anglePenalty + dropPenalty + (blocked ? 110 : 0) - clearance * 0.45 - heightBonus;
+    if (baseBlocked && !blocked) score -= 60;
+    if (waterActive && waterPenalty <= 0) score -= 18;
 
     if (!best || score < best.score){
       best = {
@@ -2065,30 +2138,141 @@ function findHardMovement(me, you, currentPlan){
         targetX,
         targetY,
         blocked,
-        feet
+        feet,
+        clearance,
+        heightGain,
+        travel,
+        anglePenalty
       };
     }
   }
 
   if (!best) return null;
   const improvement = baseScore - best.score;
-  const baseUnsafe = waterActive && baseFeet >= waterLevelY - 6;
-  const candidateSafe = waterActive && best.feet + 8 < waterLevelY;
+  const baseClearance = waterActive ? Math.max(0, waterLevelY - baseFeet) : 80;
+  const baseUnsafe = waterActive && (baseFeet >= waterLevelY - 6 || baseClearance < 14);
+  const candidateSafe = waterActive && best.feet + 10 < waterLevelY;
+  const clearanceGain = best.clearance - baseClearance;
+  const angleImprovement = baseAnglePenalty - best.anglePenalty;
+  const betterAngle = angleImprovement > 5;
   const shouldMove =
-    (baseUnsafe ? candidateSafe : false) ||
-    (!baseUnsafe && (!Number.isFinite(baseScore) ||
-    baseScore > 80 ||
-    improvement > 8 ||
-    (best.blocked === false && baseBlocked)));
+    (baseUnsafe && candidateSafe) ||
+    clearanceGain > 10 ||
+    (best.heightGain > 18 && waterActive) ||
+    (!Number.isFinite(baseScore) && Number.isFinite(best.score)) ||
+    improvement > 5 ||
+    (best.blocked === false && baseBlocked) ||
+    betterAngle;
 
   if (!shouldMove) return null;
 
+  const travel = Math.abs(best.targetX - me.x);
+  const tolerance = travel > 96 ? 6 : 4;
+  const settleMs = Math.min(360, 220 + travel * 0.35);
+  const maxDuration = Math.min(5200, 2200 + travel * 6);
+
   return {
     targetX: best.targetX,
-    tolerance: 4,
-    settleMs: 220,
+    tolerance,
+    settleMs,
+    maxDuration,
     decisionPlan: best.plan,
     fallbackPlan: clonePlan(currentPlan)
+  };
+}
+
+function shotAlignmentPenalty(plan, origin, target){
+  if (!plan || plan.angle === undefined || !origin || !target) return 0;
+  const ang = clampShotAngle(plan.angle);
+  const ox = plan.originX !== undefined ? plan.originX : origin.x;
+  const oy = plan.originY !== undefined ? plan.originY : origin.y;
+  const dx = target.x - ox;
+  const dy = oy - target.y;
+  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return 0;
+  let direct = Math.atan2(dy, dx);
+  if (direct < 0) direct += Math.PI * 2;
+  const directDeg = (direct * 180) / Math.PI;
+  let diff = Math.abs(directDeg - ang);
+  diff = Math.min(diff, 360 - diff);
+  return Math.max(0, diff - 28) * 0.35;
+}
+
+function aiCanTeleport(player){
+  if (!player) return false;
+  if (!movementOn) return false;
+  if (!wTeleport || !wTeleport.checked) return false;
+  if (!ammoChk.checked) return true;
+  return player.ammo.teleport > 0;
+}
+
+function considerTeleportEscape(me, you, currentPlan){
+  if (!aiCanTeleport(me)) return null;
+  const waterActive = waterIsActive();
+  const baseFeet = me.y + PLAYER_R;
+  const baseClearance = waterActive ? Math.max(0, waterLevelY - baseFeet) : 80;
+  const baseBlocked = currentPlan ? terrainBlocksDirectShot(me, you) : false;
+  const waterDanger = waterActive && (baseFeet >= waterLevelY - 4 || baseClearance < 16);
+  const floodThreat = waterFloodEnabled && baseClearance < 34;
+  if (!waterDanger && !floodThreat && !baseBlocked) return null;
+  const destination = findTeleportHighGround(me, you, {
+    requireHigher: waterDanger || floodThreat,
+    avoidBlocked: baseBlocked
+  });
+  if (!destination) return null;
+  return createTeleportDecision(destination);
+}
+
+function findTeleportHighGround(me, you, opts = {}){
+  const waterActive = waterIsActive();
+  const baseFeet = me.y + PLAYER_R;
+  const baseClearance = waterActive ? Math.max(0, waterLevelY - baseFeet) : 80;
+  const step = 32;
+  let best = null;
+  for (let x = PLAYER_R + 8; x <= W - PLAYER_R - 8; x += step){
+    const ground = groundYAt(x);
+    if (ground >= H) continue;
+    const rawY = ground - PLAYER_R - 4;
+    const pos = findTeleportDestination(x, rawY);
+    if (!pos) continue;
+    const y = pos.y;
+    if (y < PLAYER_R || y >= H - PLAYER_R) continue;
+    const feet = y + PLAYER_R;
+    if (waterActive && feet + 2 >= waterLevelY) continue;
+    const heightGain = me.y - y;
+    if (opts.requireHigher && heightGain < 14) continue;
+    if (!opts.requireHigher && Math.abs(heightGain) < 8 && Math.abs(x - me.x) < 60) continue;
+    const probe = { ...me, x: pos.x, y };
+    const plan = computeShotPlan(probe, you, Weapons.NORMAL, 5, 4);
+    const blocked = terrainBlocksDirectShot(probe, you);
+    if (opts.avoidBlocked && blocked) continue;
+    const clearance = waterActive ? Math.max(0, waterLevelY - feet) : 80;
+    const clearanceBonus = waterActive ? (clearance - baseClearance) * 3.2 : 0;
+    const heightBonus = Math.max(0, heightGain) * 0.35;
+    const distancePenalty = Math.abs(pos.x - you.x) * 0.02 + Math.abs(pos.x - me.x) * 0.01;
+    const blockedPenalty = blocked ? 60 : 0;
+    const alignmentPenalty = shotAlignmentPenalty(plan, { x: pos.x, y }, you);
+    const missScore = isPlanViable(plan) ? Math.min(plan.miss, 260) : 260;
+    const score = missScore - clearanceBonus - heightBonus + blockedPenalty + alignmentPenalty + distancePenalty;
+    if (!best || score < best.score){
+      best = { score, destination: { x: pos.x, y } };
+    }
+  }
+  return best ? best.destination : null;
+}
+
+function createTeleportDecision(destination){
+  if (!destination) return null;
+  return {
+    plan: {
+      weapon: Weapons.TELEPORT,
+      angle: 90,
+      power: 0,
+      miss: 0,
+      teleportTarget: { ...destination }
+    },
+    jitter: null,
+    remember: false,
+    fireDelay: 220
   };
 }
 
@@ -2117,6 +2301,7 @@ function planMediumTurn(me, you){
 
   const normalPlan = computeShotPlan(me, you, Weapons.NORMAL, coarseStep, powerStep);
   let chosenPlan = normalPlan;
+  let moveOption = null;
 
   if (canGrenade){
     const grenadePlan = computeShotPlan(me, you, Weapons.GRENADE, coarseStep + 1, powerStep + 1);
@@ -2133,13 +2318,20 @@ function planMediumTurn(me, you){
     return { decision: makeFallbackDecision(me, you), move: null };
   }
 
+  if (chosenPlan.weapon === Weapons.NORMAL){
+    moveOption = findHardMovement(me, you, chosenPlan);
+    if (moveOption){
+      chosenPlan = moveOption.decisionPlan;
+    }
+  }
+
   const decision = createDecisionFromPlan(chosenPlan, {
     jitter: { angle: randomRange(-3.2, 3.2), power: randomRange(-7, 7) },
     remember: false,
     fireDelay: 250 + Math.random() * 180
   });
 
-  return { decision, move: null };
+  return { decision, move: moveOption };
 }
 
 function planHardTurn(me, you){
@@ -2172,11 +2364,19 @@ function planHardTurn(me, you){
   chosenPlan.originX = me.x;
   chosenPlan.originY = me.y;
 
+  let teleportDecision = null;
+
   if (chosenPlan.weapon === Weapons.NORMAL){
     moveOption = findHardMovement(me, you, chosenPlan);
     if (moveOption){
       chosenPlan = moveOption.decisionPlan;
+    } else {
+      teleportDecision = considerTeleportEscape(me, you, chosenPlan);
     }
+  }
+
+  if (teleportDecision){
+    return { decision: teleportDecision, move: null };
   }
 
   const decision = createDecisionFromPlan(chosenPlan, {
@@ -2198,7 +2398,7 @@ function beginAIMove(decision, move){
     tolerance: move.tolerance ?? 4,
     settleMs: move.settleMs ?? 200,
     start: now(),
-    maxDuration: 2200,
+    maxDuration: move.maxDuration ?? 2200,
     settleAt: null,
     decision,
     fallbackDecision: move.fallbackPlan
@@ -2220,6 +2420,24 @@ function executeAIShot(decision){
   aiState.moveTask = null;
   aiState.pendingPlan = null;
 
+  const choice = plan.weapon || Weapons.NORMAL;
+  weapon = choice;
+  me.lastWeapon = choice;
+
+  if (choice === Weapons.TELEPORT){
+    placingTeleport = false;
+    updateBadge();
+    const destination = plan.teleportTarget ? { ...plan.teleportTarget } : null;
+    const delay = decision.fireDelay ?? 220;
+    setTimeout(() => {
+      if (!shot && turn === 1 && destination){
+        performTeleportTo(1, destination);
+      }
+    }, delay);
+    aiMemory.lastSolution = null;
+    return;
+  }
+
   let angle = plan.angle;
   let power = plan.power;
   if (decision.jitter){
@@ -2230,9 +2448,6 @@ function executeAIShot(decision){
   angle = clampShotAngle(angle);
   power = clampShotPower(power);
 
-  const choice = plan.weapon || Weapons.NORMAL;
-  weapon = choice;
-  me.lastWeapon = choice;
   me.angle = Math.round(angle);
   me.lastPower = power;
 
@@ -2444,7 +2659,7 @@ function onTimerFrame(){
   if (timeLeftMs<=0){
     // Forfeit shot; end turn
     allowInput = false;
-    fireBtn.disabled = true;
+    updateFireButtonState();
     openWeaponMenu(false);
     setTimeout(endShot, 200);
   }
@@ -2705,6 +2920,9 @@ function resetGame(newMap){
     players[i].fuse = 5;
     if (newMap) players[i].lastWeapon = Weapons.NORMAL;
     players[i].drowning = null;
+    players[i].slideBoost = 0;
+    players[i].turnProtectionUntil = 0;
+    players[i].hasGroundInput = false;
     lastGroundedAt[i] = now();
     lastJumpPressedAt[i] = -9999;
     lastJumpAt[i]        = -9999;
@@ -2715,7 +2933,7 @@ function resetGame(newMap){
   shot=null; turn=0; placingTeleport=false;
   cam.scale=1; cam.targetScale=1;
   allowInput = true;
-  fireBtn.disabled=false;
+  updateFireButtonState();
 
   // Terrain re-seed
   srand(mapSeed);
