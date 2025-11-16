@@ -483,19 +483,20 @@
     function handleInput(e){
       const cell = e.target;
       if (cell.readOnly) return;
-      cell.value = sanitizeValue(cell.value);
+      const sanitized = sanitizeValue(cell.value);
+      cell.value = sanitized;
       cell.classList.remove('error');
       statusEl.textContent = '';
       statusEl.className = 'status';
     }
 
     function sanitizeValue(value){
-      const cleaned = value.replace(/[^1-9]/g,'');
-      for (let i = cleaned.length - 1; i >= 0; i--){
-        const digit = cleaned[i];
-        if (Number(digit) >= 1 && Number(digit) <= gridSize){
-          return digit;
-        }
+      if (!value) return '';
+      const lastChar = value[value.length - 1];
+      if (!lastChar) return '';
+      const num = Number(lastChar);
+      if (Number.isInteger(num) && num >= 1 && num <= gridSize){
+        return String(num);
       }
       return '';
     }
