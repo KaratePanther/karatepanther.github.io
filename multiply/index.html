@@ -39,12 +39,16 @@
     .topbar { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
     .hearts { font-size:22px; letter-spacing:3px; }
     .score { font-weight:700; }
-    .mode { display:flex; gap:8px; align-items:center; }
+    .mode { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .mode button {
       background:var(--btn); color:var(--ink); border:1px solid var(--btn-b);
       border-radius:999px; padding:6px 12px; cursor:pointer; font-weight:600;
     }
     .mode button.active { background:var(--accent); color:#0b111e; border-color:#6ec86a; }
+    .mode .label { font-size:12px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; margin-right:4px; }
+    .option-row {
+      display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; margin-bottom:10px;
+    }
     .question {
       text-align:center; font-size:48px; font-weight:800; letter-spacing:1px; margin:10px 0 6px;
     }
@@ -93,7 +97,7 @@
 <body>
   <div class="wrap">
     <h1>Mark's Multiplying Game</h1>
-    <p class="sub">Reach <b>10 points</b> before you run out of hearts. Easy: <b>10s</b> • Hard: <b>5s</b> per question.</p>
+    <p class="sub">Reach <b>10 points</b> before you run out of hearts. Easy: <b>10s</b> • Hard: <b>5s</b> per question. Pick digit length and operation below (multiply stays single digits).</p>
 
     <div class="card">
       <div class="topbar">
@@ -104,9 +108,23 @@
           <button id="hard">Hard</button>
         </div>
       </div>
+      <div class="option-row">
+        <div class="mode" id="digitsMode">
+          <span class="label">Digits</span>
+          <button data-digit="1" class="active">1-digit</button>
+          <button data-digit="2">2-digit</button>
+          <button data-digit="3">3-digit</button>
+        </div>
+        <div class="mode" id="opMode">
+          <span class="label">Operation</span>
+          <button data-op="add" class="active">Add</button>
+          <button data-op="sub">Subtract</button>
+          <button data-op="mul">Multiply (1-digit)</button>
+        </div>
+      </div>
 
       <div class="timer"><div id="timebar" class="bar"></div></div>
-      <div class="question" id="question">— × —</div>
+      <div class="question" id="question">— ? —</div>
 
       <div class="controls">
         <div class="answrap">
@@ -172,21 +190,45 @@
     const hardBtn = document.getElementById('hard');
     const submitBtn = document.getElementById('submit');
     const keypad = document.querySelector('.keypad');
+    const digitButtons = document.querySelectorAll('#digitsMode [data-digit]');
+    const opButtons = document.querySelectorAll('#opMode [data-op]');
 
     const GIFTS = ["🎉","🚀","🦄","🐲","🧠","🏆","🍀","💎","🎮","🛰️","🪄","🦕","🦸‍♂️","🐱","🧩","⚽️","🏹","🚁"];
     let timePerQ = 10000; // easy default
     let a=0, b=0, correct=0, hearts=3, score=0, timer=null, startTime=0;
+    let digitMode = 1;
+    let operation = 'add';
 
     // --- Helpers ---
     function heartsStr(n){ return "❤️".repeat(n) + "🖤".repeat(3-n); }
+    function setDigitMode(mode){
+      digitMode = mode;
+      digitButtons.forEach(btn=>{
+        const btnDigit = Number(btn.dataset.digit);
+        btn.classList.toggle('active', btnDigit === digitMode);
+      });
+    }
+    function randRange(min, max){ return Math.floor(Math.random()*(max-min+1)) + min; }
     function pickQuestion(){
-      // one-digit 1..9, skip only 1x1
-      do {
-        a = 1 + Math.floor(Math.random()*9);
-        b = 1 + Math.floor(Math.random()*9);
-      } while (a===1 && b===1);
-      qEl.textContent = `${a} × ${b}`;
-      correct = a*b;
+      let min, max;
+      if (operation === 'mul') {
+        min = 1; max = 9;
+      } else {
+        min = digitMode === 1 ? 1 : Math.pow(10, digitMode - 1);
+        max = Math.pow(10, digitMode) - 1;
+      }
+      a = randRange(min, max);
+      b = randRange(min, max);
+      if (operation === 'sub' && a < b){ [a, b] = [b, a]; }
+      const symbol = operation === 'add' ? '+' : operation === 'sub' ? '-' : '×';
+      if (operation === 'add') {
+        correct = a + b;
+      } else if (operation === 'sub') {
+        correct = a - b;
+      } else {
+        correct = a * b;
+      }
+      qEl.textContent = `${a} ${symbol} ${b}`;
       ansEl.value = "";
       ansEl.blur(); // keep keypad usage
       startTimer();
@@ -273,6 +315,21 @@
     startBtn.addEventListener('click', startGame);
     easyBtn.addEventListener('click', ()=>{ timePerQ=10000; easyBtn.classList.add('active'); hardBtn.classList.remove('active'); startGame(); });
     hardBtn.addEventListener('click', ()=>{ timePerQ=5000; hardBtn.classList.add('active'); easyBtn.classList.remove('active'); startGame(); });
+    digitButtons.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        setDigitMode(Number(btn.dataset.digit));
+        startGame();
+      });
+    });
+    opButtons.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        operation = btn.dataset.op;
+        opButtons.forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        if (operation === 'mul'){ setDigitMode(1); }
+        startGame();
+      });
+    });
 
     keypad.addEventListener('click', (e)=>{
       const k = e.target.getAttribute('data-k');
@@ -280,8 +337,8 @@
       if (k === 'C') { ansEl.value = ""; return; }
       if (k === 'B') { ansEl.value = ansEl.value.slice(0,-1); return; }
       if (/^\d$/.test(k)) {
-        // limit to 3 digits just in case
-        if (ansEl.value.length < 3) ansEl.value += k;
+        // allow up to 4 digits for triple-digit addition
+        if (ansEl.value.length < 4) ansEl.value += k;
         return;
       }
     });
