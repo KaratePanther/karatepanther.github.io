@@ -330,6 +330,12 @@ canvas {
   outline-offset: 2px;
 }
 
+.touch-btn--small {
+  width: 56px;
+  height: 56px;
+  font-size: 16px;
+}
+
 .touch-btn--wide {
   width: 80px;
 }

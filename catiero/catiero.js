@@ -61,6 +61,14 @@ const TUNA = {
 
 const MAX_MOOD = 100;
 const WIN_POINTS = 5;
+const RAD = Math.PI / 180;
+const AIM_MIN = -75 * RAD;
+const AIM_MAX = 65 * RAD;
+const AIM_SPEED_PER_MS = 0.0024; // radians per ms while held
+const AIM_IDLE_HIDE_MS = 1500;
+const AIM_LINE_LEN = 18;
+const AIM_CORE_LEN = 8;
+const TAU = Math.PI * 2;
 
 const WEAPONS = {
   paw: { id: 'paw', label: 'Paw Boop' },
@@ -169,7 +177,9 @@ const AI_LEVELS = {
     useWeapons: true,
     sausageRange: 32,
     tunaChance: 0,
-    attackInterval: 900
+    attackInterval: 900,
+    aimVariance: 0.45, // radians noise
+    aimSnap: 0.4
   },
   medium: {
     decisionInterval: 320,
@@ -180,7 +190,9 @@ const AI_LEVELS = {
     useWeapons: true,
     sausageRange: 38,
     tunaChance: 0.15,
-    attackInterval: 720
+    attackInterval: 720,
+    aimVariance: 0.25,
+    aimSnap: 0.55
   },
   hard: {
     decisionInterval: 200,
@@ -191,7 +203,9 @@ const AI_LEVELS = {
     useWeapons: true,
     sausageRange: 44,
     tunaChance: 0.25,
-    attackInterval: 540
+    attackInterval: 540,
+    aimVariance: 0.12,
+    aimSnap: 0.72
   }
 };
 
@@ -256,8 +270,8 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => keys.delete(e.key));
 
 const touchStates = {
-  p1: { left: false, right: false, jump: false, boop: false },
-  p2: { left: false, right: false, jump: false, boop: false }
+  p1: { left: false, right: false, jump: false, boop: false, aimY: 0 },
+  p2: { left: false, right: false, jump: false, boop: false, aimY: 0 }
 };
 
 const touchButtons = Array.from(document.querySelectorAll('.touch-btn'));
@@ -493,6 +507,7 @@ function resetJoystick(js) {
     state.left = false;
     state.right = false;
     state.jump = false;
+    state.aimY = 0;
   }
 }
 
@@ -528,10 +543,10 @@ function updateJoystickFromPointer(js, clientX, clientY) {
   const state = touchStates[js.player];
   if (!state) return;
   const MOVE_THRESHOLD = 0.35;
-  const JUMP_THRESHOLD = 0.4;
   state.left = normX < -MOVE_THRESHOLD;
   state.right = normX > MOVE_THRESHOLD;
-  state.jump = normY < -JUMP_THRESHOLD;
+  const aimVal = -normY; // up on joystick aims upward
+  state.aimY = Math.abs(aimVal) > 0.2 ? clamp(aimVal, -1, 1) : 0;
 }
 
 joysticks.forEach((js) => {
@@ -585,7 +600,9 @@ joysticks.forEach((js) => {
 function setTouchState(player, action, isActive, el) {
   const state = touchStates[player];
   if (!state) return;
-  state[action] = isActive;
+  if (action in state) {
+    state[action] = isActive;
+  }
   if (el) el.classList.toggle('active', isActive);
 }
 
@@ -620,6 +637,7 @@ function clearTouchStates() {
     for (const action of Object.keys(st)) {
       st[action] = false;
     }
+    st.aimY = 0;
   }
   touchButtons.forEach((btn) => btn.classList.remove('active'));
   joysticks.forEach((js) => resetJoystick(js));
@@ -759,6 +777,11 @@ function applyTouchUIMode() {
   const isAndroid = /Android/.test(ua);
   const isTouch = isCoarse || hasTouchPoints || isIOS || isAndroid;
   document.body.classList.toggle('is-touch', isTouch);
+  const touchControls = document.querySelector('.touch-controls');
+  if (touchControls) {
+    touchControls.style.display = isTouch ? 'flex' : 'none';
+    touchControls.setAttribute('aria-hidden', isTouch ? 'false' : 'true');
+  }
   if (!isTouch) clearTouchStates();
   setTouchRestartVisibility(isTouch && game && game.winner);
   fitGameToViewport();
@@ -774,6 +797,12 @@ if (typeof coarsePointerQuery.addEventListener === 'function') {
 window.addEventListener(
   'touchstart',
   () => {
+    document.body.classList.add('is-touch');
+    const touchControls = document.querySelector('.touch-controls');
+    if (touchControls) {
+      touchControls.style.display = 'flex';
+      touchControls.setAttribute('aria-hidden', 'false');
+    }
     applyTouchUIMode();
   },
   { once: true }
@@ -864,6 +893,13 @@ if ($menuPrimaryBtn) {
 if ($menuRestartBtn) {
   $menuRestartBtn.addEventListener('click', () => {
     if (!game || !game.started) return;
+    const mode = getCheckedValue(modeRadios, 'ai');
+    const difficulty = getCheckedValue(difficultyRadios, 'medium');
+    game.mode = mode;
+    game.aiEnabled = mode === 'ai';
+    game.aiDifficulty = difficulty;
+    applyOpponentUIState(game.aiEnabled);
+    updatePlayerLabels();
     ensureAudioContext();
     resetMatch({ resetWeaponsToDefault: true });
     closeMenu();
@@ -887,6 +923,13 @@ applyAllowedWeapons(getAllowedWeaponsFromMenu());
 
 // Helper
 const now = () => performance.now();
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const normalizeAngle = (a) => {
+  let res = a;
+  while (res > Math.PI) res -= TAU;
+  while (res < -Math.PI) res += TAU;
+  return res;
+};
 
 let projectiles = [];
 let impactFlashes = [];
@@ -908,6 +951,8 @@ function makePlayer(isP1, overrides = {}) {
       // Attack state
       booping: false,
       boopStart: 0,
+      aimAngle: 0,
+      aimLastChanged: now(),
       scored: 0,
       activeWeapon: getDefaultWeapon(),
       weaponCooldownUntil: 0,
@@ -1038,6 +1083,10 @@ function fireSausage(pl) {
   const t = now();
   const px = pl.facing === 1 ? pl.x + pl.w : pl.x - 5;
   const py = pl.y + pl.h * 0.4;
+  const base = pl.facing === 1 ? 0 : Math.PI;
+  const shotAngle = base + (pl.aimAngle || 0);
+  const vx = cfg.speed * Math.cos(shotAngle);
+  const vy = cfg.speed * Math.sin(shotAngle) + cfg.initialVy;
   projectiles.push({
     owner: pl,
     weapon: 'sausage',
@@ -1045,8 +1094,8 @@ function fireSausage(pl) {
     y: py,
     w: 6,
     h: 4,
-    vx: cfg.speed * pl.facing,
-    vy: cfg.initialVy,
+    vx,
+    vy,
     spawnAt: t,
     gravityScale: cfg.gravityScale,
     config: cfg,
@@ -1063,6 +1112,10 @@ function throwTunaBomb(pl) {
   const t = now();
   const px = pl.facing === 1 ? pl.x + pl.w - 1 : pl.x - 5;
   const py = pl.y + pl.h * 0.2;
+  const base = pl.facing === 1 ? 0 : Math.PI;
+  const shotAngle = base + (pl.aimAngle || 0);
+  const vx = cfg.speed * Math.cos(shotAngle);
+  const vy = cfg.speed * Math.sin(shotAngle) + cfg.initialVy;
   projectiles.push({
     owner: pl,
     weapon: 'tuna',
@@ -1070,8 +1123,8 @@ function throwTunaBomb(pl) {
     y: py,
     w: 6,
     h: 6,
-    vx: cfg.speed * pl.facing,
-    vy: cfg.initialVy,
+    vx,
+    vy,
     spawnAt: t,
     gravityScale: cfg.gravityScale,
     config: cfg,
@@ -1146,8 +1199,10 @@ function controlPlayer(pl) {
 
   const leftKey = pl.isP1 ? keys.has('a') || keys.has('A') : (!isAI && (keys.has('ArrowLeft')));
   const rightKey = pl.isP1 ? keys.has('d') || keys.has('D') : (!isAI && (keys.has('ArrowRight')));
-  const jumpKey = pl.isP1 ? keys.has('w') || keys.has('W') : (!isAI && keys.has('ArrowUp'));
+  const jumpKey = pl.isP1 ? keys.has('g') || keys.has('G') : (!isAI && (keys.has('k') || keys.has('K')));
   const boopKey = pl.isP1 ? keys.has('f') : (!isAI && (keys.has('l') || keys.has('L')));
+  const aimUpKey = pl.isP1 ? keys.has('w') || keys.has('W') : (!isAI && keys.has('ArrowUp'));
+  const aimDownKey = pl.isP1 ? keys.has('s') || keys.has('S') : (!isAI && keys.has('ArrowDown'));
 
   const left = !!leftKey || !!(touch && touch.left) || !!(ai && ai.left);
   const right = !!rightKey || !!(touch && touch.right) || !!(ai && ai.right);
@@ -1172,6 +1227,20 @@ function controlPlayer(pl) {
   if (jump && pl.onGround) {
     pl.vy = JUMP_VEL;
     pl.onGround = false;
+  }
+
+  // Aim adjustment (Up/Down)
+  const aimAnalog = touch ? touch.aimY || 0 : 0; // up on stick is positive
+  let aimInput = 0;
+  aimInput += aimDownKey ? 1 : 0;
+  aimInput -= aimUpKey ? 1 : 0;
+  aimInput -= aimAnalog; // subtract because analog up is positive
+  const facingFactor = pl.facing === 1 ? 1 : -1;
+  const aimDir = clamp(aimInput * facingFactor, -1, 1);
+  if (aimDir !== 0) {
+    const delta = AIM_SPEED_PER_MS * dtMs * aimDir;
+    pl.aimAngle = clamp(pl.aimAngle + delta, AIM_MIN, AIM_MAX);
+    pl.aimLastChanged = now();
   }
 
   // Start boop if possible
@@ -1242,6 +1311,23 @@ function resolveBoops(attacker, defender) {
   }
 }
 
+function setAIAim(cat, target, cfg) {
+  if (!cat || !target) return;
+  const cx = cat.x + cat.w * 0.5;
+  const cy = cat.y + cat.h * 0.5;
+  const tx = target.x + target.w * 0.5;
+  const ty = target.y + target.h * 0.5;
+  const baseAngle = Math.atan2(ty - cy, tx - cx);
+  const noise = (Math.random() * 2 - 1) * (cfg.aimVariance ?? 0.2);
+  const desired = baseAngle + noise;
+  const facingBase = cat.facing === 1 ? 0 : Math.PI;
+  let rel = normalizeAngle(desired - facingBase);
+  const clamped = clamp(rel, AIM_MIN, AIM_MAX);
+  const snap = cfg.aimSnap ?? 0.5;
+  cat.aimAngle = cat.aimAngle * (1 - snap) + clamped * snap;
+  cat.aimLastChanged = now();
+}
+
 function updateAIControl(ai, target) {
   if (!game.started || !game.aiEnabled || !ai || !target) return;
   const cfg = AI_LEVELS[game.aiDifficulty] || AI_LEVELS.medium;
@@ -1265,6 +1351,9 @@ function updateAIControl(ai, target) {
     control.left = dx < -6;
     control.right = dx > 6;
   }
+  if (absDx > 2) {
+    ai.facing = dx > 0 ? 1 : -1;
+  }
 
   const dy = target.y - ai.y;
   const closeVertical = Math.abs((target.y + target.h / 2) - (ai.y + ai.h / 2)) < 12;
@@ -1284,11 +1373,13 @@ function updateAIControl(ai, target) {
       t >= ai.nextAIAttack;
     if (shouldTuna) {
       setPlayerWeapon('p2', 'tuna');
+      setAIAim(ai, target, cfg);
       control.attack = true;
       ai.nextAIAttack = t + cfg.attackInterval * 1.3;
     } else if (canUseSausage && absDx > (cfg.sausageRange ?? 36)) {
       if (ai.activeWeapon !== 'sausage') setPlayerWeapon('p2', 'sausage');
       if (t >= ai.nextAIAttack) {
+        setAIAim(ai, target, cfg);
         control.attack = true;
         ai.nextAIAttack = t + cfg.attackInterval;
       }
@@ -1550,6 +1641,30 @@ function drawWeaponIndicator(pl) {
   ctx.restore();
 }
 
+function drawAimIndicator(pl) {
+  const t = now();
+  if (t - pl.aimLastChanged > AIM_IDLE_HIDE_MS) return;
+  const originX = pl.x + pl.w / 2;
+  const originY = pl.y + pl.h / 2;
+  const base = pl.facing === 1 ? 0 : Math.PI;
+  const angle = base + (pl.aimAngle || 0);
+  const tipX = originX + Math.cos(angle) * AIM_LINE_LEN;
+  const tipY = originY + Math.sin(angle) * AIM_LINE_LEN;
+  const coreX = originX + Math.cos(angle) * AIM_CORE_LEN;
+  const coreY = originY + Math.sin(angle) * AIM_CORE_LEN;
+
+  ctx.save();
+  ctx.strokeStyle = pl.isP1 ? '#ffdd57' : '#8fb3ff';
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(originX, originY);
+  ctx.lineTo(coreX, coreY);
+  ctx.stroke();
+  drawPixelRect(tipX - 2, tipY - 2, 4, 4, pl.isP1 ? '#ff8aa8' : '#6a89ff');
+  ctx.restore();
+}
+
 function drawImpactFlashes() {
   if (!impactFlashes.length) return;
   const t = now();
@@ -1661,6 +1776,8 @@ function step() {
     drawPlatforms();
     drawProjectiles();
     drawImpactFlashes();
+    drawAimIndicator(p1);
+    drawAimIndicator(p2);
 
     // Draw boop hit flashes (debug optional)
     // (kept minimal for MVP)
