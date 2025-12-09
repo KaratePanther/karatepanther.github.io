@@ -40,6 +40,10 @@
           <span class="scoreboard__label" id="p2Label">Player 2</span>
           <span class="scoreboard__score" id="p2Score">0</span>
         </div>
+        <div class="scoreboard__item scoreboard__item--boss">
+          <span class="scoreboard__label" id="bossLabel">Boss</span>
+          <span class="scoreboard__score" id="bossScore">—</span>
+        </div>
       </div>
     </header>
     <canvas id="game" width="960" height="540"></canvas>
@@ -114,10 +118,18 @@
           <input type="radio" name="cat-mode" value="ai" checked />
           Player vs Computer
         </label>
+        <label class="menu-option">
+          <input type="radio" name="cat-mode" value="boss" />
+          Boss Fight — 2 players vs Snoop Dogg (CPU)
+        </label>
+        <label class="menu-option">
+          <input type="radio" name="cat-mode" value="boss-coop" />
+          Co-op Boss — You + CPU Buddy vs Snoop Dogg
+        </label>
       </section>
 
       <section class="menu-section" id="aiDifficultySection" aria-labelledby="difficultyHeading">
-        <h2 id="difficultyHeading">Computer Difficulty</h2>
+        <h2 id="difficultyHeading">Computer / Boss Difficulty</h2>
         <label class="menu-option">
           <input type="radio" name="cat-difficulty" value="easy" />
           Easy — chill cat, rarely boops first

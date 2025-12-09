@@ -5,6 +5,7 @@
   --accent: #ffdd57;
   --p1: #64d2ff; /* cyan */
   --p2: #ff8aa8; /* pink */
+  --boss: #c3ff7d; /* neon lime */
   --bar-green: #37d67a;
   --bar-yellow: #f5a623;
   --bar-red: #f04f4f;
@@ -176,6 +177,10 @@ header.hud {
 
 .scoreboard__item--p2 .scoreboard__score {
   color: var(--p2);
+}
+
+.scoreboard__item--boss .scoreboard__score {
+  color: var(--boss);
 }
 
 canvas {

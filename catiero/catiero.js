@@ -14,7 +14,7 @@ const SCALE_X = canvas.width / WIDTH;
 const SCALE_Y = canvas.height / HEIGHT;
 
 // Emoji font prep
-const EMOJI = { P1: '🐱', P2: '🐈‍⬛' };
+const EMOJI = { P1: '🐱', P2: '🐈‍⬛', BOSS: '🕶️' };
 
 // Game constants
 const GRAVITY = 0.35;
@@ -74,6 +74,40 @@ const WEAPONS = {
   paw: { id: 'paw', label: 'Paw Boop' },
   sausage: { id: 'sausage', label: 'Sausage Bazooka', projectile: SAUSAGE },
   tuna: { id: 'tuna', label: 'Tuna Can Bomb', projectile: TUNA }
+};
+
+const BOSS_STATS = {
+  w: 18,
+  h: 22,
+  maxMood: 260,
+  moveSpeed: 0.9,
+  jumpVel: -6.2,
+  fallClamp: 6.2
+};
+
+const BOSS_BOOP = {
+  windup: 180,
+  active: 140,
+  cooldown: 850,
+  dmg: 28,
+  kbX: 3.4,
+  kbY: -2.6,
+  iframes: 400,
+  range: 16,
+  height: 12
+};
+
+const BOSS_ORB = {
+  fireCooldown: 1100,
+  speed: 3.2,
+  initialVy: -0.3,
+  gravityScale: 0.1,
+  moodDamage: 42,
+  knockbackX: 3.2,
+  knockbackY: -2.1,
+  lifetime: 2400,
+  splashRadius: 22,
+  flashDuration: 240
 };
 
 let audioCtx = null;
@@ -212,6 +246,7 @@ const AI_LEVELS = {
 let game;
 let p1;
 let p2;
+let boss = null;
 
 // Platforms (pixel rectangles)
 // Each: x, y, w, h in world (WIDTH x HEIGHT)
@@ -293,6 +328,9 @@ const $p1Score = document.getElementById('p1Score');
 const $p2Score = document.getElementById('p2Score');
 const $p1Label = document.getElementById('p1Label');
 const $p2Label = document.getElementById('p2Label');
+const $bossScore = document.getElementById('bossScore');
+const $bossLabel = document.getElementById('bossLabel');
+const $bossItem = document.querySelector('.scoreboard__item--boss');
 const $menuOverlay = document.getElementById('menuOverlay');
 const $menuToggleBtn = document.getElementById('menuToggleBtn');
 const $menuCloseBtn = document.getElementById('menuCloseBtn');
@@ -369,7 +407,8 @@ function getCheckedValue(nodes, fallback) {
 function updateDifficultySectionVisibility() {
   const mode = getCheckedValue(modeRadios, 'ai');
   if ($difficultySection) {
-    $difficultySection.style.display = mode === 'ai' ? 'flex' : 'none';
+    const show = mode === 'ai' || mode === 'boss' || mode === 'boss-coop';
+    $difficultySection.style.display = show ? 'flex' : 'none';
   }
 }
 
@@ -394,9 +433,26 @@ function setTouchRestartVisibility(show) {
   fitGameToViewport();
 }
 
+const isP2AIControlled = () => game && (game.mode === 'ai' || game.mode === 'boss-coop');
+const isBossMode = () => game && (game.mode === 'boss' || game.mode === 'boss-coop');
+
 function updatePlayerLabels() {
   if ($p1Label) $p1Label.textContent = 'Player 1';
-  if ($p2Label) $p2Label.textContent = game && game.aiEnabled ? 'CPU' : 'Player 2';
+  if ($p2Label) {
+    const mode = game ? game.mode : 'ai';
+    const label = mode === 'boss-coop' ? 'CPU Buddy' : mode === 'ai' ? 'CPU' : 'Player 2';
+    $p2Label.textContent = label;
+  }
+  if ($bossLabel) {
+    $bossLabel.textContent = 'Boss';
+  }
+}
+
+function updateBossVisibility() {
+  if (!$bossItem) return;
+  const visible = isBossMode();
+  $bossItem.style.display = visible ? 'flex' : 'none';
+  $bossItem.setAttribute('aria-hidden', visible ? 'false' : 'true');
 }
 
 function applyOpponentUIState(isAI) {
@@ -407,6 +463,7 @@ function applyOpponentUIState(isAI) {
   }
   lastOpponentMode = flag;
   updatePlayerLabels();
+  updateBossVisibility();
 }
 
 function updateMenuUI() {
@@ -439,7 +496,7 @@ function updateMenuUI() {
     $menuPrimaryBtn.dataset.action = action;
   }
   if (game) {
-    applyOpponentUIState(game.aiEnabled);
+    applyOpponentUIState(isP2AIControlled());
   }
   fitGameToViewport();
 }
@@ -472,14 +529,16 @@ function startNewMatch() {
   applyAllowedWeapons(selectedWeapons);
   if (!game) return;
   game.mode = mode;
-  game.aiEnabled = mode === 'ai';
+  game.aiEnabled = mode === 'ai' || mode === 'boss-coop';
+  game.bossMode = isBossMode();
   game.aiDifficulty = difficulty;
   game.started = true;
   game.winner = null;
   game.paused = false;
   game.menuOpen = false;
   updateSoundPreference(game.soundEnabled);
-  applyOpponentUIState(game.aiEnabled);
+  applyOpponentUIState(isP2AIControlled());
+  updateBossVisibility();
   resetMatch({ resetWeaponsToDefault: true });
   closeMenu();
 }
@@ -646,6 +705,12 @@ function clearTouchStates() {
     p2.aiControl.right = false;
     p2.aiControl.jump = false;
     p2.aiControl.attack = false;
+  }
+  if (boss && boss.aiControl) {
+    boss.aiControl.left = false;
+    boss.aiControl.right = false;
+    boss.aiControl.jump = false;
+    boss.aiControl.attack = false;
   }
 }
 
@@ -824,7 +889,7 @@ function updateWeaponButtonState() {
     const player = playerKey === 'p1' ? p1 : p2;
     const isActive = !!player && player.activeWeapon === weaponId;
     const allowed = allowedWeapons.has(weaponId);
-    const hideForAI = playerKey === 'p2' && game && game.aiEnabled;
+    const hideForAI = playerKey === 'p2' && game && (game.mode === 'ai' || game.mode === 'boss-coop');
     btn.classList.toggle('active', isActive);
     btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     btn.disabled = !allowed || hideForAI;
@@ -866,9 +931,15 @@ modeRadios.forEach((radio) =>
   radio.addEventListener('change', () => {
     updateDifficultySectionVisibility();
     if (!game || game.started) return;
-    const futureAI = getCheckedValue(modeRadios, 'ai') === 'ai';
+    const selection = getCheckedValue(modeRadios, 'ai');
+    const futureAI = selection === 'ai' || selection === 'boss-coop';
+    const futureBoss = selection === 'boss' || selection === 'boss-coop';
     document.body.classList.toggle('ai-opponent', futureAI);
-    if ($p2Label) $p2Label.textContent = futureAI ? 'CPU' : 'Player 2';
+    if ($p2Label) {
+      const label = selection === 'boss-coop' ? 'CPU Buddy' : futureAI ? 'CPU' : 'Player 2';
+      $p2Label.textContent = label;
+    }
+    if ($bossItem) $bossItem.style.display = futureBoss ? 'flex' : 'none';
   })
 );
 
@@ -896,9 +967,10 @@ if ($menuRestartBtn) {
     const mode = getCheckedValue(modeRadios, 'ai');
     const difficulty = getCheckedValue(difficultyRadios, 'medium');
     game.mode = mode;
-    game.aiEnabled = mode === 'ai';
+    game.aiEnabled = mode === 'ai' || mode === 'boss-coop';
+    game.bossMode = isBossMode();
     game.aiDifficulty = difficulty;
-    applyOpponentUIState(game.aiEnabled);
+    applyOpponentUIState(isP2AIControlled());
     updatePlayerLabels();
     ensureAudioContext();
     resetMatch({ resetWeaponsToDefault: true });
@@ -931,6 +1003,27 @@ const normalizeAngle = (a) => {
   return res;
 };
 
+const livingPlayers = () => [p1, p2].filter((pl) => pl && pl.alive);
+
+function getClosestLivingPlayer(from) {
+  const candidates = livingPlayers();
+  if (!candidates.length) return null;
+  let best = candidates[0];
+  let bestDist = Infinity;
+  for (const pl of candidates) {
+    const cx = pl.x + pl.w / 2;
+    const cy = pl.y + pl.h / 2;
+    const dx = cx - (from.x + from.w / 2);
+    const dy = cy - (from.y + from.h / 2);
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      best = pl;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
 let projectiles = [];
 let impactFlashes = [];
 
@@ -946,6 +1039,8 @@ function makePlayer(isP1, overrides = {}) {
       vy: 0,
       onGround: false,
       facing: isP1 ? 1 : -1,
+      lastFacing: isP1 ? 1 : -1,
+      maxMood: MAX_MOOD,
       mood: MAX_MOOD,
       lastHitAt: -9999,
       // Attack state
@@ -956,12 +1051,42 @@ function makePlayer(isP1, overrides = {}) {
       scored: 0,
       activeWeapon: getDefaultWeapon(),
       weaponCooldownUntil: 0,
+      alive: true,
+      type: 'player',
       aiControl: { left: false, right: false, jump: false, attack: false },
       nextAIDecision: 0,
       nextAIAttack: 0
     },
     overrides
   );
+}
+
+function makeBoss() {
+  return {
+    isBoss: true,
+    type: 'boss',
+    x: WIDTH / 2 - BOSS_STATS.w / 2,
+    y: 70,
+    w: BOSS_STATS.w,
+    h: BOSS_STATS.h,
+    vx: 0,
+    vy: 0,
+    onGround: false,
+    facing: -1,
+    lastFacing: -1,
+    maxMood: BOSS_STATS.maxMood,
+    mood: BOSS_STATS.maxMood,
+    lastHitAt: -9999,
+    booping: false,
+    boopStart: 0,
+    weaponCooldownUntil: 0,
+    aimAngle: 0,
+    aimLastChanged: now(),
+    alive: true,
+    aiControl: { left: false, right: false, jump: false, attack: false },
+    nextAIDecision: 0,
+    nextAIAttack: 0
+  };
 }
 
 p1 = makePlayer(true);
@@ -979,16 +1104,18 @@ game = {
   menuOpen: true,
   mode: 'ai',
   aiEnabled: true,
+  bossMode: false,
   aiDifficulty: 'medium',
   soundEnabled: true
 };
 
-applyOpponentUIState(game.aiEnabled);
+applyOpponentUIState(isP2AIControlled());
 updateSoundPreference(game.soundEnabled);
 updateMenuUI();
 updateWeaponButtonState();
 
 function resetRound(deadPlayer, killer) {
+  if (isBossMode()) return;
   // screen shake a bit
   game.shakeTime = 120;
   // score
@@ -1020,6 +1147,8 @@ function resetRound(deadPlayer, killer) {
 function resetMatch(options = {}) {
   const { resetWeaponsToDefault = false } = options;
   if (!game.started) return;
+  game.aiEnabled = game.mode === 'ai' || game.mode === 'boss-coop';
+  game.bossMode = isBossMode();
   const baseWeapon = getDefaultWeapon();
   const prevP1Weapon = p1 ? p1.activeWeapon : baseWeapon;
   const prevP2Weapon = p2 ? p2.activeWeapon : baseWeapon;
@@ -1027,8 +1156,13 @@ function resetMatch(options = {}) {
   const p2Weapon = resetWeaponsToDefault ? baseWeapon : ensureWeaponAllowed(prevP2Weapon);
   p1 = makePlayer(true, { activeWeapon: p1Weapon });
   p1.scored = 0;
+  p1.mood = p1.maxMood;
+  p1.alive = true;
   p2 = makePlayer(false, { activeWeapon: p2Weapon });
   p2.scored = 0;
+  p2.mood = p2.maxMood;
+  p2.alive = true;
+  boss = game.bossMode ? makeBoss() : null;
   game.winner = null;
   setTouchRestartVisibility(false);
   game.paused = false;
@@ -1046,11 +1180,48 @@ function resetMatch(options = {}) {
   }
   updateWeaponButtonState();
   updatePlayerLabels();
+  updateBossVisibility();
 }
 
 function updateScoreHUD() {
-  $p1Score.textContent = p1.scored;
-  $p2Score.textContent = p2.scored;
+  const bossMode = isBossMode();
+  if (bossMode) {
+    $p1Score.textContent = p1 ? Math.max(0, Math.round(p1.mood)) : 0;
+    $p2Score.textContent = p2 ? Math.max(0, Math.round(p2.mood)) : 0;
+    if ($bossScore) {
+      $bossScore.textContent = boss && boss.alive ? Math.max(0, Math.round(boss.mood)) : boss ? '0' : '—';
+    }
+    return;
+  }
+  $p1Score.textContent = p1 ? p1.scored : 0;
+  $p2Score.textContent = p2 ? p2.scored : 0;
+  if ($bossScore) $bossScore.textContent = '—';
+}
+
+function markCatDown(cat) {
+  if (!cat || !cat.alive) return;
+  cat.alive = false;
+  cat.mood = 0;
+  cat.vx = 0;
+  cat.vy = 0;
+}
+
+function handleBossWinStates() {
+  if (!game || !game.bossMode) return;
+  if (p1 && p1.alive && p1.mood <= 0) markCatDown(p1);
+  if (p2 && p2.alive && p2.mood <= 0) markCatDown(p2);
+  if (boss && boss.alive && boss.mood <= 0) {
+    markCatDown(boss);
+    game.winner = 'Team Cats';
+    setTouchRestartVisibility(true);
+    updateScoreHUD();
+    return;
+  }
+  if ((!p1 || !p1.alive) && (!p2 || !p2.alive)) {
+    game.winner = 'Snoop Dogg';
+    setTouchRestartVisibility(true);
+    updateScoreHUD();
+  }
 }
 
 function togglePause() {
@@ -1063,7 +1234,7 @@ function setPlayerWeapon(playerKey, weaponId) {
   const weapon = WEAPONS[weaponId];
   if (!weapon) return;
   const player = playerKey === 'p1' ? p1 : p2;
-  if (!player) return;
+  if (!player || !player.alive) return;
   if (!allowedWeapons.has(weaponId)) {
     weaponId = ensureWeaponAllowed(weaponId);
   }
@@ -1138,12 +1309,43 @@ function throwTunaBomb(pl) {
   return true;
 }
 
+function fireBossOrb(b, target) {
+  if (!b || !target) return false;
+  const cfg = BOSS_ORB;
+  const t = now();
+  if (t < b.weaponCooldownUntil) return false;
+  const bx = b.x + b.w * 0.5;
+  const by = b.y + b.h * 0.4;
+  const tx = target.x + target.w * 0.5;
+  const ty = target.y + target.h * 0.5;
+  const angle = Math.atan2(ty - by, tx - bx);
+  const vx = cfg.speed * Math.cos(angle);
+  const vy = cfg.speed * Math.sin(angle) + cfg.initialVy;
+  projectiles.push({
+    owner: b,
+    weapon: 'bossOrb',
+    x: bx,
+    y: by,
+    w: 7,
+    h: 7,
+    vx,
+    vy,
+    spawnAt: t,
+    gravityScale: cfg.gravityScale,
+    config: cfg,
+    active: true
+  });
+  b.weaponCooldownUntil = t + cfg.fireCooldown;
+  return true;
+}
+
 // Physics helpers
 function aabb(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 function collidePlatforms(pl) {
+  if (!pl) return;
   pl.onGround = false;
   // vertical resolution first
   pl.y += pl.vy;
@@ -1193,6 +1395,7 @@ function collidePlatforms(pl) {
 }
 
 function controlPlayer(pl) {
+  if (!pl || pl.isBoss || !pl.alive) return;
   const isAI = game.aiEnabled && !pl.isP1;
   const touch = isAI ? null : touchStates[pl.isP1 ? 'p1' : 'p2'];
   const ai = isAI ? pl.aiControl : null;
@@ -1222,6 +1425,13 @@ function controlPlayer(pl) {
     if (pl.onGround) pl.vx *= FRICTION_GROUND;
     else pl.vx *= 0.99;
     if (Math.abs(pl.vx) < 0.02) pl.vx = 0;
+  }
+
+  // If facing flipped, mirror aim so elevation stays consistent to horizon
+  if (pl.facing !== pl.lastFacing) {
+    pl.aimAngle = clamp(-pl.aimAngle, AIM_MIN, AIM_MAX);
+    pl.lastFacing = pl.facing;
+    pl.aimLastChanged = now();
   }
 
   if (jump && pl.onGround) {
@@ -1274,7 +1484,45 @@ function controlPlayer(pl) {
   }
 }
 
+function controlBoss(b) {
+  if (!b || !b.alive) return;
+  const ai = b.aiControl;
+  const left = !!(ai && ai.left);
+  const right = !!(ai && ai.right);
+  const jump = !!(ai && ai.jump);
+  const moveSpeed = BOSS_STATS.moveSpeed;
+
+  if (left) {
+    b.vx = -moveSpeed;
+    b.facing = -1;
+  }
+  if (right) {
+    b.vx = moveSpeed;
+    b.facing = 1;
+  }
+  if (!left && !right) {
+    if (b.onGround) b.vx *= FRICTION_GROUND;
+    else b.vx *= 0.99;
+    if (Math.abs(b.vx) < 0.02) b.vx = 0;
+  }
+
+  if (jump && b.onGround) {
+    b.vy = BOSS_STATS.jumpVel;
+    b.onGround = false;
+  }
+
+  b.vy += GRAVITY;
+  if (b.vy > (BOSS_STATS.fallClamp || MAX_FALL)) b.vy = BOSS_STATS.fallClamp || MAX_FALL;
+
+  if (ai) {
+    ai.jump = false;
+    ai.attack = false;
+  }
+}
+
 function resolveBoops(attacker, defender) {
+  if (!attacker || !defender) return;
+  if (!attacker.alive || !defender.alive) return;
   if (attacker.activeWeapon !== 'paw') return;
   if (!attacker.booping) return;
   const t = now();
@@ -1311,6 +1559,36 @@ function resolveBoops(attacker, defender) {
   }
 }
 
+function resolveBossBoop(attacker, defender) {
+  if (!attacker || !defender) return;
+  if (!attacker.isBoss || !attacker.alive || !defender.alive) return;
+  if (!attacker.booping) return;
+  const t = now();
+  const dt = t - attacker.boopStart;
+  if (dt > BOSS_BOOP.cooldown) {
+    attacker.booping = false;
+    return;
+  }
+  if (dt >= BOSS_BOOP.windup && dt <= BOSS_BOOP.windup + BOSS_BOOP.active) {
+    const hb = {
+      x: attacker.facing === 1 ? attacker.x + attacker.w : attacker.x - BOSS_BOOP.range,
+      y: attacker.y + (attacker.h - BOSS_BOOP.height) / 2,
+      w: BOSS_BOOP.range,
+      h: BOSS_BOOP.height
+    };
+    if (aabb(hb, defender)) {
+      if (t - defender.lastHitAt > BOSS_BOOP.iframes) {
+        defender.lastHitAt = t;
+        defender.mood -= BOSS_BOOP.dmg;
+        defender.vx = attacker.facing * BOSS_BOOP.kbX;
+        defender.vy = BOSS_BOOP.kbY;
+        game.shakeTime = Math.max(game.shakeTime, 120);
+        playSound('boopHit');
+      }
+    }
+  }
+}
+
 function setAIAim(cat, target, cfg) {
   if (!cat || !target) return;
   const cx = cat.x + cat.w * 0.5;
@@ -1330,6 +1608,7 @@ function setAIAim(cat, target, cfg) {
 
 function updateAIControl(ai, target) {
   if (!game.started || !game.aiEnabled || !ai || !target) return;
+  if (!ai.alive || !target.alive) return;
   const cfg = AI_LEVELS[game.aiDifficulty] || AI_LEVELS.medium;
   const t = now();
   if (t < ai.nextAIDecision) return;
@@ -1397,6 +1676,57 @@ function updateAIControl(ai, target) {
   }
 }
 
+function updateBossControl(b, target) {
+  if (!game.started || !game.bossMode || !b || !target) return;
+  if (!b.alive || !target.alive) return;
+  const cfg = AI_LEVELS[game.aiDifficulty] || AI_LEVELS.medium;
+  const t = now();
+  if (t < b.nextAIDecision) return;
+  const control = b.aiControl;
+  if (!control) return;
+  b.nextAIDecision = t + cfg.decisionInterval + Math.random() * (cfg.variance || 0);
+
+  control.left = false;
+  control.right = false;
+  control.jump = false;
+
+  const bx = b.x + b.w / 2;
+  const tx = target.x + target.w / 2;
+  const dx = tx - bx;
+  const absDx = Math.abs(dx);
+  const dy = (target.y + target.h / 2) - (b.y + b.h / 2);
+
+  if (absDx > 10) {
+    control.left = dx < -10;
+    control.right = dx > 10;
+  } else {
+    const jitter = Math.random() > 0.5 ? 1 : -1;
+    control.left = jitter < 0;
+    control.right = jitter > 0;
+  }
+  b.facing = dx >= 0 ? 1 : -1;
+
+  if (b.onGround && Math.random() < cfg.jumpChance * 0.6 && Math.abs(dy) > 12) {
+    control.jump = true;
+  }
+
+  const ready = t >= b.nextAIAttack;
+  if (!ready) return;
+  const closeVertical = Math.abs(dy) < 18;
+  const wantsMelee = absDx < BOSS_BOOP.range + 4 && closeVertical && Math.random() < cfg.boopAggro;
+  if (wantsMelee) {
+    b.booping = true;
+    b.boopStart = t;
+    b.nextAIAttack = t + Math.max(BOSS_BOOP.cooldown, cfg.attackInterval);
+  } else {
+    const fired = fireBossOrb(b, target);
+    if (fired) {
+      setAIAim(b, target, cfg);
+      b.nextAIAttack = t + cfg.attackInterval * 1.05;
+    }
+  }
+}
+
 function explodeProjectile(pr, options = {}) {
   if (!pr.active) return;
   pr.active = false;
@@ -1427,7 +1757,7 @@ function explodeProjectile(pr, options = {}) {
     tryHitCat(directTarget, true);
   }
 
-  const cats = [p1, p2];
+  const cats = [p1, p2, boss].filter(Boolean);
   for (const cat of cats) {
     tryHitCat(cat, false);
   }
@@ -1547,9 +1877,12 @@ function updateProjectiles() {
     }
     if (!pr.active) continue;
 
-    const targets = [p1, p2];
+    const targets = [p1, p2, boss].filter(Boolean);
     for (const target of targets) {
-      if (target === pr.owner) continue;
+      if (target === pr.owner || !target.alive) continue;
+      if (game && game.bossMode && pr.owner && pr.owner.type === 'player' && target.type === 'player') {
+        continue;
+      }
       if (aabb(hitbox, target)) {
         const opts = pr.weapon === 'tuna' ? { directTarget: target } : undefined;
         explodeProjectile(pr, opts);
@@ -1570,8 +1903,8 @@ function drawPixelRect(x, y, w, h, color) {
   ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
 }
 
-function moodColor(v) {
-  const r = v / MAX_MOOD;
+function moodColor(v, maxVal = MAX_MOOD) {
+  const r = maxVal > 0 ? v / maxVal : 0;
   if (r > 0.6) return getComputedStyle(document.documentElement).getPropertyValue('--bar-green');
   if (r > 0.3) return getComputedStyle(document.documentElement).getPropertyValue('--bar-yellow');
   return getComputedStyle(document.documentElement).getPropertyValue('--bar-red');
@@ -1583,8 +1916,9 @@ function drawMoodBar(pl) {
   const mx = pl.x + (pl.w / 2) - bw / 2;
   const my = pl.y - 6;
   drawPixelRect(mx, my, bw, bh, '#000');
-  const fill = Math.max(0, Math.round((pl.mood / MAX_MOOD) * (bw - 2)));
-  drawPixelRect(mx + 1, my + 1, fill, bh - 2, moodColor(pl.mood));
+  const maxVal = pl.maxMood || MAX_MOOD;
+  const fill = Math.max(0, Math.round((pl.mood / maxVal) * (bw - 2)));
+  drawPixelRect(mx + 1, my + 1, fill, bh - 2, moodColor(pl.mood, maxVal));
 }
 
 function drawEmoji(pl) {
@@ -1592,7 +1926,8 @@ function drawEmoji(pl) {
   drawPixelRect(pl.x, pl.y + pl.h - 2, pl.w, 2, 'rgba(0,0,0,0.35)');
   ctx.font = '12px serif'; // emoji size relative to internal pixels
   ctx.textBaseline = 'top';
-  ctx.fillText(pl.isP1 ? EMOJI.P1 : EMOJI.P2, Math.floor(pl.x - 1), Math.floor(pl.y - 6));
+  const glyph = pl.isBoss ? EMOJI.BOSS : pl.isP1 ? EMOJI.P1 : EMOJI.P2;
+  ctx.fillText(glyph, Math.floor(pl.x - 1), Math.floor(pl.y - 6));
 }
 
 function drawPlatforms() {
@@ -1614,6 +1949,10 @@ function drawProjectiles() {
       drawPixelRect(pr.x, pr.y, pr.w, pr.h, '#8fb3ff');
       drawPixelRect(pr.x, pr.y, pr.w, 1, '#d8e6ff');
       drawPixelRect(pr.x, pr.y + pr.h - 1, pr.w, 1, '#6a89ff');
+    } else if (pr.weapon === 'bossOrb') {
+      drawPixelRect(pr.x, pr.y, pr.w, pr.h, '#b3ff7a');
+      drawPixelRect(pr.x + 1, pr.y + 1, pr.w - 2, pr.h - 2, '#5e9d3f');
+      drawPixelRect(pr.x, pr.y, pr.w, 1, '#e9ffd3');
     } else {
       drawPixelRect(pr.x, pr.y, pr.w, pr.h, '#ffdd57');
     }
@@ -1621,6 +1960,7 @@ function drawProjectiles() {
 }
 
 function drawWeaponIndicator(pl) {
+  if (pl.isBoss) return;
   const labels = {
     paw: { text: 'Paw', color: '#ff8aa8' },
     sausage: { text: 'Saus', color: '#ffb347' },
@@ -1642,6 +1982,7 @@ function drawWeaponIndicator(pl) {
 }
 
 function drawAimIndicator(pl) {
+  if (pl.isBoss) return;
   const t = now();
   if (t - pl.aimLastChanged > AIM_IDLE_HIDE_MS) return;
   const originX = pl.x + pl.w / 2;
@@ -1743,25 +2084,48 @@ function step() {
   const playing = game.started && !game.paused && !game.winner;
 
   if (playing) {
-    if (game.aiEnabled) updateAIControl(p2, p1);
+    if (game.bossMode && boss) {
+      if (game.aiEnabled) {
+        updateAIControl(p2, boss);
+      }
+      const target = getClosestLivingPlayer(boss);
+      if (target) updateBossControl(boss, target);
+    } else if (game.aiEnabled) {
+      updateAIControl(p2, p1);
+    }
     // Control & physics
     controlPlayer(p1);
     controlPlayer(p2);
+    if (game.bossMode && boss) controlBoss(boss);
     collidePlatforms(p1);
     collidePlatforms(p2);
+    if (game.bossMode && boss) collidePlatforms(boss);
 
     // Resolve boops
-    resolveBoops(p1, p2);
-    resolveBoops(p2, p1);
+    if (game.bossMode && boss) {
+      resolveBoops(p1, boss);
+      resolveBoops(p2, boss);
+      resolveBossBoop(boss, p1);
+      resolveBossBoop(boss, p2);
+    } else {
+      resolveBoops(p1, p2);
+      resolveBoops(p2, p1);
+    }
     updateProjectiles();
     updateImpactFlashes();
 
     // Check mood / scoring
-    if (p1.mood <= 0) resetRound(p1, p2);
-    if (p2.mood <= 0) resetRound(p2, p1);
+    if (game.bossMode) {
+      handleBossWinStates();
+      updateScoreHUD();
+    } else {
+      if (p1.mood <= 0) resetRound(p1, p2);
+      if (p2.mood <= 0) resetRound(p2, p1);
+    }
   }
   if (!playing) {
     updateImpactFlashes();
+    if (game.bossMode) updateScoreHUD();
   }
 
   // RENDER (to internal low-res then scaled by canvas CSS)
@@ -1778,6 +2142,7 @@ function step() {
     drawImpactFlashes();
     drawAimIndicator(p1);
     drawAimIndicator(p2);
+    if (boss) drawAimIndicator(boss);
 
     // Draw boop hit flashes (debug optional)
     // (kept minimal for MVP)
@@ -1788,6 +2153,11 @@ function step() {
     drawEmoji(p2);
     drawMoodBar(p2);
     drawWeaponIndicator(p2);
+    if (boss) {
+      drawEmoji(boss);
+      drawMoodBar(boss);
+      drawWeaponIndicator(boss);
+    }
     drawWinner();
   });
 
