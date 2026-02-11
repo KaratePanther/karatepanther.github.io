@@ -50,13 +50,17 @@
           <div class="center">
             <p class="time" id="timeDisplay">30:00</p>
             <div class="muted" id="status">Running</div>
+            <div class="muted" style="margin-top:6px;font-size:14px" id="exerciseSlot"></div>
           </div>
         </div>
       </div>
       <div class="toggles">
         <label class="toggle"><input type="checkbox" id="showSeconds" checked> Show seconds</label>
         <label class="toggle"><input type="checkbox" id="soundOn" checked> Sound on finish</label>
+        <label class="toggle"><input type="checkbox" id="exerciseToggle" checked> Random exercise</label>
         <button class="chip-btn" id="restart">Restart 30:00</button>
+        <button class="chip-btn" id="restart5">Restart 00:05</button>
+        <button class="chip-btn" id="exerciseBtn">Random exercise</button>
       </div>
     </section>
     <div class="footer" id="ticker"></div>
@@ -71,10 +75,14 @@
     const statusEl = document.getElementById('status');
     const showSeconds = document.getElementById('showSeconds');
     const soundOn = document.getElementById('soundOn');
+    const exerciseToggle = document.getElementById('exerciseToggle');
     const restartBtn = document.getElementById('restart');
+    const restart5Btn = document.getElementById('restart5');
+    const exerciseBtn = document.getElementById('exerciseBtn');
     const ticker = document.getElementById('ticker');
     const chime = document.getElementById('chime');
     let audioCtx = null;
+    let pendingChime = false;
     let audioPrimed = false;
 
     const State = { IDLE:'IDLE', RUN:'RUN' };
@@ -85,6 +93,31 @@
       endTs: null,
       lastWhole: null
     };
+    const EXERCISES = [
+      "10 push-ups",
+      "10 squats",
+      "10 lunges (each leg 5)",
+      "30 jumping jacks",
+      "15 calf raises",
+      "20 mountain climbers",
+      "20s plank",
+      "15 glute bridges",
+      "30 air punches",
+      "10 jump squats",
+      "20s mountain pose",
+      "10 leg swings (each leg 5)",
+      "10 side leg swings (each leg 5)",
+      "10 knee-to-elbows",
+      "10 table dips",
+      "20 arm rotations",
+      "10 cat-cows",
+      "10 side bends",
+      "20 high knees",
+      "20 butt kicks",
+      "10 front kicks",
+      "10 side kicks",
+      "10 reverse lunges"
+    ];
 
     const clamp = (v,min,max)=>Math.min(Math.max(v,min),max);
 
@@ -99,16 +132,18 @@
     function ensureAudioUnlocked(){
       if(audioUnlocked) return;
       try{
-        chime.volume = 0;
-        const p = chime.play();
-        if(p?.catch) p.catch(()=>{});
-        chime.pause();
-        chime.currentTime = 0;
         const AC = window.AudioContext || window.webkitAudioContext;
         if(AC && !audioCtx){
           audioCtx = new AC();
         }
-        audioUnlocked = true;
+        if(audioCtx && audioCtx.state === 'suspended'){
+          audioCtx.resume().catch(()=>{});
+        }
+        // try a silent play on the audio element
+        chime.volume = 0;
+        const p = chime.play();
+        if(p?.then) p.then(()=>{chime.pause(); chime.currentTime = 0; audioUnlocked = true;}).catch(()=>{});
+        else { chime.pause(); chime.currentTime = 0; audioUnlocked = true; }
       }catch(_){}
     }
 
@@ -116,28 +151,67 @@
       if(!soundOn.checked) return;
       ensureAudioUnlocked();
       const AC = window.AudioContext || window.webkitAudioContext;
-      if(AC){
-        if(!audioCtx) audioCtx = new AC();
-        if(audioCtx.state === 'suspended'){ audioCtx.resume().catch(()=>{}); }
+      const ACctor = AC;
+      const playOsc = () => {
+        try{
+          const ctx = audioCtx;
+          const now = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, now);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.4, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.5);
+          return true;
+        }catch(_){
+          return false;
+        }
+      };
+
+      if(ACctor){
+        if(!audioCtx) audioCtx = new ACctor();
         const ctx = audioCtx;
-        const now = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, now);
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.4, now + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.5);
+        const tryOsc = () => {
+          if(!playOsc()) queuePendingChime();
+        };
+        if(ctx.state === 'suspended'){
+          ctx.resume().then(tryOsc).catch(queuePendingChime);
+        }else{
+          tryOsc();
+        }
         return;
       }
       try{
         chime.currentTime = 0;
         chime.volume = 0.8;
-        chime.play();
-      }catch(_){}
+        chime.play().catch(() => queuePendingChime());
+      }catch(_){
+        queuePendingChime();
+      }
+    }
+
+    function queuePendingChime(){
+      if(pendingChime) return;
+      pendingChime = true;
+      const fire = () => {
+        pendingChime = false;
+        window.removeEventListener('pointerdown', fire);
+        window.removeEventListener('keydown', fire);
+        window.removeEventListener('touchstart', fire);
+        ensureAudioUnlocked();
+        try{
+          chime.currentTime = 0;
+          chime.volume = 0.8;
+          chime.play().catch(()=>{});
+        }catch(_){}
+      };
+      window.addEventListener('pointerdown', fire, {once:true, passive:true});
+      window.addEventListener('keydown', fire, {once:true});
+      window.addEventListener('touchstart', fire, {once:true, passive:true});
     }
 
     function render(){
@@ -186,11 +260,18 @@
       state.endTs = Date.now() + state.remainingMs;
       state.lastWhole = Math.floor(state.remainingMs/1000);
       ensureAudioUnlocked();
+      exerciseSlot.textContent = '';
       scheduleTick();
     }
 
     function handleComplete(){
       playChime();
+      if(exerciseToggle.checked){
+        const pick = EXERCISES[Math.floor(Math.random()*EXERCISES.length)];
+        exerciseSlot.textContent = `Try: ${pick}`;
+      }else{
+        exerciseSlot.textContent = '';
+      }
       state.runState = State.IDLE;
       state.remainingMs = 0;
       state.endTs = null;
@@ -223,6 +304,18 @@
     showSeconds.addEventListener('change', render);
     soundOn.addEventListener('change', ()=>{});
     restartBtn.addEventListener('click', ()=>{state.focusMs=30*60_000;state.remainingMs=state.focusMs;ensureAudioUnlocked();start();});
+    restart5Btn.addEventListener('click', ()=>{state.focusMs=5_000;state.remainingMs=state.focusMs;ensureAudioUnlocked();start();});
+    exerciseBtn.addEventListener('click', ()=> {
+      if(exerciseToggle.checked){
+        const pick = EXERCISES[Math.floor(Math.random()*EXERCISES.length)];
+        exerciseSlot.textContent = `Try: ${pick}`;
+      }
+    });
+    exerciseToggle.addEventListener('change', ()=>{
+      if(!exerciseToggle.checked){
+        exerciseSlot.textContent = '';
+      }
+    });
 
     // one-time global primer to unlock audio on any first user gesture
     function primeAudioOnce(){
@@ -247,6 +340,7 @@
 
     // init
     render();
+    ensureAudioUnlocked(); // try early; some browsers allow on load
     start();
   </script>
 </body>
