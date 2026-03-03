@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Murano Studio Editor</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="panel controls">
+        <h1>Murano Studio Editor</h1>
+        <p class="subhead">Upload a product photo and generate a clean studio-style e-commerce version.</p>
+
+        <label class="field">
+          <span>Photo</span>
+          <input id="imageInput" type="file" accept="image/*" required />
+        </label>
+
+        <label class="field">
+          <span>Prompt preset</span>
+          <textarea id="promptInput" rows="11"></textarea>
+        </label>
+
+        <label class="field">
+          <span>API base URL</span>
+          <input id="apiBaseInput" type="text" value="http://localhost:8000" />
+        </label>
+
+        <button id="generateBtn" class="cta">Generate Studio Image</button>
+
+        <p id="status" class="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel preview">
+        <div class="preview-grid">
+          <article>
+            <h2>Original</h2>
+            <img id="originalPreview" alt="Original preview" />
+          </article>
+          <article>
+            <h2>Studio Result</h2>
+            <img id="resultPreview" alt="Studio result preview" />
+          </article>
+        </div>
+        <a id="downloadLink" class="download" download="studio-result.jpg">Download Result</a>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

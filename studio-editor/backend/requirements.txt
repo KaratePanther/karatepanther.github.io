@@ -1,0 +1,5 @@
+Flask==3.0.3
+Flask-Cors==4.0.1
+huggingface_hub==0.35.3
+Pillow==10.4.0
+requests==2.32.3
