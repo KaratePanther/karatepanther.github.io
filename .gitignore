@@ -1,0 +1,4 @@
+
+# Studio editor local artifacts
+studio-editor/backend/.venv/
+studio-editor/backend/__pycache__/
