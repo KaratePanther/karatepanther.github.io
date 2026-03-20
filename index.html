@@ -29,75 +29,189 @@
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Anton Korolev — Product Manager & Growth</title>
-  <meta name="description" content="Product Manager focused on growth experiments and shipping outcomes. Based in Italy; open to remote/hybrid EU roles. CV & case studies on /pro.">
+  <title>Anton Ko — Builder. Product Manager. Studio.</title>
+  <meta name="description" content="I build digital products that grow businesses. Luceo, AI tools, and more. Based in Italy.">
   <link rel="icon" href="favicon.ico">
   <link rel="canonical" href="https://antonko.com/">
 
-  <!-- Open Graph / Twitter -->
-  <meta property="og:title" content="Anton Korolev — Product Manager & Growth">
-  <meta property="og:description" content="I design experiments and ship outcomes. CV & case studies on /pro.">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Anton Ko — Builder. Product Manager. Studio.">
+  <meta property="og:description" content="I build digital products that grow businesses. Luceo, AI tools, and more.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://antonko.com/">
   <meta property="og:image" content="https://antonko.com/anton-ko.jpeg">
   <meta name="twitter:card" content="summary_large_image">
 
-  <!-- Theme colors -->
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- No top navigation on purpose -->
 
-  <!-- HERO (single fold) -->
-  <header class="site">
-    <div class="container hero solo">
-      <div class="profile">
-        <img src="anton-ko.jpeg" alt="Portrait of Anton Korolev" class="avatar" width="160" height="160" loading="eager" decoding="async">
-        <div>
-          <h1>Anton Korolev</h1>
-          <p class="tagline">Product Manager for growth — I design experiments and ship outcomes.</p>
-          <ul class="inline-chips" aria-label="Highlights">
-            <li>+3.6× online growth</li>
-            <li>−25% checkout drop-off</li>
-            <li>EU remote/hybrid</li>
-          </ul>
-          <div class="cta">
-            <a class="btn" href="/pro.html" aria-label="View professional profile and case studies">View /pro</a>
-            <a class="btn alt" href="/contact.html" aria-label="Contact Anton Korolev">Contact</a>
-          </div>
-          <p class="tiny muted" style="margin-top:10px">CV & full case studies on <a class="link" href="/pro.html">/pro</a>.</p>
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="container">
+      <a class="nav-brand" href="/">Anton Ko</a>
+      <button class="nav-burger" aria-expanded="false" aria-label="Toggle menu">&#9776;</button>
+      <ul class="nav-links">
+        <li><a href="#products">Products</a></li>
+        <li><a href="#now">Now</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <p class="hero-eyebrow">Anton Ko Studio</p>
+        <h1>I build products<br>that grow businesses.</h1>
+        <p class="hero-sub">
+          Product manager and builder. I ship AI-powered tools for
+          e-commerce and small business — backed by 15 years of doing it
+          for a premium retail brand.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#products">See what I'm building</a>
+          <a class="btn btn-secondary" href="#contact">Get in touch</a>
         </div>
       </div>
     </div>
-  </header>
+  </section>
 
-  <!-- NOW (single compact card) -->
-  <main class="container">
-    <section class="card" aria-labelledby="now">
-      <h2 id="now">Now</h2>
-      <ul class="bullets">
-        <li>🎯 Exploring remote/hybrid Product Manager roles across EU</li>
-        <li>📈 Running lean experiments + decision tools</li>
-        <li>🗂️ For recruiters: CV + cases → <a class="link" href="/pro.html">/pro</a></li>
-      </ul>
-    </section>
-  </main>
-
-  <!-- FOOTER (minimal) -->
-  <footer class="container footer">
-    <div class="footwrap">
-      <small>© <span id="y"></span> Anton Korolev · Northern Italy</small>
-      <nav class="footnav">
-        <a href="/pro.html">Pro</a>
-        <a href="/contact.html">Contact</a>
-        <a href="/about.html">About</a>
-      </nav>
+  <!-- PRODUCTS -->
+  <section id="products">
+    <div class="container">
+      <p class="section-label">Products</p>
+      <h2 class="section-title">What I've shipped</h2>
+      <div class="products-grid">
+        <a class="product-card product-card--featured" href="https://luceo.antonko.com" target="_blank" rel="noopener">
+          <span class="product-badge badge-live">Live</span>
+          <h3>Luceo</h3>
+          <p class="product-desc">AI product photography for e-commerce. Upload a photo of your product, get studio-quality shots in seconds. No photographer, no studio, no editing.</p>
+          <ul class="product-features">
+            <li>5 business categories with tailored prompts</li>
+            <li>Upload once, get multiple styled shots</li>
+            <li>Built with AI + React</li>
+          </ul>
+          <span class="product-link">Try Luceo &rarr;</span>
+        </a>
+        <div class="product-card">
+          <span class="product-badge badge-soon">Coming soon</span>
+          <h3>Next up</h3>
+          <p class="product-desc">More tools for small businesses selling online. If you have a problem worth solving, I want to hear about it.</p>
+          <a class="product-link" href="#contact">Tell me what you need &rarr;</a>
+        </div>
+      </div>
     </div>
-    <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+  </section>
+
+  <!-- NOW -->
+  <section id="now">
+    <div class="container">
+      <p class="section-label">Now</p>
+      <h2 class="section-title">What I'm working on</h2>
+      <div class="now-grid">
+        <div class="now-item">
+          <h3>Shipping Luceo v2</h3>
+          <p>Adding batch processing, new categories, and improving generation quality based on early user feedback.</p>
+        </div>
+        <div class="now-item">
+          <h3>Building the next tool</h3>
+          <p>Researching problems in e-commerce operations that AI can actually solve — not just demos, real workflows.</p>
+        </div>
+        <div class="now-item">
+          <h3>Open to PM roles</h3>
+          <p>Selectively exploring product manager positions in EU (remote/hybrid). Especially interested in AI, e-commerce, and growth.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <div class="container">
+      <p class="section-label">About</p>
+      <div class="about-layout">
+        <img src="anton-ko.jpeg" alt="Anton Korolev" class="about-photo">
+        <div class="about-body">
+          <h2 class="section-title">Hey, I'm Anton.</h2>
+          <p>
+            I spent 15 years growing a premium retail brand — from managing stores in Moscow
+            to running product, e-commerce, and marketing for the whole business.
+            I drove 3.6x online growth, delivered $6M+ in revenue, cut CAC in half, and built the analytics layer from scratch.
+          </p>
+          <p>
+            Now I'm in Northern Italy building my own things.
+            I believe the best products come from people who've felt the problem firsthand —
+            that's why I build tools for the kind of businesses I used to run.
+          </p>
+          <div class="about-proof">
+            <span class="proof-item"><strong>3.6x</strong> online growth</span>
+            <span class="proof-item"><strong>$6M+</strong> revenue driven</span>
+            <span class="proof-item"><strong>15+</strong> years in product & ops</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact">
+    <div class="container">
+      <p class="section-label">Contact</p>
+      <h2 class="section-title">Let's talk</h2>
+      <p class="section-desc">
+        Have a project in mind, want to try Luceo for your business,
+        or just want to say hi — drop me a line.
+      </p>
+      <div class="contact-links">
+        <a class="contact-link" id="email-link" href="#">Loading...</a>
+        <a class="contact-link" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener">LinkedIn</a>
+        <a class="contact-link" href="https://github.com/KaratePanther" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <small>&copy; <span id="y"></span> Anton Ko &middot; Verona, Italy</small>
+      <div class="footer-links">
+        <a href="https://luceo.antonko.com" target="_blank" rel="noopener">Luceo</a>
+      </div>
+    </div>
   </footer>
+
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+
+    (function() {
+      var u = 'antonko.hq', d = 'gmail.com';
+      var el = document.getElementById('email-link');
+      el.href = 'mailto:' + u + '@' + d;
+      el.textContent = 'Email me';
+    })();
+
+    (function() {
+      var burger = document.querySelector('.nav-burger');
+      var links = document.querySelector('.nav-links');
+      if (!burger || !links) return;
+      burger.addEventListener('click', function() {
+        var open = links.classList.toggle('open');
+        burger.setAttribute('aria-expanded', open);
+      });
+      links.addEventListener('click', function(e) {
+        if (e.target.tagName === 'A') {
+          links.classList.remove('open');
+          burger.setAttribute('aria-expanded', 'false');
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
