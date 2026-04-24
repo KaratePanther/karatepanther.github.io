@@ -234,7 +234,11 @@
       window.addEventListener('touchstart', fire, {once:true, passive:true});
     }
 
-    function render(){
+    function updateTitle(){
+      document.title = state.runState === State.RUN ? `⏳ ${format(state.remainingMs,true)} • Timer` : 'Visual Timer';
+    }
+
+    function renderVisual(){
       const withSeconds = showSeconds.checked;
       timeDisplay.textContent = format(state.remainingMs, withSeconds);
       ticker.textContent = '';
@@ -248,7 +252,12 @@
       const x = radius * Math.sin(angleRad);  // CSS angles: 0deg at top, sin for x when starting at top
       const y = -radius * Math.cos(angleRad);
       knob.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
-      document.title = state.runState === State.RUN ? `⏳ ${format(state.remainingMs,true)} • Timer` : 'Visual Timer';
+    }
+
+    function render(){
+      updateTitle();
+      if(document.hidden) return;
+      renderVisual();
     }
 
     function setFromAngle(clientX, clientY){
@@ -263,24 +272,22 @@
       start();
     }
 
-    let rafId = null, timeoutId = null;
-    const clearTickHandles = () => { if(rafId){cancelAnimationFrame(rafId); rafId=null;} if(timeoutId){clearTimeout(timeoutId); timeoutId=null;} };
+    let timeoutId = null;
+    const clearTickHandles = () => { if(timeoutId){clearTimeout(timeoutId); timeoutId=null;} };
     const scheduleTick = () => {
       clearTickHandles();
       if(state.runState !== State.RUN || state.endTs===null) return;
-      if(document.hidden){
-        timeoutId = setTimeout(tick, 500);
-      }else{
-        rafId = requestAnimationFrame(tick);
-      }
+      const remaining = Math.max(0, state.endTs - Date.now());
+      const nextSecondDelay = Math.min(remaining, (remaining % 1000) || 1000);
+      timeoutId = setTimeout(tick, nextSecondDelay + 20);
     };
 
     function start(){
       state.runState = State.RUN;
       state.endTs = Date.now() + state.remainingMs;
       state.lastWhole = Math.floor(state.remainingMs/1000);
-      ensureAudioUnlocked();
       exerciseSlot.textContent = '';
+      render();
       scheduleTick();
     }
 
@@ -292,6 +299,7 @@
       }else{
         exerciseSlot.textContent = '';
       }
+      clearTickHandles();
       state.runState = State.IDLE;
       state.remainingMs = 0;
       state.endTs = null;
@@ -306,10 +314,7 @@
         return;
       }
       state.remainingMs = remaining;
-      const whole = Math.floor(remaining/1000);
-      if(whole !== state.lastWhole){
-        state.lastWhole = whole;
-      }
+      state.lastWhole = Math.floor(remaining/1000);
       render();
       scheduleTick();
     }
@@ -323,8 +328,8 @@
 
     showSeconds.addEventListener('change', render);
     soundOn.addEventListener('change', ()=>{});
-    restartBtn.addEventListener('click', ()=>{state.focusMs=30*60_000;state.remainingMs=state.focusMs;ensureAudioUnlocked();start();});
-    restart5Btn.addEventListener('click', ()=>{state.focusMs=5_000;state.remainingMs=state.focusMs;ensureAudioUnlocked();start();});
+    restartBtn.addEventListener('click', ()=>{state.focusMs=30*60_000;state.remainingMs=state.focusMs;start();});
+    restart5Btn.addEventListener('click', ()=>{state.focusMs=5_000;state.remainingMs=state.focusMs;start();});
     exerciseBtn.addEventListener('click', ()=> {
       if(exerciseToggle.checked){
         const pick = EXERCISES[Math.floor(Math.random()*EXERCISES.length)];
@@ -360,7 +365,6 @@
 
     // init
     render();
-    ensureAudioUnlocked(); // try early; some browsers allow on load
     start();
   </script>
 </body>
