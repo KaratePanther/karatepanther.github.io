@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Workout</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #1a1a1a; color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; line-height: 1.4;
+    min-height: 100vh;
+  }
+  body { padding-bottom: 120px; }
+  main { max-width: 760px; margin: 0 auto; padding: 12px; }
+  h1 { font-size: 1.3em; margin: 0 0 4px; color: #fff; }
+  h2 { font-size: 1.1em; margin: 16px 0 6px; color: #fff; }
+  h3 { font-size: 1em; margin: 12px 0 6px; color: #b0d4ff; }
+  p { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid #333; margin: 16px 0; }
+  a { color: #6ab0e6; }
+  code { background: #2a2a2a; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+
+  .card {
+    background: #252525; border-radius: 8px; padding: 12px;
+    margin-bottom: 12px; border: 1px solid #333;
+  }
+  .meta { color: #999; font-size: 0.9em; }
+  .meta strong { color: #ccc; }
+
+  /* form controls */
+  input[type=text], input[type=number], textarea, select {
+    background: #1f1f1f; color: #fff; border: 1px solid #444;
+    border-radius: 5px; padding: 8px 10px; font-size: 1em;
+    width: 100%; font-family: inherit;
+    -webkit-appearance: none; appearance: none;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: #6ab0e6; }
+  textarea { resize: vertical; min-height: 80px; }
+  label { display: block; margin: 8px 0 4px; color: #b0d4ff; font-size: 0.9em; }
+
+  button {
+    background: #2d5a87; color: #fff; border: none;
+    border-radius: 6px; padding: 10px 16px; font-size: 1em;
+    font-family: inherit; cursor: pointer; min-height: 44px;
+    transition: background 0.15s;
+  }
+  button:active { background: #1f4060; }
+  button.primary { background: #2d8757; }
+  button.primary:active { background: #1f6040; }
+  button.secondary { background: #444; }
+  button.danger { background: #874040; }
+  button.ghost { background: transparent; border: 1px solid #444; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .btn-row button { flex: 1; min-width: 120px; }
+
+  /* checklist */
+  .checklist { list-style: none; padding: 0; margin: 0; }
+  .checklist li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid #2a2a2a;
+  }
+  .checklist input[type=checkbox] {
+    width: 22px; height: 22px; accent-color: #6ab0e6;
+    flex-shrink: 0;
+  }
+  .checklist li.done span { color: #666; text-decoration: line-through; }
+
+  /* block table cards */
+  .round-card {
+    background: #2a2a2a; border-radius: 6px; padding: 10px;
+    margin: 8px 0; border-left: 3px solid #6ab0e6;
+  }
+  .round-card .round-label {
+    font-weight: 600; color: #b0d4ff; margin-bottom: 6px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .round-card .field {
+    display: flex; align-items: center; gap: 8px; margin: 4px 0;
+    flex-wrap: wrap;
+  }
+  .round-card .field-label {
+    flex: 0 0 auto; min-width: 110px; color: #aaa; font-size: 0.9em;
+  }
+  .round-card .field-prefill {
+    color: #888; font-size: 0.9em;
+  }
+  .round-card .field input {
+    flex: 1; min-width: 80px; padding: 6px 8px;
+  }
+  .round-card .rest-btn {
+    background: #444; color: #fff; border: none; border-radius: 4px;
+    padding: 4px 10px; font-size: 0.85em; min-height: 32px;
+  }
+
+  /* coaching collapsible */
+  details { margin: 8px 0; }
+  summary {
+    cursor: pointer; color: #6ab0e6; font-size: 0.9em;
+    padding: 4px 0; list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸ "; }
+  details[open] summary::before { content: "▾ "; }
+  details > div { padding: 8px 0 0 16px; color: #ccc; font-size: 0.95em; }
+
+  /* feedback */
+  .feedback-field { margin: 10px 0; }
+  .feedback-field .label { color: #b0d4ff; font-weight: 600; margin-bottom: 4px; }
+
+  /* welcome screen */
+  .welcome { padding: 20px 12px; }
+  .welcome textarea { min-height: 200px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85em; }
+  .welcome .hint { color: #888; font-size: 0.9em; margin: 8px 0; }
+
+  /* floating rest timer */
+  .timer-fab {
+    position: fixed; bottom: 16px; right: 16px;
+    background: #2d8757; color: #fff;
+    width: 88px; height: 88px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    cursor: pointer; user-select: none;
+    z-index: 100; font-size: 0.85em; text-align: center;
+    border: 3px solid #1a1a1a;
+  }
+  .timer-fab .time { font-size: 1.5em; font-weight: 700; line-height: 1; }
+  .timer-fab .label { font-size: 0.7em; color: #c5e8d5; }
+  .timer-fab.running { background: #c25450; }
+  .timer-fab.done { background: #d4a017; animation: pulse 0.5s ease-in-out 3; }
+  @keyframes pulse { 50% { transform: scale(1.1); } }
+
+  .timer-presets {
+    position: fixed; bottom: 110px; right: 16px;
+    display: none; flex-direction: column; gap: 6px;
+    z-index: 99;
+  }
+  .timer-presets.show { display: flex; }
+  .timer-presets button {
+    background: #333; color: #fff; border-radius: 20px;
+    padding: 8px 14px; font-size: 0.9em; min-height: 36px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+
+  /* save bar */
+  .save-bar {
+    background: #252525; border-radius: 8px; padding: 12px;
+    margin: 16px 0; border: 1px solid #444;
+  }
+  .save-bar p { color: #aaa; font-size: 0.85em; margin: 6px 0; }
+
+  /* RPE picker */
+  .rpe-row {
+    display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 4px 0;
+  }
+  .rpe-row .rpe-btn {
+    flex: 0 0 auto; width: 36px; height: 36px; padding: 0;
+    background: #333; border-radius: 4px; font-size: 0.85em;
+    min-height: 36px;
+  }
+  .rpe-row .rpe-btn.selected { background: #2d8757; }
+
+  /* toast */
+  .toast {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: #2d8757; color: #fff; padding: 10px 20px;
+    border-radius: 6px; z-index: 200;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { background: #874040; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<div class="timer-presets" id="timerPresets">
+  <button data-secs="60">60 s</button>
+  <button data-secs="90">90 s</button>
+  <button data-secs="120">2 min</button>
+  <button data-secs="180">3 min</button>
+</div>
+<div class="timer-fab" id="timerFab" onclick="toggleTimerMenu()">
+  <div class="label">REST</div>
+  <div class="time" id="timerDisplay">—</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+//---------------------------------------------------------
+// Config
+//---------------------------------------------------------
+const VAULT_NAME = "My Idea Garden";
+const SESSION_PATH_PREFIX = "AI-Workspace/health/workouts/sessions/";
+const LOCALSTORAGE_KEY = "workoutapp.v1.state";
+
+//---------------------------------------------------------
+// State
+//---------------------------------------------------------
+let state = {
+  rawMarkdown: "",      // last loaded markdown (preserved for round-trip)
+  model: null,          // parsed structured model
+  filename: "",         // YYYY-MM-DD.md
+  loadedAt: null,
+};
+
+//---------------------------------------------------------
+// Markdown parsing
+//---------------------------------------------------------
+function parseMarkdown(md) {
+  const lines = md.split("\n");
+  const model = { title: "", preamble: [], sections: [] };
+
+  let i = 0;
+  // Title
+  while (i < lines.length && !lines[i].startsWith("# ")) i++;
+  if (i < lines.length) {
+    model.title = lines[i].replace(/^#\s+/, "").trim();
+    i++;
+  }
+  // Preamble: lines until first ## or end
+  while (i < lines.length && !lines[i].startsWith("## ")) {
+    model.preamble.push(lines[i]);
+    i++;
+  }
+
+  // trim trailing AND leading blank/--- from preamble
+  while (model.preamble.length) {
+    const last = model.preamble[model.preamble.length - 1].trim();
+    if (last === "" || last === "---") model.preamble.pop();
+    else break;
+  }
+  while (model.preamble.length && model.preamble[0].trim() === "") model.preamble.shift();
+
+  // Sections
+  while (i < lines.length) {
+    if (!lines[i].startsWith("## ")) { i++; continue; }
+    const heading = lines[i].replace(/^##\s+/, "").trim();
+    i++;
+    const sectionLines = [];
+    while (i < lines.length && !lines[i].startsWith("## ")) {
+      sectionLines.push(lines[i]);
+      i++;
+    }
+    // strip trailing blank/--- (they're section separators, not content)
+    while (sectionLines.length) {
+      const last = sectionLines[sectionLines.length - 1].trim();
+      if (last === "" || last === "---") sectionLines.pop();
+      else break;
+    }
+    // strip leading blank
+    while (sectionLines.length && sectionLines[0].trim() === "") sectionLines.shift();
+    model.sections.push(classifySection(heading, sectionLines));
+  }
+
+  return model;
+}
+
+function classifySection(heading, lines) {
+  const hLower = heading.toLowerCase();
+  if (hLower.startsWith("warmup") || hLower.startsWith("cooldown")) {
+    return parseChecklistSection(heading, lines);
+  }
+  if (hLower.startsWith("feedback")) {
+    return parseFeedbackSection(heading, lines);
+  }
+  if (hLower.startsWith("what i'll use") || hLower.startsWith("what i will use") || hLower.startsWith("next session")) {
+    return parseBulletSection(heading, lines, "next");
+  }
+  // Block sections (A —, B —, C —, or anything with a table)
+  if (lines.some(l => l.trim().startsWith("|"))) {
+    return parseBlockSection(heading, lines);
+  }
+  // Fallback: bullet
+  return parseBulletSection(heading, lines, "generic");
+}
+
+function parseChecklistSection(heading, lines) {
+  const items = [];
+  const trailing = [];
+  for (const ln of lines) {
+    const m = ln.match(/^-\s*\[([ xX])\]\s*(.*)$/);
+    if (m) items.push({ done: m[1].toLowerCase() === "x", text: m[2].trim() });
+    else if (ln.trim() !== "" && ln.trim() !== "---") trailing.push(ln);
+  }
+  return { type: "checklist", heading, items, trailing };
+}
+
+function parseBulletSection(heading, lines, subtype) {
+  const items = [];
+  const trailing = [];
+  for (const ln of lines) {
+    const m = ln.match(/^-\s+(.*)$/);
+    if (m) items.push(m[1].trim());
+    else if (ln.trim() !== "" && ln.trim() !== "---") trailing.push(ln);
+  }
+  return { type: subtype, heading, items, trailing };
+}
+
+function parseFeedbackSection(heading, lines) {
+  const fields = [];
+  for (const ln of lines) {
+    // Match: - **Label**: value
+    const m = ln.match(/^-\s*\*\*([^*]+)\*\*\s*:\s*(.*)$/);
+    if (m) fields.push({ label: m[1].trim(), value: m[2].trim() });
+  }
+  return { type: "feedback", heading, fields };
+}
+
+function parseBlockSection(heading, lines) {
+  const description = [];
+  const coaching = [];
+  let table = null;
+  let mode = "desc"; // desc → table → coaching
+
+  let i = 0;
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (ln.trim().startsWith("|") && mode !== "coaching") {
+      // start of table
+      const tableLines = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      table = parseTable(tableLines);
+      mode = "coaching";
+      continue;
+    }
+    if (mode === "desc") description.push(ln);
+    else coaching.push(ln);
+    i++;
+  }
+  // strip leading/trailing blank lines on description and coaching
+  trimBlanks(description);
+  trimBlanks(coaching);
+  return { type: "block", heading, description, table, coaching };
+}
+
+function trimBlanks(arr) {
+  while (arr.length && arr[0].trim() === "") arr.shift();
+  while (arr.length && arr[arr.length - 1].trim() === "") arr.pop();
+}
+
+function parseTable(tableLines) {
+  // Filter empty rows
+  const rows = tableLines.filter(l => l.trim().length > 0);
+  if (rows.length < 2) return null;
+  const headers = splitTableRow(rows[0]);
+  // rows[1] is separator
+  const data = rows.slice(2).map(splitTableRow);
+  return { headers, data };
+}
+
+function splitTableRow(line) {
+  // strip leading/trailing | then split
+  const s = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return s.split("|").map(c => c.trim());
+}
+
+//---------------------------------------------------------
+// Serialization (model → markdown)
+//---------------------------------------------------------
+function serialize(model) {
+  const out = [];
+  out.push("# " + model.title);
+  out.push("");
+  for (const ln of model.preamble) out.push(ln);
+  // ensure trailing newline before sections
+  trimTrailingBlank(out);
+  for (const sec of model.sections) {
+    out.push("");
+    out.push("---");
+    out.push("");
+    out.push("## " + sec.heading);
+    out.push("");
+    serializeSection(sec, out);
+    trimTrailingBlank(out);
+  }
+  return out.join("\n") + "\n";
+}
+
+function trimTrailingBlank(arr) {
+  while (arr.length && arr[arr.length - 1].trim() === "") arr.pop();
+}
+
+function serializeSection(sec, out) {
+  if (sec.type === "checklist") {
+    for (const it of sec.items) {
+      out.push(`- [${it.done ? "x" : " "}] ${it.text}`);
+    }
+    if (sec.trailing && sec.trailing.length) {
+      out.push("");
+      for (const ln of sec.trailing) out.push(ln);
+    }
+  } else if (sec.type === "block") {
+    for (const ln of sec.description) out.push(ln);
+    trimTrailingBlank(out);
+    if (sec.table) {
+      out.push("");
+      out.push(...serializeTable(sec.table));
+    }
+    if (sec.coaching && sec.coaching.length) {
+      out.push("");
+      for (const ln of sec.coaching) out.push(ln);
+    }
+  } else if (sec.type === "feedback") {
+    for (const f of sec.fields) {
+      const v = (f.value || "").trim();
+      out.push(v ? `- **${f.label}**: ${v}` : `- **${f.label}**:`);
+    }
+  } else { // next or generic
+    for (const it of sec.items) out.push(`- ${it}`);
+    if (sec.trailing && sec.trailing.length) {
+      out.push("");
+      for (const ln of sec.trailing) out.push(ln);
+    }
+  }
+}
+
+function serializeTable(tbl) {
+  // Compute column widths
+  const widths = tbl.headers.map((h, i) => {
+    let w = h.length;
+    for (const r of tbl.data) {
+      if (r[i] && r[i].length > w) w = r[i].length;
+    }
+    return Math.max(w, 3);
+  });
+  const fmt = (cells) =>
+    "| " + cells.map((c, i) => (c || "").padEnd(widths[i])).join(" | ") + " |";
+  const sep = "| " + widths.map(w => "-".repeat(w)).join(" | ") + " |";
+  const lines = [fmt(tbl.headers), sep];
+  for (const r of tbl.data) lines.push(fmt(r));
+  return lines;
+}
+
+//---------------------------------------------------------
+// Detection of "actual" columns (editable)
+//---------------------------------------------------------
+function getEditableColumns(table) {
+  // A column is editable if header contains "actual" or "rpe", OR if any cell is empty
+  const cols = [];
+  for (let c = 0; c < table.headers.length; c++) {
+    const h = table.headers[c].toLowerCase();
+    const isActual = /actual|rpe|reps?|notes?/i.test(h);
+    let hasEmpty = false;
+    for (const r of table.data) {
+      if (!r[c] || r[c].trim() === "") { hasEmpty = true; break; }
+    }
+    cols.push(isActual || hasEmpty);
+  }
+  return cols;
+}
+
+//---------------------------------------------------------
+// Rendering
+//---------------------------------------------------------
+function render() {
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+  if (!state.model) {
+    renderWelcome(app);
+    return;
+  }
+  renderSession(app);
+}
+
+function renderWelcome(app) {
+  const div = document.createElement("div");
+  div.className = "welcome";
+  div.innerHTML = `
+    <h1>Workout</h1>
+    <p class="hint">Paste today's session markdown from Obsidian, or pick the .md file.</p>
+    <label>Date (filename)</label>
+    <input type="text" id="dateInput" value="${todayISO()}" placeholder="2026-05-13">
+    <label>Session markdown</label>
+    <textarea id="mdInput" placeholder="Paste the contents of your sessions/YYYY-MM-DD.md file here..."></textarea>
+    <div class="btn-row">
+      <button class="primary" onclick="loadFromTextarea()">Load</button>
+      <button class="secondary" onclick="document.getElementById('filePicker').click()">Pick .md file</button>
+    </div>
+    <input type="file" id="filePicker" accept=".md,text/markdown,text/plain" style="display:none" onchange="loadFromFile(event)">
+    <p class="hint">Loaded content is auto-saved to this browser. If you close the tab mid-workout, your inputs are restored.</p>
+    ${hasAutosave() ? `<div class="btn-row"><button class="ghost" onclick="restoreAutosave()">Restore last session</button></div>` : ""}
+  `;
+  app.appendChild(div);
+}
+
+function renderSession(app) {
+  const m = state.model;
+  // header
+  const head = document.createElement("div");
+  head.className = "card";
+  head.innerHTML = `
+    <h1>${escapeHtml(m.title)}</h1>
+    <p class="meta">${m.preamble.filter(l => l.startsWith("**")).map(escapeHtml).join("<br>")}</p>
+    <div class="btn-row" style="margin-top:8px">
+      <button class="ghost" onclick="resetSession()">Load different session</button>
+    </div>
+  `;
+  app.appendChild(head);
+
+  // sections
+  m.sections.forEach((sec, idx) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    if (sec.type === "checklist") renderChecklist(card, sec, idx);
+    else if (sec.type === "block") renderBlock(card, sec, idx);
+    else if (sec.type === "feedback") renderFeedback(card, sec, idx);
+    else renderBulletSection(card, sec, idx);
+    app.appendChild(card);
+  });
+
+  // save bar
+  const save = document.createElement("div");
+  save.className = "save-bar";
+  save.innerHTML = `
+    <h3>Done?</h3>
+    <p>Sends updated markdown back to <code>${SESSION_PATH_PREFIX}${state.filename}</code> in vault <strong>${VAULT_NAME}</strong>.</p>
+    <div class="btn-row">
+      <button class="primary" onclick="saveToObsidian()">Send to Obsidian</button>
+      <button class="secondary" onclick="copyMarkdown()">Copy markdown</button>
+    </div>
+    <p class="hint">If Obsidian doesn't open: tap Copy and paste into the file manually.</p>
+  `;
+  app.appendChild(save);
+}
+
+function renderChecklist(card, sec, idx) {
+  const h = document.createElement("h2");
+  h.textContent = sec.heading;
+  card.appendChild(h);
+  const ul = document.createElement("ul");
+  ul.className = "checklist";
+  sec.items.forEach((it, i) => {
+    const li = document.createElement("li");
+    if (it.done) li.classList.add("done");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = it.done;
+    cb.onchange = () => {
+      sec.items[i].done = cb.checked;
+      li.classList.toggle("done", cb.checked);
+      autosave();
+    };
+    const span = document.createElement("span");
+    span.textContent = it.text;
+    li.appendChild(cb);
+    li.appendChild(span);
+    ul.appendChild(li);
+  });
+  card.appendChild(ul);
+}
+
+function renderBlock(card, sec, idx) {
+  const h = document.createElement("h2");
+  h.textContent = sec.heading;
+  card.appendChild(h);
+
+  // description (collapsed)
+  const desc = sec.description.filter(l => l.trim()).join("\n").trim();
+  if (desc) {
+    const d = document.createElement("details");
+    d.innerHTML = `<summary>Description</summary><div>${escapeHtml(desc).replace(/\n/g, "<br>")}</div>`;
+    card.appendChild(d);
+  }
+
+  // table → round cards
+  if (sec.table) {
+    const editable = getEditableColumns(sec.table);
+    sec.table.data.forEach((row, ri) => {
+      const rc = document.createElement("div");
+      rc.className = "round-card";
+      const label = document.createElement("div");
+      label.className = "round-label";
+      const roundName = row[0] || `Set ${ri + 1}`;
+      label.innerHTML = `<span>Round ${escapeHtml(roundName)}</span>`;
+      const restBtn = document.createElement("button");
+      restBtn.className = "rest-btn";
+      restBtn.textContent = "Rest";
+      restBtn.onclick = (e) => { e.stopPropagation(); openTimerMenu(); };
+      label.appendChild(restBtn);
+      rc.appendChild(label);
+
+      for (let ci = 1; ci < sec.table.headers.length; ci++) {
+        const fld = document.createElement("div");
+        fld.className = "field";
+        const lab = document.createElement("div");
+        lab.className = "field-label";
+        lab.textContent = sec.table.headers[ci];
+        fld.appendChild(lab);
+        if (editable[ci]) {
+          const inp = document.createElement("input");
+          inp.type = "text";
+          inp.value = row[ci] || "";
+          inp.placeholder = inferPlaceholder(sec.table.headers[ci]);
+          inp.oninput = () => { sec.table.data[ri][ci] = inp.value; autosave(); };
+          fld.appendChild(inp);
+        } else {
+          const pre = document.createElement("div");
+          pre.className = "field-prefill";
+          pre.textContent = row[ci] || "—";
+          fld.appendChild(pre);
+        }
+        rc.appendChild(fld);
+      }
+      card.appendChild(rc);
+    });
+  }
+
+  // coaching (collapsed)
+  const co = sec.coaching.filter(l => l.trim()).join("\n").trim();
+  if (co) {
+    const d = document.createElement("details");
+    d.innerHTML = `<summary>Coaching</summary><div>${escapeHtml(co).replace(/\n/g, "<br>")}</div>`;
+    card.appendChild(d);
+  }
+}
+
+function renderFeedback(card, sec, idx) {
+  const h = document.createElement("h2");
+  h.textContent = sec.heading;
+  card.appendChild(h);
+  sec.fields.forEach((f, i) => {
+    const wrap = document.createElement("div");
+    wrap.className = "feedback-field";
+    const lab = document.createElement("div");
+    lab.className = "label";
+    lab.textContent = f.label;
+    wrap.appendChild(lab);
+
+    // RPE special-case
+    if (/^Average RPE|RPE \(1/i.test(f.label) || /^Energy entering/i.test(f.label)) {
+      const row = document.createElement("div");
+      row.className = "rpe-row";
+      for (let r = 1; r <= 10; r++) {
+        const b = document.createElement("button");
+        b.className = "rpe-btn";
+        b.textContent = r;
+        if (String(f.value).trim() === String(r)) b.classList.add("selected");
+        b.onclick = () => {
+          sec.fields[i].value = String(r);
+          row.querySelectorAll(".rpe-btn").forEach(x => x.classList.remove("selected"));
+          b.classList.add("selected");
+          autosave();
+        };
+        row.appendChild(b);
+      }
+      wrap.appendChild(row);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = f.value || "";
+      ta.rows = 2;
+      ta.oninput = () => { sec.fields[i].value = ta.value; autosave(); };
+      wrap.appendChild(ta);
+    }
+    card.appendChild(wrap);
+  });
+}
+
+function renderBulletSection(card, sec, idx) {
+  const h = document.createElement("h2");
+  h.textContent = sec.heading;
+  card.appendChild(h);
+  const ul = document.createElement("ul");
+  sec.items.forEach((it) => {
+    const li = document.createElement("li");
+    li.textContent = it;
+    ul.appendChild(li);
+  });
+  card.appendChild(ul);
+}
+
+function inferPlaceholder(headerLabel) {
+  const h = headerLabel.toLowerCase();
+  if (h.includes("rpe")) return "1–10";
+  if (h.includes("actual")) return "reps / load";
+  if (h.includes("reps")) return "e.g. 10";
+  return "";
+}
+
+//---------------------------------------------------------
+// Load / save
+//---------------------------------------------------------
+function loadFromTextarea() {
+  const md = document.getElementById("mdInput").value.trim();
+  const date = document.getElementById("dateInput").value.trim() || todayISO();
+  if (!md) { toast("Paste markdown first", true); return; }
+  loadSession(md, date + ".md");
+}
+
+function loadFromFile(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const name = f.name.replace(/\.md$/i, "") + ".md";
+    loadSession(reader.result, name);
+  };
+  reader.readAsText(f);
+}
+
+function loadSession(md, filename) {
+  try {
+    const model = parseMarkdown(md);
+    state.rawMarkdown = md;
+    state.model = model;
+    state.filename = filename;
+    state.loadedAt = Date.now();
+    autosave();
+    render();
+  } catch (e) {
+    console.error(e);
+    toast("Parse error: " + e.message, true);
+  }
+}
+
+function resetSession() {
+  if (!confirm("Discard current session and load a different one? Inputs are autosaved and can be restored.")) return;
+  state = { rawMarkdown: "", model: null, filename: "", loadedAt: null };
+  // intentionally keep autosave so user can restore
+  render();
+}
+
+function autosave() {
+  try {
+    localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(state));
+  } catch (e) { console.warn("autosave failed", e); }
+}
+
+function hasAutosave() {
+  try {
+    const s = localStorage.getItem(LOCALSTORAGE_KEY);
+    if (!s) return false;
+    const parsed = JSON.parse(s);
+    return !!parsed.model;
+  } catch { return false; }
+}
+
+function restoreAutosave() {
+  try {
+    const s = localStorage.getItem(LOCALSTORAGE_KEY);
+    if (!s) { toast("No autosave found", true); return; }
+    state = JSON.parse(s);
+    render();
+    toast("Restored");
+  } catch (e) { toast("Restore failed: " + e.message, true); }
+}
+
+function copyMarkdown() {
+  const md = serialize(state.model);
+  navigator.clipboard.writeText(md).then(
+    () => toast("Markdown copied"),
+    (e) => toast("Copy failed: " + e.message, true)
+  );
+}
+
+function saveToObsidian() {
+  const md = serialize(state.model);
+  const path = SESSION_PATH_PREFIX + state.filename;
+  // advanced-uri: vault + filepath + data + mode=overwrite
+  const uri = `obsidian://advanced-uri?vault=${encodeURIComponent(VAULT_NAME)}&filepath=${encodeURIComponent(path)}&data=${encodeURIComponent(md)}&mode=overwrite`;
+  // also stash to clipboard as fallback
+  navigator.clipboard.writeText(md).catch(() => {});
+  // launch
+  window.location.href = uri;
+  setTimeout(() => toast("Sent to Obsidian (also copied to clipboard)"), 400);
+}
+
+//---------------------------------------------------------
+// Rest timer
+//---------------------------------------------------------
+let timerState = { running: false, endsAt: 0, duration: 0, tick: null };
+
+function toggleTimerMenu() {
+  if (timerState.running) {
+    // cancel
+    stopTimer();
+    return;
+  }
+  openTimerMenu();
+}
+
+function openTimerMenu() {
+  const menu = document.getElementById("timerPresets");
+  menu.classList.toggle("show");
+}
+
+document.addEventListener("click", (e) => {
+  const fab = document.getElementById("timerFab");
+  const menu = document.getElementById("timerPresets");
+  if (!fab.contains(e.target) && !menu.contains(e.target)) menu.classList.remove("show");
+});
+
+document.getElementById("timerPresets").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const secs = parseInt(b.dataset.secs, 10);
+  startTimer(secs);
+  document.getElementById("timerPresets").classList.remove("show");
+});
+
+function startTimer(secs) {
+  timerState.running = true;
+  timerState.duration = secs;
+  timerState.endsAt = Date.now() + secs * 1000;
+  document.getElementById("timerFab").classList.add("running");
+  document.getElementById("timerFab").classList.remove("done");
+  timerState.tick = setInterval(updateTimer, 200);
+  updateTimer();
+}
+
+function stopTimer() {
+  timerState.running = false;
+  clearInterval(timerState.tick);
+  document.getElementById("timerFab").classList.remove("running", "done");
+  document.getElementById("timerDisplay").textContent = "—";
+}
+
+function updateTimer() {
+  const left = Math.max(0, Math.ceil((timerState.endsAt - Date.now()) / 1000));
+  const m = Math.floor(left / 60);
+  const s = left % 60;
+  document.getElementById("timerDisplay").textContent =
+    m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}`;
+  if (left <= 0) {
+    clearInterval(timerState.tick);
+    timerState.running = false;
+    document.getElementById("timerFab").classList.remove("running");
+    document.getElementById("timerFab").classList.add("done");
+    document.getElementById("timerDisplay").textContent = "GO";
+    beep();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+    setTimeout(() => {
+      document.getElementById("timerFab").classList.remove("done");
+      document.getElementById("timerDisplay").textContent = "—";
+    }, 4000);
+  }
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880;
+    g.gain.value = 0.0001;
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
+    setTimeout(() => { o.stop(); ctx.close(); }, 700);
+  } catch (e) { console.warn("beep failed", e); }
+}
+
+//---------------------------------------------------------
+// Helpers
+//---------------------------------------------------------
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function toast(msg, err) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.toggle("error", !!err);
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+//---------------------------------------------------------
+// Init
+//---------------------------------------------------------
+(function init() {
+  // restore on load if available
+  try {
+    const s = localStorage.getItem(LOCALSTORAGE_KEY);
+    if (s) {
+      const parsed = JSON.parse(s);
+      if (parsed && parsed.model) state = parsed;
+    }
+  } catch (e) { console.warn("init restore failed", e); }
+  render();
+})();
+</script>
+</body>
+</html>
