@@ -763,16 +763,20 @@ function copyMarkdown() {
   );
 }
 
-function saveToObsidian() {
+async function saveToObsidian() {
   const md = serialize(state.model);
   const path = SESSION_PATH_PREFIX + state.filename;
-  // advanced-uri: vault + filepath + data + mode=overwrite
-  const uri = `obsidian://advanced-uri?vault=${encodeURIComponent(VAULT_NAME)}&filepath=${encodeURIComponent(path)}&data=${encodeURIComponent(md)}&mode=overwrite`;
-  // also stash to clipboard as fallback
-  navigator.clipboard.writeText(md).catch(() => {});
-  // launch
+  // iOS Safari truncates large data params in custom URI schemes (>~8 KB).
+  // Use clipboard=true so Advanced URI reads from the OS clipboard instead.
+  try {
+    await navigator.clipboard.writeText(md);
+  } catch (e) {
+    toast("Clipboard write failed — tap Copy markdown instead", true);
+    return;
+  }
+  const uri = `obsidian://advanced-uri?vault=${encodeURIComponent(VAULT_NAME)}&filepath=${encodeURIComponent(path)}&clipboard=true&mode=overwrite`;
   window.location.href = uri;
-  setTimeout(() => toast("Sent to Obsidian (also copied to clipboard)"), 400);
+  setTimeout(() => toast("Sent to Obsidian via clipboard"), 400);
 }
 
 //---------------------------------------------------------
