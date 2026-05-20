@@ -31,6 +31,10 @@
     .time{font-size:56px;font-variant-numeric:tabular-nums;color:var(--ink);margin:0;line-height:1;}
     .toggles{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:12px;color:var(--muted);}
     .toggle{display:flex;align-items:center;gap:6px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);}
+    .control{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);}
+    .control select{background:#0b1020;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;}
+    .control input[type="range"]{width:128px;accent-color:var(--accent-2);}
+    .volume-value{min-width:42px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);}
     .chip-btn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--ink);padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:700;}
     .footer{margin-top:14px;color:var(--muted);font-size:13px;text-align:center}
     @media(max-width:520px){.dial{width:280px;height:280px}.center{inset:44px}.time{font-size:48px}}
@@ -57,6 +61,18 @@
       <div class="toggles">
         <label class="toggle"><input type="checkbox" id="showSeconds" checked> Show seconds</label>
         <label class="toggle"><input type="checkbox" id="soundOn" checked> Sound on finish</label>
+        <label class="control">Sound
+          <select id="soundSelect">
+            <option value="chime">Chime</option>
+            <option value="chicken">Chicken</option>
+            <option value="oink">Oink</option>
+            <option value="gong">Gong</option>
+          </select>
+        </label>
+        <label class="control">Volume
+          <input type="range" id="volumeSlider" min="0" max="200" value="120">
+          <span class="volume-value" id="volumeValue">120%</span>
+        </label>
         <label class="toggle"><input type="checkbox" id="exerciseToggle" checked> Random exercise</label>
         <button class="chip-btn" id="restart">Restart 30:00</button>
         <button class="chip-btn" id="restart5">Restart 00:05</button>
@@ -75,6 +91,9 @@
     const statusEl = document.getElementById('status');
     const showSeconds = document.getElementById('showSeconds');
     const soundOn = document.getElementById('soundOn');
+    const soundSelect = document.getElementById('soundSelect');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeValue = document.getElementById('volumeValue');
     const exerciseToggle = document.getElementById('exerciseToggle');
     const restartBtn = document.getElementById('restart');
     const restart5Btn = document.getElementById('restart5');
@@ -84,6 +103,9 @@
     let audioCtx = null;
     let pendingChime = false;
     let audioPrimed = false;
+    let timerWorker = null;
+    let completionHandled = false;
+    let lastPreviewAt = 0;
 
     const State = { IDLE:'IDLE', RUN:'RUN' };
     let state = {
@@ -140,6 +162,7 @@
     ];
 
     const clamp = (v,min,max)=>Math.min(Math.max(v,min),max);
+    const volumeGain = () => Number(volumeSlider.value) / 100;
 
     function format(ms, withSeconds){
       const total = Math.max(0, Math.floor(ms/1000));
@@ -159,7 +182,15 @@
         if(audioCtx && audioCtx.state === 'suspended'){
           audioCtx.resume().catch(()=>{});
         }
-        // try a silent play on the audio element
+        if(audioCtx){
+          const silent = audioCtx.createBufferSource();
+          const gain = audioCtx.createGain();
+          gain.gain.value = 0;
+          silent.connect(gain).connect(audioCtx.destination);
+          silent.start(0);
+          audioUnlocked = true;
+        }
+        // try a silent play on the audio element as a fallback path
         chime.volume = 0;
         const p = chime.play();
         if(p?.then) p.then(()=>{chime.pause(); chime.currentTime = 0; audioUnlocked = true;}).catch(()=>{});
@@ -167,25 +198,66 @@
       }catch(_){}
     }
 
-    function playChime(){
+    function playOsc(freq, start, duration, peak, type='sine'){
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + duration + 0.03);
+    }
+
+    function playCluck(start, peak){
+      playOsc(940, start, 0.08, peak * 0.9, 'square');
+      playOsc(1220, start + 0.08, 0.07, peak, 'square');
+      playOsc(760, start + 0.16, 0.09, peak * 0.75, 'sawtooth');
+    }
+
+    function playOink(start, peak){
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, start);
+      osc.frequency.exponentialRampToValueAtTime(95, start + 0.22);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.36);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.4);
+    }
+
+    function playGong(start, peak){
+      [196, 247, 330].forEach((freq, i) => {
+        playOsc(freq, start + i * 0.015, 1.7 + i * 0.25, peak * (0.7 - i * 0.12), i ? 'triangle' : 'sine');
+      });
+    }
+
+    function playSelectedSound(force=false){
       if(!soundOn.checked) return;
       ensureAudioUnlocked();
       const AC = window.AudioContext || window.webkitAudioContext;
       const ACctor = AC;
-      const playOsc = () => {
+      const playSound = () => {
         try{
           const ctx = audioCtx;
           const now = ctx.currentTime;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, now);
-          gain.gain.setValueAtTime(0, now);
-          gain.gain.linearRampToValueAtTime(0.4, now + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
-          osc.connect(gain).connect(ctx.destination);
-          osc.start(now);
-          osc.stop(now + 0.5);
+          const peak = clamp(0.38 * volumeGain(), 0.0001, 1.2);
+          const sound = soundSelect.value;
+          if(sound === 'chicken'){
+            playCluck(now, peak);
+          }else if(sound === 'oink'){
+            playOink(now, peak);
+          }else if(sound === 'gong'){
+            playGong(now, peak);
+          }else{
+            playOsc(880, now, force ? 0.28 : 0.5, peak, 'sine');
+            playOsc(1320, now + 0.12, force ? 0.2 : 0.35, peak * 0.72, 'sine');
+          }
           return true;
         }catch(_){
           return false;
@@ -195,19 +267,19 @@
       if(ACctor){
         if(!audioCtx) audioCtx = new ACctor();
         const ctx = audioCtx;
-        const tryOsc = () => {
-          if(!playOsc()) queuePendingChime();
+        const trySound = () => {
+          if(!playSound()) queuePendingChime();
         };
         if(ctx.state === 'suspended'){
-          ctx.resume().then(tryOsc).catch(queuePendingChime);
+          ctx.resume().then(trySound).catch(queuePendingChime);
         }else{
-          tryOsc();
+          trySound();
         }
         return;
       }
       try{
         chime.currentTime = 0;
-        chime.volume = 0.8;
+        chime.volume = clamp(volumeGain(), 0, 1);
         chime.play().catch(() => queuePendingChime());
       }catch(_){
         queuePendingChime();
@@ -225,7 +297,7 @@
         ensureAudioUnlocked();
         try{
           chime.currentTime = 0;
-          chime.volume = 0.8;
+          chime.volume = clamp(volumeGain(), 0, 1);
           chime.play().catch(()=>{});
         }catch(_){}
       };
@@ -274,49 +346,95 @@
 
     let timeoutId = null;
     const clearTickHandles = () => { if(timeoutId){clearTimeout(timeoutId); timeoutId=null;} };
-    const scheduleTick = () => {
+
+    function ensureTimerWorker(){
+      if(timerWorker || !window.Worker || !window.Blob || !window.URL) return timerWorker;
+      const code = `
+        let intervalId = null;
+        function stop(){
+          if(intervalId){ clearInterval(intervalId); intervalId = null; }
+        }
+        self.onmessage = (event) => {
+          if(event.data.type === 'start'){
+            stop();
+            const endTs = event.data.endTs;
+            const tick = () => self.postMessage({type:'tick', remaining: endTs - Date.now()});
+            tick();
+            intervalId = setInterval(tick, 1000);
+          }
+          if(event.data.type === 'stop') stop();
+        };
+      `;
+      const blob = new Blob([code], {type:'application/javascript'});
+      timerWorker = new Worker(URL.createObjectURL(blob));
+      timerWorker.onmessage = (event) => {
+        if(event.data.type === 'tick') tick(event.data.remaining);
+      };
+      return timerWorker;
+    }
+
+    function scheduleTick(){
       clearTickHandles();
       if(state.runState !== State.RUN || state.endTs===null) return;
+      const worker = ensureTimerWorker();
+      if(worker){
+        worker.postMessage({type:'start', endTs: state.endTs});
+        return;
+      }
       const remaining = Math.max(0, state.endTs - Date.now());
       const nextSecondDelay = Math.min(remaining, (remaining % 1000) || 1000);
       timeoutId = setTimeout(tick, nextSecondDelay + 20);
-    };
+    }
+
+    function stopTicking(){
+      if(timerWorker) timerWorker.postMessage({type:'stop'});
+      clearTickHandles();
+    }
 
     function start(){
       state.runState = State.RUN;
       state.endTs = Date.now() + state.remainingMs;
       state.lastWhole = Math.floor(state.remainingMs/1000);
+      completionHandled = false;
+      ensureAudioUnlocked();
       exerciseSlot.textContent = '';
       render();
       scheduleTick();
     }
 
     function handleComplete(){
-      playChime();
+      if(completionHandled) return;
+      completionHandled = true;
+      stopTicking();
+      playSelectedSound();
       if(exerciseToggle.checked){
         const pick = EXERCISES[Math.floor(Math.random()*EXERCISES.length)];
         exerciseSlot.textContent = `Try: ${pick}`;
       }else{
         exerciseSlot.textContent = '';
       }
-      clearTickHandles();
       state.runState = State.IDLE;
       state.remainingMs = 0;
       state.endTs = null;
       render();
     }
 
-    function tick(){
+    function tick(workerRemaining=null){
       if(state.runState !== State.RUN || state.endTs === null) return;
-      const remaining = state.endTs - Date.now();
+      const remaining = workerRemaining ?? state.endTs - Date.now();
       if(remaining <= 0){
         handleComplete();
         return;
       }
       state.remainingMs = remaining;
-      state.lastWhole = Math.floor(remaining/1000);
-      render();
-      scheduleTick();
+      const whole = Math.floor(remaining/1000);
+      if(whole !== state.lastWhole){
+        state.lastWhole = whole;
+        render();
+      }
+      if(!timerWorker){
+        scheduleTick();
+      }
     }
 
     // drag only knob
@@ -328,8 +446,17 @@
 
     showSeconds.addEventListener('change', render);
     soundOn.addEventListener('change', ()=>{});
-    restartBtn.addEventListener('click', ()=>{state.focusMs=30*60_000;state.remainingMs=state.focusMs;start();});
-    restart5Btn.addEventListener('click', ()=>{state.focusMs=5_000;state.remainingMs=state.focusMs;start();});
+    soundSelect.addEventListener('change', ()=>playSelectedSound(true));
+    volumeSlider.addEventListener('input', ()=>{
+      volumeValue.textContent = `${volumeSlider.value}%`;
+      const now = Date.now();
+      if(now - lastPreviewAt > 180){
+        lastPreviewAt = now;
+        playSelectedSound(true);
+      }
+    });
+    restartBtn.addEventListener('click', ()=>{state.focusMs=30*60_000;state.remainingMs=state.focusMs;ensureAudioUnlocked();start();});
+    restart5Btn.addEventListener('click', ()=>{state.focusMs=5_000;state.remainingMs=state.focusMs;ensureAudioUnlocked();start();});
     exerciseBtn.addEventListener('click', ()=> {
       if(exerciseToggle.checked){
         const pick = EXERCISES[Math.floor(Math.random()*EXERCISES.length)];
@@ -360,7 +487,7 @@
       if(state.runState!==State.RUN || state.endTs===null) return;
       const remaining = state.endTs - Date.now();
       if(remaining<=0){ handleComplete(); }
-      else { state.remainingMs = remaining; render(); scheduleTick(); }
+      else { state.remainingMs = remaining; render(); }
     });
 
     // init
