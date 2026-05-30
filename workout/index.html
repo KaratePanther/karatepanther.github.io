@@ -190,6 +190,9 @@
   .summary-head .arrow { font-size: 0.9em; }
   .summary-body { overflow: hidden; transition: max-height 0.28s ease; }
   .summary-body .meta-inner { padding-top: 6px; }
+  .summary-body .meta-inner > div { margin: 3px 0; }
+  .summary-body .sum-list { margin: 4px 0; padding-left: 18px; }
+  .summary-body .sum-list li { margin: 2px 0; }
 
   /* top bar: total timer + view toggle + wake status */
   .topbar {
@@ -264,7 +267,7 @@ let state = {
   totalSeconds: 0,      // count-up total workout time (persisted)
   viewMode: "overview", // "overview" (full scroll) | "focus" (one section)
   focusIndex: 0,        // which section is shown in focus mode
-  summaryOpen: true,    // session-summary collapsible (persisted across focus nav)
+  summaryOpen: false,   // session-summary collapsible — default closed so the workout screen stays clean
   dirty: false,         // edits made but not yet sent to Obsidian
 };
 
@@ -596,7 +599,7 @@ function renderSession(app) {
   head.innerHTML = `
     <h1>${escapeHtml(m.title)}</h1>
     <div class="summary-head" id="summaryHead" onclick="toggleSummary()"><span class="arrow">▾</span> Session summary</div>
-    <div class="summary-body" id="summaryBody"><div class="meta meta-inner">${m.preamble.filter(l => l.startsWith("**")).map(mdInline).join("<br>")}</div></div>
+    <div class="summary-body" id="summaryBody"><div class="meta meta-inner">${mdLinesToHtml(m.preamble)}</div></div>
     <div class="topbar">
       <div class="total-wrap">
         <div class="tlabel">TOTAL TIME</div>
@@ -895,7 +898,7 @@ function loadSession(md, filename) {
     state.totalSeconds = 0;
     state.viewMode = "overview";
     state.focusIndex = 0;
-    state.summaryOpen = true;
+    state.summaryOpen = false;
     state.dirty = false;       // fresh load, nothing entered yet
     persist();
     requestWakeLock();
@@ -914,7 +917,7 @@ function resetSession() {
   stopTotal();
   // intentionally keep the persisted autosave so user can restore
   state = { rawMarkdown: "", model: null, filename: "", loadedAt: null,
-            totalSeconds: 0, viewMode: "overview", focusIndex: 0, summaryOpen: true, dirty: false };
+            totalSeconds: 0, viewMode: "overview", focusIndex: 0, summaryOpen: false, dirty: false };
   render();
 }
 
@@ -1255,6 +1258,28 @@ function mdBlock(s) {
   return mdInline(s).replace(/\n/g, "<br>");
 }
 
+// Render a list of raw markdown lines to HTML, grouping `- ` runs into real bullets.
+// Used for the session summary so NOTHING gets dropped (bold lines + reasoning bullets).
+function mdLinesToHtml(lines) {
+  const html = [];
+  let inList = false;
+  const closeList = () => { if (inList) { html.push("</ul>"); inList = false; } };
+  for (const raw of lines || []) {
+    const t = (raw || "").trim();
+    if (t === "" || t === "---") { closeList(); continue; }
+    const bullet = t.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      if (!inList) { html.push("<ul class='sum-list'>"); inList = true; }
+      html.push(`<li>${mdInline(bullet[1])}</li>`);
+    } else {
+      closeList();
+      html.push(`<div>${mdInline(t)}</div>`);
+    }
+  }
+  closeList();
+  return html.join("");
+}
+
 function todayISO() {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
@@ -1284,7 +1309,7 @@ function toast(msg, err) {
   state.totalSeconds = state.totalSeconds || 0;
   state.viewMode = state.viewMode || "overview";
   state.focusIndex = state.focusIndex || 0;
-  if (typeof state.summaryOpen !== "boolean") state.summaryOpen = true;
+  if (typeof state.summaryOpen !== "boolean") state.summaryOpen = false;
   totalRunning = false;
   render();
   requestWakeLock();
