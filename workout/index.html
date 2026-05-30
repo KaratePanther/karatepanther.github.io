@@ -180,6 +180,7 @@
     font-weight: 700; color: #b0d4ff; font-variant-numeric: tabular-nums;
   }
   .field-prefill.planned { color: #9a9a9a; }
+  .note-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2d8757; vertical-align: middle; }
 
   /* collapsible session summary */
   .summary-head {
@@ -396,8 +397,23 @@ function parseBlockSection(heading, lines) {
   }
   // strip leading/trailing blank lines on description and coaching
   trimBlanks(description);
-  trimBlanks(coaching);
-  return { type: "block", heading, description, table, coaching };
+  // pull an optional per-exercise note out of the post-table content
+  const ex = extractNotes(coaching);
+  const cleanCoaching = ex.rest;
+  trimBlanks(cleanCoaching);
+  return { type: "block", heading, description, table, coaching: cleanCoaching, notes: ex.notes };
+}
+
+// Pull a `**Notes**: ...` line out of a set of lines; return the note + the rest.
+function extractNotes(lines) {
+  let notes = "";
+  const rest = [];
+  for (const ln of lines) {
+    const m = ln.match(/^\*\*Notes\*\*:\s*(.*)$/);
+    if (m) notes = m[1].trim();
+    else rest.push(ln);
+  }
+  return { notes, rest };
 }
 
 function trimBlanks(arr) {
@@ -467,6 +483,11 @@ function serializeSection(sec, out) {
       out.push("");
       for (const ln of sec.coaching) out.push(ln);
     }
+    const noteVal = (sec.notes || "").replace(/\s*\n\s*/g, " ").trim();
+    if (noteVal) {
+      out.push("");
+      out.push(`**Notes**: ${noteVal}`);
+    }
   } else if (sec.type === "feedback") {
     for (const f of sec.fields) {
       const v = (f.value || "").trim();
@@ -506,9 +527,10 @@ function getColumnKinds(table) {
     const h = (hdr || "").toLowerCase().trim();
     if (c === 0) return "ro";                                   // set/round label
     // Planned columns are read-only — checked FIRST so "Plan RPE" stays read-only
-    if (/plan|target|prescrib|^load$|^load\b/.test(h)) return "ro";
+    if (/plan|target|prescrib/.test(h)) return "ro";
+    if (/load/.test(h)) return "text";                          // actual load: prefilled, editable
     if (/rpe/.test(h)) return "rpe";                            // ACTUAL rpe → slider
-    if (/actual|notes?|reps?/.test(h)) return "text";          // actual reps / load
+    if (/actual|notes?|reps?/.test(h)) return "text";          // actual reps
     // Unknown column: editable only if it has blank cells (backward compat), else read-only
     return table.data.some(r => !r[c] || r[c].trim() === "") ? "text" : "ro";
   });
@@ -755,6 +777,28 @@ function renderBlock(card, sec, idx, focus) {
     d.innerHTML = `<summary>Coaching</summary><div>${mdBlock(co)}</div>`;
     card.appendChild(d);
   }
+
+  // optional per-exercise note — collapsed when empty, auto-open when there's something
+  const nd = document.createElement("details");
+  nd.className = "notes-det";
+  if (sec.notes && sec.notes.trim()) nd.open = true;
+  const sum = document.createElement("summary");
+  nd.appendChild(sum);
+  const ndBody = document.createElement("div");
+  const ta = document.createElement("textarea");
+  ta.value = sec.notes || "";
+  ta.rows = 2;
+  ta.placeholder = "Anything to remember about this exercise — form, a tweak, what to change next time.";
+  ta.oninput = () => { sec.notes = ta.value; refreshNoteSummary(sum, ta.value); autosave(); };
+  ndBody.appendChild(ta);
+  nd.appendChild(ndBody);
+  refreshNoteSummary(sum, sec.notes);
+  card.appendChild(nd);
+}
+
+function refreshNoteSummary(sum, val) {
+  const has = val && val.trim();
+  sum.innerHTML = `Notes${has ? ' <span class="note-dot"></span>' : ''}`;
 }
 
 function renderFeedback(card, sec, idx) {
@@ -905,7 +949,21 @@ function restoreAutosave() {
   } catch (e) { toast("Restore failed: " + e.message, true); }
 }
 
+// Fill feedback fields the app already knows (total time) before exporting.
+function fillDerivedFeedback() {
+  if (!state.model) return;
+  for (const sec of state.model.sections) {
+    if (sec.type !== "feedback") continue;
+    for (const f of sec.fields) {
+      if (/total time/i.test(f.label) && !String(f.value || "").trim() && (state.totalSeconds || 0) > 0) {
+        f.value = fmtClock(state.totalSeconds);
+      }
+    }
+  }
+}
+
 function copyMarkdown() {
+  fillDerivedFeedback();
   const md = serialize(state.model);
   navigator.clipboard.writeText(md).then(
     () => toast("Markdown copied"),
@@ -914,6 +972,7 @@ function copyMarkdown() {
 }
 
 async function saveToObsidian() {
+  fillDerivedFeedback();
   const md = serialize(state.model);
   const path = SESSION_PATH_PREFIX + state.filename;
   // iOS Safari truncates large data params in custom URI schemes (>~8 KB).
