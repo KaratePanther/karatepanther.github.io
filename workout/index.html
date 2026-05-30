@@ -165,6 +165,31 @@
   }
   .rpe-row .rpe-btn.selected { background: #2d8757; }
 
+  /* RPE slider (actual, in round cards) */
+  .rpe-slider { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 120px; }
+  .rpe-slider input[type=range] {
+    flex: 1; -webkit-appearance: none; appearance: none;
+    height: 6px; border-radius: 3px; background: #444; padding: 0; margin: 0;
+  }
+  .rpe-slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+    background: #2d8757; border: 2px solid #1a1a1a; cursor: pointer;
+  }
+  .rpe-slider .rpe-val {
+    flex: 0 0 auto; min-width: 34px; text-align: center;
+    font-weight: 700; color: #b0d4ff; font-variant-numeric: tabular-nums;
+  }
+  .field-prefill.planned { color: #9a9a9a; }
+
+  /* collapsible session summary */
+  .summary-head {
+    cursor: pointer; color: #6ab0e6; font-size: 0.82em; letter-spacing: 0.04em;
+    user-select: none; display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  }
+  .summary-head .arrow { font-size: 0.9em; }
+  .summary-body { overflow: hidden; transition: max-height 0.28s ease; }
+  .summary-body .meta-inner { padding-top: 6px; }
+
   /* top bar: total timer + view toggle + wake status */
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
@@ -238,6 +263,7 @@ let state = {
   totalSeconds: 0,      // count-up total workout time (persisted)
   viewMode: "overview", // "overview" (full scroll) | "focus" (one section)
   focusIndex: 0,        // which section is shown in focus mode
+  summaryOpen: true,    // session-summary collapsible (persisted across focus nav)
   dirty: false,         // edits made but not yet sent to Obsidian
 };
 
@@ -473,21 +499,37 @@ function serializeTable(tbl) {
 }
 
 //---------------------------------------------------------
-// Detection of "actual" columns (editable)
+// Per-column behaviour: "ro" (planned, read-only) | "text" (actual) | "rpe" (slider)
 //---------------------------------------------------------
-function getEditableColumns(table) {
-  // A column is editable if header contains "actual" or "rpe", OR if any cell is empty
-  const cols = [];
-  for (let c = 0; c < table.headers.length; c++) {
-    const h = table.headers[c].toLowerCase();
-    const isActual = /actual|rpe|reps?|notes?/i.test(h);
-    let hasEmpty = false;
-    for (const r of table.data) {
-      if (!r[c] || r[c].trim() === "") { hasEmpty = true; break; }
-    }
-    cols.push(isActual || hasEmpty);
-  }
-  return cols;
+function getColumnKinds(table) {
+  return table.headers.map((hdr, c) => {
+    const h = (hdr || "").toLowerCase().trim();
+    if (c === 0) return "ro";                                   // set/round label
+    // Planned columns are read-only — checked FIRST so "Plan RPE" stays read-only
+    if (/plan|target|prescrib|^load$|^load\b/.test(h)) return "ro";
+    if (/rpe/.test(h)) return "rpe";                            // ACTUAL rpe → slider
+    if (/actual|notes?|reps?/.test(h)) return "text";          // actual reps / load
+    // Unknown column: editable only if it has blank cells (backward compat), else read-only
+    return table.data.some(r => !r[c] || r[c].trim() === "") ? "text" : "ro";
+  });
+}
+
+// Compact RPE slider (1–10, 0.5 steps). Stays blank until first touch so we don't
+// fabricate a value the user never set. Returns the field element.
+function makeRpeField(initial, onSet) {
+  const wrap = document.createElement("div");
+  wrap.className = "rpe-slider";
+  const range = document.createElement("input");
+  range.type = "range"; range.min = "1"; range.max = "10"; range.step = "0.5";
+  const has = initial != null && String(initial).trim() !== "";
+  range.value = has ? parseFloat(initial) : 7;
+  const bubble = document.createElement("span");
+  bubble.className = "rpe-val";
+  bubble.textContent = has ? String(initial).trim() : "–";
+  range.oninput = () => { bubble.textContent = range.value; onSet(range.value); };
+  wrap.appendChild(range);
+  wrap.appendChild(bubble);
+  return wrap;
 }
 
 //---------------------------------------------------------
@@ -531,7 +573,8 @@ function renderSession(app) {
   head.className = "card";
   head.innerHTML = `
     <h1>${escapeHtml(m.title)}</h1>
-    <p class="meta">${m.preamble.filter(l => l.startsWith("**")).map(escapeHtml).join("<br>")}</p>
+    <div class="summary-head" id="summaryHead" onclick="toggleSummary()"><span class="arrow">▾</span> Session summary</div>
+    <div class="summary-body" id="summaryBody"><div class="meta meta-inner">${m.preamble.filter(l => l.startsWith("**")).map(mdInline).join("<br>")}</div></div>
     <div class="topbar">
       <div class="total-wrap">
         <div class="tlabel">TOTAL TIME</div>
@@ -596,6 +639,7 @@ function renderSession(app) {
   `;
   app.appendChild(save);
 
+  applySummaryState();
   syncTimerUI();
   updateWakeStatus();
 }
@@ -646,13 +690,13 @@ function renderBlock(card, sec, idx, focus) {
   const desc = sec.description.filter(l => l.trim()).join("\n").trim();
   if (desc) {
     const d = document.createElement("details");
-    d.innerHTML = `<summary>Description</summary><div>${escapeHtml(desc).replace(/\n/g, "<br>")}</div>`;
+    d.innerHTML = `<summary>Description</summary><div>${mdBlock(desc)}</div>`;
     card.appendChild(d);
   }
 
   // table → round cards
   if (sec.table) {
-    const editable = getEditableColumns(sec.table);
+    const kinds = getColumnKinds(sec.table);
     sec.table.data.forEach((row, ri) => {
       const rc = document.createElement("div");
       rc.className = "round-card";
@@ -674,21 +718,26 @@ function renderBlock(card, sec, idx, focus) {
         lab.className = "field-label";
         lab.textContent = sec.table.headers[ci];
         fld.appendChild(lab);
-        if (editable[ci]) {
+        if (kinds[ci] === "text") {
           const inp = document.createElement("input");
           inp.type = "text";
           inp.value = row[ci] || "";
           inp.placeholder = inferPlaceholder(sec.table.headers[ci]);
-          inp.oninput = () => { sec.table.data[ri][ci] = inp.value; autosave(); };
-          // finishing a set (value entered, focus leaves) → start total + this exercise's rest
-          inp.onchange = () => {
-            ensureTotalStarted();
-            if (inp.value.trim()) startTimer(restSecs);
+          inp.oninput = () => {
+            sec.table.data[ri][ci] = inp.value;
+            ensureTotalStarted();   // first entry starts the total clock; NO auto rest timer
+            autosave();
           };
           fld.appendChild(inp);
-        } else {
+        } else if (kinds[ci] === "rpe") {
+          fld.appendChild(makeRpeField(row[ci], (v) => {
+            sec.table.data[ri][ci] = v;
+            ensureTotalStarted();
+            autosave();
+          }));
+        } else { // read-only planned value
           const pre = document.createElement("div");
-          pre.className = "field-prefill";
+          pre.className = "field-prefill planned";
           pre.textContent = row[ci] || "—";
           fld.appendChild(pre);
         }
@@ -703,7 +752,7 @@ function renderBlock(card, sec, idx, focus) {
   if (co) {
     const d = document.createElement("details");
     if (focus) d.open = true;
-    d.innerHTML = `<summary>Coaching</summary><div>${escapeHtml(co).replace(/\n/g, "<br>")}</div>`;
+    d.innerHTML = `<summary>Coaching</summary><div>${mdBlock(co)}</div>`;
     card.appendChild(d);
   }
 }
@@ -756,7 +805,7 @@ function renderBulletSection(card, sec, idx) {
   const ul = document.createElement("ul");
   sec.items.forEach((it) => {
     const li = document.createElement("li");
-    li.textContent = it;
+    li.innerHTML = mdInline(it);
     ul.appendChild(li);
   });
   card.appendChild(ul);
@@ -802,6 +851,7 @@ function loadSession(md, filename) {
     state.totalSeconds = 0;
     state.viewMode = "overview";
     state.focusIndex = 0;
+    state.summaryOpen = true;
     state.dirty = false;       // fresh load, nothing entered yet
     persist();
     requestWakeLock();
@@ -820,7 +870,7 @@ function resetSession() {
   stopTotal();
   // intentionally keep the persisted autosave so user can restore
   state = { rawMarkdown: "", model: null, filename: "", loadedAt: null,
-            totalSeconds: 0, viewMode: "overview", focusIndex: 0, dirty: false };
+            totalSeconds: 0, viewMode: "overview", focusIndex: 0, summaryOpen: true, dirty: false };
   render();
 }
 
@@ -884,23 +934,33 @@ async function saveToObsidian() {
 //---------------------------------------------------------
 // Total workout timer (count up)
 //---------------------------------------------------------
-let totalRunning = false, totalTick = null;
+// Wall-clock based so it can't lose time when iOS throttles/pauses timers while the
+// screen is locked or the app is backgrounded. We anchor to Date.now() on start and
+// recompute elapsed on every tick + on refocus — no per-second incrementing to drift.
+let totalRunning = false, totalTick = null, totalAnchor = 0, totalBase = 0;
 
 function ensureTotalStarted() { if (!totalRunning) startTotal(); }
+
+function recomputeTotal() {
+  state.totalSeconds = totalBase + Math.round((Date.now() - totalAnchor) / 1000);
+  const el = document.getElementById("totalDisplay");
+  if (el) el.textContent = fmtClock(state.totalSeconds);
+}
 
 function startTotal() {
   if (totalRunning) return;
   totalRunning = true;
+  totalBase = state.totalSeconds || 0;
+  totalAnchor = Date.now();
   totalTick = setInterval(() => {
-    state.totalSeconds = (state.totalSeconds || 0) + 1;
-    const el = document.getElementById("totalDisplay");
-    if (el) el.textContent = fmtClock(state.totalSeconds);
+    recomputeTotal();
     if (state.totalSeconds % 10 === 0) persist();   // checkpoint, doesn't flip dirty
   }, 1000);
   updateTotalBtn();
 }
 
 function stopTotal() {
+  if (totalRunning) recomputeTotal();
   totalRunning = false;
   if (totalTick) clearInterval(totalTick);
   totalTick = null;
@@ -971,6 +1031,29 @@ function focusStep(d) {
 }
 
 //---------------------------------------------------------
+// Collapsible session summary (state remembered across focus nav)
+//---------------------------------------------------------
+function toggleSummary() {
+  state.summaryOpen = !state.summaryOpen;
+  persist();
+  applySummaryState();
+}
+
+function applySummaryState() {
+  const body = document.getElementById("summaryBody");
+  const head = document.getElementById("summaryHead");
+  if (!body || !head) return;
+  const arrow = head.querySelector(".arrow");
+  if (state.summaryOpen) {
+    body.style.maxHeight = body.scrollHeight + "px";
+    if (arrow) arrow.textContent = "▾";
+  } else {
+    body.style.maxHeight = "0px";
+    if (arrow) arrow.textContent = "▸";
+  }
+}
+
+//---------------------------------------------------------
 // Wake lock (keep screen on)
 //---------------------------------------------------------
 let wakeLock = null;
@@ -986,8 +1069,12 @@ async function requestWakeLock() {
 }
 
 document.addEventListener("visibilitychange", () => {
-  // wake lock drops when the tab is hidden — re-acquire when it comes back
-  if (document.visibilityState === "visible" && !wakeLock) requestWakeLock();
+  if (document.visibilityState === "visible") {
+    // wake lock drops when the tab is hidden — re-acquire when it comes back
+    if (!wakeLock) requestWakeLock();
+    // timers may have been throttled while hidden — resync from wall clock immediately
+    if (totalRunning) recomputeTotal();
+  }
 });
 
 function updateWakeStatus() {
@@ -1034,6 +1121,7 @@ document.getElementById("timerPresets").addEventListener("click", (e) => {
 });
 
 function startTimer(secs) {
+  if (timerState.tick) clearInterval(timerState.tick);   // never stack intervals
   timerState.running = true;
   timerState.duration = secs;
   timerState.endsAt = Date.now() + secs * 1000;
@@ -1095,6 +1183,19 @@ function escapeHtml(s) {
   }[c]));
 }
 
+// Minimal inline markdown → HTML: **bold**, *italic*, `code`. Escapes first (XSS-safe).
+function mdInline(s) {
+  let h = escapeHtml(s);
+  h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  h = h.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+  return h;
+}
+// Same, but for multi-line blocks (newlines → <br>).
+function mdBlock(s) {
+  return mdInline(s).replace(/\n/g, "<br>");
+}
+
 function todayISO() {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
@@ -1124,6 +1225,7 @@ function toast(msg, err) {
   state.totalSeconds = state.totalSeconds || 0;
   state.viewMode = state.viewMode || "overview";
   state.focusIndex = state.focusIndex || 0;
+  if (typeof state.summaryOpen !== "boolean") state.summaryOpen = true;
   totalRunning = false;
   render();
   requestWakeLock();
