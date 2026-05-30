@@ -165,6 +165,32 @@
   }
   .rpe-row .rpe-btn.selected { background: #2d8757; }
 
+  /* top bar: total timer + view toggle + wake status */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 8px; gap: 8px;
+  }
+  .topbar .tlabel { font-size: 0.62em; color: #888; letter-spacing: 0.08em; }
+  .topbar .total {
+    font-size: 1.9em; font-weight: 800; color: #fff; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .topbar-btns { display: flex; gap: 6px; }
+  .mini { min-height: 40px; padding: 8px 12px; font-size: 0.95em; min-width: auto; }
+  .wake-status {
+    font-size: 0.8em; color: #888; margin-top: 8px; cursor: pointer;
+    display: flex; align-items: center;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot.on { background: #2d8757; }
+  .dot.off { background: #777; }
+
+  /* focus-mode nav */
+  .focus-nav { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+  .focus-nav button { flex: 1; min-width: auto; }
+  .focus-nav button:disabled { opacity: 0.4; }
+  .focus-pos { flex: 0 0 auto; color: #aaa; font-size: 0.9em; min-width: 54px; text-align: center; }
+
   /* toast */
   .toast {
     position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
@@ -209,6 +235,10 @@ let state = {
   model: null,          // parsed structured model
   filename: "",         // YYYY-MM-DD.md
   loadedAt: null,
+  totalSeconds: 0,      // count-up total workout time (persisted)
+  viewMode: "overview", // "overview" (full scroll) | "focus" (one section)
+  focusIndex: 0,        // which section is shown in focus mode
+  dirty: false,         // edits made but not yet sent to Obsidian
 };
 
 //---------------------------------------------------------
@@ -496,28 +526,61 @@ function renderWelcome(app) {
 
 function renderSession(app) {
   const m = state.model;
-  // header
+  // header + top bar (total timer, wake lock, view toggle)
   const head = document.createElement("div");
   head.className = "card";
   head.innerHTML = `
     <h1>${escapeHtml(m.title)}</h1>
     <p class="meta">${m.preamble.filter(l => l.startsWith("**")).map(escapeHtml).join("<br>")}</p>
+    <div class="topbar">
+      <div class="total-wrap">
+        <div class="tlabel">TOTAL TIME</div>
+        <div class="total" id="totalDisplay">${fmtClock(state.totalSeconds || 0)}</div>
+      </div>
+      <div class="topbar-btns">
+        <button class="mini primary" id="totalBtn" onclick="toggleTotal()">▶</button>
+        <button class="mini secondary" id="totalReset" onclick="resetTotal()">⟲</button>
+        <button class="mini" id="viewToggle" onclick="toggleView()">${state.viewMode === 'focus' ? 'Overview' : 'Focus'}</button>
+      </div>
+    </div>
+    <div class="wake-status" id="wakeStatus" onclick="requestWakeLock()"></div>
     <div class="btn-row" style="margin-top:8px">
       <button class="ghost" onclick="resetSession()">Load different session</button>
     </div>
   `;
   app.appendChild(head);
 
-  // sections
-  m.sections.forEach((sec, idx) => {
+  // sections — overview (full scroll) or focus (one section at a time)
+  if (state.viewMode === "focus") {
+    const idx = Math.max(0, Math.min(state.focusIndex || 0, m.sections.length - 1));
+    state.focusIndex = idx;
+    const navHtml = `
+      <button class="secondary" ${idx === 0 ? "disabled" : ""} onclick="focusStep(-1)">← Prev</button>
+      <div class="focus-pos">${idx + 1} / ${m.sections.length}</div>
+      <button class="secondary" ${idx === m.sections.length - 1 ? "disabled" : ""} onclick="focusStep(1)">Next →</button>
+    `;
+    const navTop = document.createElement("div");
+    navTop.className = "focus-nav";
+    navTop.innerHTML = navHtml;
+    app.appendChild(navTop);
+
     const card = document.createElement("div");
     card.className = "card";
-    if (sec.type === "checklist") renderChecklist(card, sec, idx);
-    else if (sec.type === "block") renderBlock(card, sec, idx);
-    else if (sec.type === "feedback") renderFeedback(card, sec, idx);
-    else renderBulletSection(card, sec, idx);
+    renderOneSection(card, m.sections[idx], idx, true);
     app.appendChild(card);
-  });
+
+    const navBot = document.createElement("div");
+    navBot.className = "focus-nav";
+    navBot.innerHTML = navHtml;
+    app.appendChild(navBot);
+  } else {
+    m.sections.forEach((sec, idx) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      renderOneSection(card, sec, idx, false);
+      app.appendChild(card);
+    });
+  }
 
   // save bar
   const save = document.createElement("div");
@@ -532,6 +595,16 @@ function renderSession(app) {
     <p class="hint">If Obsidian doesn't open: tap Copy and paste into the file manually.</p>
   `;
   app.appendChild(save);
+
+  syncTimerUI();
+  updateWakeStatus();
+}
+
+function renderOneSection(card, sec, idx, focus) {
+  if (sec.type === "checklist") renderChecklist(card, sec, idx);
+  else if (sec.type === "block") renderBlock(card, sec, idx, focus);
+  else if (sec.type === "feedback") renderFeedback(card, sec, idx);
+  else renderBulletSection(card, sec, idx);
 }
 
 function renderChecklist(card, sec, idx) {
@@ -549,6 +622,7 @@ function renderChecklist(card, sec, idx) {
     cb.onchange = () => {
       sec.items[i].done = cb.checked;
       li.classList.toggle("done", cb.checked);
+      if (cb.checked && /^warmup/i.test(sec.heading)) ensureTotalStarted();
       autosave();
     };
     const span = document.createElement("span");
@@ -560,10 +634,13 @@ function renderChecklist(card, sec, idx) {
   card.appendChild(ul);
 }
 
-function renderBlock(card, sec, idx) {
+function renderBlock(card, sec, idx, focus) {
   const h = document.createElement("h2");
   h.textContent = sec.heading;
   card.appendChild(h);
+
+  // rest duration parsed from the heading (e.g. "~2 min rest", "~90s rest")
+  const restSecs = parseRestSeconds(sec.heading) || 90;
 
   // description (collapsed)
   const desc = sec.description.filter(l => l.trim()).join("\n").trim();
@@ -585,8 +662,8 @@ function renderBlock(card, sec, idx) {
       label.innerHTML = `<span>Round ${escapeHtml(roundName)}</span>`;
       const restBtn = document.createElement("button");
       restBtn.className = "rest-btn";
-      restBtn.textContent = "Rest";
-      restBtn.onclick = (e) => { e.stopPropagation(); openTimerMenu(); };
+      restBtn.textContent = `Rest ${fmtRest(restSecs)}`;
+      restBtn.onclick = (e) => { e.stopPropagation(); startTimer(restSecs); };
       label.appendChild(restBtn);
       rc.appendChild(label);
 
@@ -603,6 +680,11 @@ function renderBlock(card, sec, idx) {
           inp.value = row[ci] || "";
           inp.placeholder = inferPlaceholder(sec.table.headers[ci]);
           inp.oninput = () => { sec.table.data[ri][ci] = inp.value; autosave(); };
+          // finishing a set (value entered, focus leaves) → start total + this exercise's rest
+          inp.onchange = () => {
+            ensureTotalStarted();
+            if (inp.value.trim()) startTimer(restSecs);
+          };
           fld.appendChild(inp);
         } else {
           const pre = document.createElement("div");
@@ -616,10 +698,11 @@ function renderBlock(card, sec, idx) {
     });
   }
 
-  // coaching (collapsed)
+  // coaching — collapsed in overview, expanded in focus mode
   const co = sec.coaching.filter(l => l.trim()).join("\n").trim();
   if (co) {
     const d = document.createElement("details");
+    if (focus) d.open = true;
     d.innerHTML = `<summary>Coaching</summary><div>${escapeHtml(co).replace(/\n/g, "<br>")}</div>`;
     card.appendChild(d);
   }
@@ -711,11 +794,17 @@ function loadFromFile(ev) {
 function loadSession(md, filename) {
   try {
     const model = parseMarkdown(md);
+    stopTotal();
     state.rawMarkdown = md;
     state.model = model;
     state.filename = filename;
     state.loadedAt = Date.now();
-    autosave();
+    state.totalSeconds = 0;
+    state.viewMode = "overview";
+    state.focusIndex = 0;
+    state.dirty = false;       // fresh load, nothing entered yet
+    persist();
+    requestWakeLock();
     render();
   } catch (e) {
     console.error(e);
@@ -724,16 +813,27 @@ function loadSession(md, filename) {
 }
 
 function resetSession() {
-  if (!confirm("Discard current session and load a different one? Inputs are autosaved and can be restored.")) return;
-  state = { rawMarkdown: "", model: null, filename: "", loadedAt: null };
-  // intentionally keep autosave so user can restore
+  const msg = state.dirty
+    ? "You have edits that haven't been sent to Obsidian. Load a different session anyway?\n\n(Your current inputs stay autosaved and can be restored — until you load AND edit a new session.)"
+    : "Load a different session? Inputs are autosaved and can be restored.";
+  if (!confirm(msg)) return;
+  stopTotal();
+  // intentionally keep the persisted autosave so user can restore
+  state = { rawMarkdown: "", model: null, filename: "", loadedAt: null,
+            totalSeconds: 0, viewMode: "overview", focusIndex: 0, dirty: false };
   render();
 }
 
-function autosave() {
+function persist() {
   try {
     localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(state));
-  } catch (e) { console.warn("autosave failed", e); }
+  } catch (e) { console.warn("persist failed", e); }
+}
+
+// autosave = a content edit happened → mark dirty + persist
+function autosave() {
+  state.dirty = true;
+  persist();
 }
 
 function hasAutosave() {
@@ -776,7 +876,128 @@ async function saveToObsidian() {
   }
   const uri = `obsidian://advanced-uri?vault=${encodeURIComponent(VAULT_NAME)}&filepath=${encodeURIComponent(path)}&clipboard=true&mode=overwrite`;
   window.location.href = uri;
+  state.dirty = false;   // sent — safe to load another session without warning
+  persist();
   setTimeout(() => toast("Sent to Obsidian via clipboard"), 400);
+}
+
+//---------------------------------------------------------
+// Total workout timer (count up)
+//---------------------------------------------------------
+let totalRunning = false, totalTick = null;
+
+function ensureTotalStarted() { if (!totalRunning) startTotal(); }
+
+function startTotal() {
+  if (totalRunning) return;
+  totalRunning = true;
+  totalTick = setInterval(() => {
+    state.totalSeconds = (state.totalSeconds || 0) + 1;
+    const el = document.getElementById("totalDisplay");
+    if (el) el.textContent = fmtClock(state.totalSeconds);
+    if (state.totalSeconds % 10 === 0) persist();   // checkpoint, doesn't flip dirty
+  }, 1000);
+  updateTotalBtn();
+}
+
+function stopTotal() {
+  totalRunning = false;
+  if (totalTick) clearInterval(totalTick);
+  totalTick = null;
+  persist();
+  updateTotalBtn();
+}
+
+function toggleTotal() { totalRunning ? stopTotal() : startTotal(); }
+
+function resetTotal() {
+  if (!confirm("Reset total workout time to 0:00?")) return;
+  stopTotal();
+  state.totalSeconds = 0;
+  const el = document.getElementById("totalDisplay");
+  if (el) el.textContent = fmtClock(0);
+  persist();
+}
+
+function updateTotalBtn() {
+  const b = document.getElementById("totalBtn");
+  if (b) b.textContent = totalRunning ? "⏸" : "▶";
+}
+
+function syncTimerUI() {
+  const el = document.getElementById("totalDisplay");
+  if (el) el.textContent = fmtClock(state.totalSeconds || 0);
+  updateTotalBtn();
+}
+
+function fmtClock(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h > 0 ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0");
+}
+
+function fmtRest(s) {
+  return s >= 60 && s % 60 === 0 ? (s / 60) + "m" : (s >= 60 ? Math.floor(s / 60) + "m" + (s % 60) + "s" : s + "s");
+}
+
+// Parse rest seconds from a heading like "(4 sets, ~2 min rest)" or "(~90s rest)"
+function parseRestSeconds(heading) {
+  if (!heading) return 0;
+  const h = heading.toLowerCase();
+  let secs = 0, found = false;
+  const min = h.match(/(\d+(?:\.\d+)?)\s*min/);
+  if (min) { secs += parseFloat(min[1]) * 60; found = true; }
+  const sec = h.match(/(\d+)\s*s(?:ec)?\b/);
+  if (sec) { secs += parseInt(sec[1], 10); found = true; }
+  return found ? Math.round(secs) : 0;
+}
+
+//---------------------------------------------------------
+// View mode (overview / focus)
+//---------------------------------------------------------
+function toggleView() {
+  state.viewMode = state.viewMode === "focus" ? "overview" : "focus";
+  persist();
+  render();
+  window.scrollTo(0, 0);
+}
+
+function focusStep(d) {
+  const n = state.model.sections.length;
+  state.focusIndex = Math.max(0, Math.min((state.focusIndex || 0) + d, n - 1));
+  persist();
+  render();
+  window.scrollTo(0, 0);
+}
+
+//---------------------------------------------------------
+// Wake lock (keep screen on)
+//---------------------------------------------------------
+let wakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ("wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; updateWakeStatus(); });
+    }
+  } catch (e) { wakeLock = null; }
+  updateWakeStatus();
+}
+
+document.addEventListener("visibilitychange", () => {
+  // wake lock drops when the tab is hidden — re-acquire when it comes back
+  if (document.visibilityState === "visible" && !wakeLock) requestWakeLock();
+});
+
+function updateWakeStatus() {
+  const el = document.getElementById("wakeStatus");
+  if (!el) return;
+  const supported = "wakeLock" in navigator;
+  const on = !!wakeLock;
+  el.innerHTML = supported
+    ? `<span class="dot ${on ? "on" : "off"}"></span>${on ? "Screen stays on" : "Tap to keep screen on"}`
+    : `<span class="dot off"></span>Wake-lock not supported on this browser`;
 }
 
 //---------------------------------------------------------
@@ -896,10 +1117,16 @@ function toast(msg, err) {
     const s = localStorage.getItem(LOCALSTORAGE_KEY);
     if (s) {
       const parsed = JSON.parse(s);
-      if (parsed && parsed.model) state = parsed;
+      if (parsed && parsed.model) state = Object.assign(state, parsed);
     }
   } catch (e) { console.warn("init restore failed", e); }
+  // normalize fields that older saves won't have; total timer always resumes paused
+  state.totalSeconds = state.totalSeconds || 0;
+  state.viewMode = state.viewMode || "overview";
+  state.focusIndex = state.focusIndex || 0;
+  totalRunning = false;
   render();
+  requestWakeLock();
 })();
 </script>
 </body>
