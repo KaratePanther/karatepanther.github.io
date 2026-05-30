@@ -47,6 +47,12 @@
   <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 
   <link rel="stylesheet" href="style.css">
+  <style>
+    .lang-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+    .lang-toggle button { background: none; border: none; cursor: pointer; padding: 2px 4px; color: var(--muted, #999); font: inherit; }
+    .lang-toggle button.active { color: var(--accent, #b8860b); }
+    .lang-toggle .sep { color: #ccc; }
+  </style>
 </head>
 <body>
 
@@ -56,10 +62,17 @@
       <a class="nav-brand" href="/">Anton Ko</a>
       <button class="nav-burger" aria-expanded="false" aria-label="Toggle menu">&#9776;</button>
       <ul class="nav-links">
-        <li><a href="#products">Products</a></li>
-        <li><a href="#now">Now</a></li>
-        <li><a href="#about">About</a></li>
-        <li><a href="#contact">Contact</a></li>
+        <li><a href="#products" data-i18n="nav_products">Products</a></li>
+        <li><a href="#now" data-i18n="nav_now">Now</a></li>
+        <li><a href="#about" data-i18n="nav_about">About</a></li>
+        <li><a href="#contact" data-i18n="nav_contact">Contact</a></li>
+        <li>
+          <span class="lang-toggle" id="langToggle">
+            <button type="button" data-set-lang="it">IT</button>
+            <span class="sep">|</span>
+            <button type="button" data-set-lang="en">EN</button>
+          </span>
+        </li>
       </ul>
     </div>
   </nav>
@@ -69,15 +82,15 @@
     <div class="container">
       <div class="hero-content">
         <p class="hero-eyebrow">Anton Ko Studio</p>
-        <h1>I build products<br>that grow businesses.</h1>
-        <p class="hero-sub">
+        <h1 data-i18n="hero_h1">I build products<br>that grow businesses.</h1>
+        <p class="hero-sub" data-i18n="hero_sub">
           Product manager and builder. I ship AI-powered tools for
           e-commerce and small business — backed by 15 years of doing it
           for a premium retail brand.
         </p>
         <div class="hero-cta">
-          <a class="btn btn-primary" href="#products">See what I'm building</a>
-          <a class="btn btn-secondary" href="#contact">Get in touch</a>
+          <a class="btn btn-primary" href="#products" data-i18n="hero_cta1">See what I'm building</a>
+          <a class="btn btn-secondary" href="#contact" data-i18n="hero_cta2">Get in touch</a>
         </div>
       </div>
     </div>
@@ -86,25 +99,25 @@
   <!-- PRODUCTS -->
   <section id="products">
     <div class="container">
-      <p class="section-label">Products</p>
-      <h2 class="section-title">What I've shipped</h2>
+      <p class="section-label" data-i18n="products_label">Products</p>
+      <h2 class="section-title" data-i18n="products_title">What I've shipped</h2>
       <div class="products-grid">
         <a class="product-card product-card--featured" href="https://luceo.antonko.com" target="_blank" rel="noopener">
-          <span class="product-badge badge-live">Live</span>
+          <span class="product-badge badge-live" data-i18n="badge_live">Live</span>
           <h3>Luceo</h3>
-          <p class="product-desc">AI product photography for e-commerce. Upload a photo of your product, get studio-quality shots in seconds. No photographer, no studio, no editing.</p>
+          <p class="product-desc" data-i18n="luceo_desc">AI product photography for e-commerce. Upload a photo of your product, get studio-quality shots in seconds. No photographer, no studio, no editing.</p>
           <ul class="product-features">
-            <li>5 business categories with tailored prompts</li>
-            <li>Upload once, get multiple styled shots</li>
-            <li>Built with AI + React</li>
+            <li data-i18n="luceo_feat1">5 business categories with tailored prompts</li>
+            <li data-i18n="luceo_feat2">Upload once, get multiple styled shots</li>
+            <li data-i18n="luceo_feat3">Built with AI + React</li>
           </ul>
-          <span class="product-link">Try Luceo &rarr;</span>
+          <span class="product-link" data-i18n="luceo_link">Try Luceo &rarr;</span>
         </a>
         <div class="product-card">
-          <span class="product-badge badge-soon">Coming soon</span>
-          <h3>Next up</h3>
-          <p class="product-desc">More tools for small businesses selling online. If you have a problem worth solving, I want to hear about it.</p>
-          <a class="product-link" href="#contact">Tell me what you need &rarr;</a>
+          <span class="product-badge badge-soon" data-i18n="soon_badge">Coming soon</span>
+          <h3 data-i18n="soon_title">Next up</h3>
+          <p class="product-desc" data-i18n="soon_desc">More tools for small businesses selling online. If you have a problem worth solving, I want to hear about it.</p>
+          <a class="product-link" href="#contact" data-i18n="soon_link">Tell me what you need &rarr;</a>
         </div>
       </div>
     </div>
@@ -113,18 +126,18 @@
   <!-- NOW -->
   <section id="now">
     <div class="container">
-      <p class="section-label">Now</p>
-      <h2 class="section-title">What I'm working on</h2>
+      <p class="section-label" data-i18n="now_label">Now</p>
+      <h2 class="section-title" data-i18n="now_title">What I'm working on</h2>
       <div class="now-grid">
         <div class="now-item">
-          <h3>Shipping Luceo v2</h3>
-          <p>Adding batch processing, new categories, and improving generation quality based on early user feedback.</p>
+          <h3 data-i18n="now1_title">Shipping Luceo v2</h3>
+          <p data-i18n="now1_desc">Adding batch processing, new categories, and improving generation quality based on early user feedback.</p>
         </div>
         <div class="now-item">
-          <h3>Building the next tool</h3>
-          <p>Researching problems in e-commerce operations that AI can actually solve — not just demos, real workflows.</p>
+          <h3 data-i18n="now2_title">Building the next tool</h3>
+          <p data-i18n="now2_desc">Researching problems in e-commerce operations that AI can actually solve — not just demos, real workflows.</p>
         </div>
-        <div class="now-item">
+        <div class="now-item" data-lang-only="en">
           <h3>Open to PM roles</h3>
           <p>Selectively exploring product manager positions in EU (remote/hybrid). Especially interested in AI, e-commerce, and growth.</p>
         </div>
@@ -135,25 +148,25 @@
   <!-- ABOUT -->
   <section id="about">
     <div class="container">
-      <p class="section-label">About</p>
+      <p class="section-label" data-i18n="about_label">About</p>
       <div class="about-layout">
         <img src="anton-ko.jpeg" alt="Anton Korolev" class="about-photo">
         <div class="about-body">
-          <h2 class="section-title">Hey, I'm Anton.</h2>
-          <p>
+          <h2 class="section-title" data-i18n="about_title">Hey, I'm Anton.</h2>
+          <p data-i18n="about_p1">
             I spent 15 years growing a premium retail brand — from managing stores in Moscow
             to running product, e-commerce, and marketing for the whole business.
             I drove 3.6x online growth, delivered $6M+ in revenue, cut CAC in half, and built the analytics layer from scratch.
           </p>
-          <p>
+          <p data-i18n="about_p2">
             Now I'm in Northern Italy building my own things.
             I believe the best products come from people who've felt the problem firsthand —
             that's why I build tools for the kind of businesses I used to run.
           </p>
           <div class="about-proof">
-            <span class="proof-item"><strong>3.6x</strong> online growth</span>
-            <span class="proof-item"><strong>$6M+</strong> revenue driven</span>
-            <span class="proof-item"><strong>15+</strong> years in product & ops</span>
+            <span class="proof-item"><strong>3.6x</strong> <span data-i18n="proof1">online growth</span></span>
+            <span class="proof-item"><strong>$6M+</strong> <span data-i18n="proof2">revenue driven</span></span>
+            <span class="proof-item"><strong>15+</strong> <span data-i18n="proof3">years in product &amp; ops</span></span>
           </div>
         </div>
       </div>
@@ -163,14 +176,14 @@
   <!-- CONTACT -->
   <section id="contact">
     <div class="container">
-      <p class="section-label">Contact</p>
-      <h2 class="section-title">Let's talk</h2>
-      <p class="section-desc">
+      <p class="section-label" data-i18n="contact_label">Contact</p>
+      <h2 class="section-title" data-i18n="contact_title">Let's talk</h2>
+      <p class="section-desc" data-i18n="contact_desc">
         Have a project in mind, want to try Luceo for your business,
         or just want to say hi — drop me a line.
       </p>
       <div class="contact-links">
-        <a class="contact-link" id="email-link" href="#">Loading...</a>
+        <a class="contact-link" id="email-link" href="#" data-i18n="email_link">Email me</a>
         <a class="contact-link" href="https://www.linkedin.com/in/anton-korolev" target="_blank" rel="noopener">LinkedIn</a>
         <a class="contact-link" href="https://github.com/KaratePanther" target="_blank" rel="noopener">GitHub</a>
       </div>
@@ -180,7 +193,7 @@
   <!-- FOOTER -->
   <footer class="footer">
     <div class="container">
-      <small>&copy; <span id="y"></span> Anton Ko &middot; Verona, Italy</small>
+      <small>&copy; <span id="y"></span> Anton Ko &middot; <span data-i18n="footer_loc">Verona, Italy</span></small>
       <div class="footer-links">
         <a href="https://luceo.antonko.com" target="_blank" rel="noopener">Luceo</a>
       </div>
@@ -190,13 +203,14 @@
   <script>
     document.getElementById('y').textContent = new Date().getFullYear();
 
+    // Email obfuscation — set href only; text is handled by the i18n layer.
     (function() {
       var u = 'antonko.hq', d = 'gmail.com';
       var el = document.getElementById('email-link');
       el.href = 'mailto:' + u + '@' + d;
-      el.textContent = 'Email me';
     })();
 
+    // Mobile burger menu
     (function() {
       var burger = document.querySelector('.nav-burger');
       var links = document.querySelector('.nav-links');
@@ -211,6 +225,91 @@
           burger.setAttribute('aria-expanded', 'false');
         }
       });
+    })();
+
+    // Lightweight EN/IT i18n. IT is the customer-facing view (Luceo visitors);
+    // EN keeps the recruiter-facing framing. The "Open to PM roles" block shows on EN only.
+    (function() {
+      var I18N = {
+        en: {
+          nav_products: 'Products', nav_now: 'Now', nav_about: 'About', nav_contact: 'Contact',
+          hero_h1: 'I build products<br>that grow businesses.',
+          hero_sub: 'Product manager and builder. I ship AI-powered tools for e-commerce and small business — backed by 15 years of doing it for a premium retail brand.',
+          hero_cta1: "See what I'm building", hero_cta2: 'Get in touch',
+          products_label: 'Products', products_title: "What I've shipped",
+          badge_live: 'Live', luceo_link: 'Try Luceo &rarr;',
+          luceo_desc: 'AI product photography for e-commerce. Upload a photo of your product, get studio-quality shots in seconds. No photographer, no studio, no editing.',
+          luceo_feat1: '5 business categories with tailored prompts',
+          luceo_feat2: 'Upload once, get multiple styled shots',
+          luceo_feat3: 'Built with AI + React',
+          soon_badge: 'Coming soon', soon_title: 'Next up',
+          soon_desc: 'More tools for small businesses selling online. If you have a problem worth solving, I want to hear about it.',
+          soon_link: 'Tell me what you need &rarr;',
+          now_label: 'Now', now_title: "What I'm working on",
+          now1_title: 'Shipping Luceo v2',
+          now1_desc: 'Adding batch processing, new categories, and improving generation quality based on early user feedback.',
+          now2_title: 'Building the next tool',
+          now2_desc: 'Researching problems in e-commerce operations that AI can actually solve — not just demos, real workflows.',
+          about_label: 'About', about_title: "Hey, I'm Anton.",
+          about_p1: 'I spent 15 years growing a premium retail brand — from managing stores in Moscow to running product, e-commerce, and marketing for the whole business. I drove 3.6x online growth, delivered $6M+ in revenue, cut CAC in half, and built the analytics layer from scratch.',
+          about_p2: "Now I'm in Northern Italy building my own things. I believe the best products come from people who've felt the problem firsthand — that's why I build tools for the kind of businesses I used to run.",
+          proof1: 'online growth', proof2: 'revenue driven', proof3: 'years in product &amp; ops',
+          contact_label: 'Contact', contact_title: "Let's talk",
+          contact_desc: 'Have a project in mind, want to try Luceo for your business, or just want to say hi — drop me a line.',
+          email_link: 'Email me', footer_loc: 'Verona, Italy'
+        },
+        it: {
+          nav_products: 'Prodotti', nav_now: 'Ora', nav_about: 'Chi sono', nav_contact: 'Contatti',
+          hero_h1: 'Creo prodotti<br>che fanno crescere le aziende.',
+          hero_sub: 'Product manager e builder. Realizzo strumenti basati su AI per e-commerce e piccole imprese — forte di 15 anni di esperienza in un brand retail premium.',
+          hero_cta1: 'Scopri cosa sto creando', hero_cta2: 'Contattami',
+          products_label: 'Prodotti', products_title: 'Cosa ho realizzato',
+          badge_live: 'Online', luceo_link: 'Prova Luceo &rarr;',
+          luceo_desc: "Fotografia prodotto con AI per l'e-commerce. Carica una foto del tuo prodotto e ottieni scatti di qualità studio in pochi secondi. Senza fotografo, senza studio, senza editing.",
+          luceo_feat1: '5 categorie di prodotto con prompt dedicati',
+          luceo_feat2: 'Carica una volta, ottieni più scatti in stili diversi',
+          luceo_feat3: 'Realizzato con AI + React',
+          soon_badge: 'In arrivo', soon_title: 'Prossimamente',
+          soon_desc: 'Altri strumenti per le piccole imprese che vendono online. Se hai un problema da risolvere, voglio sentirlo.',
+          soon_link: 'Dimmi di cosa hai bisogno &rarr;',
+          now_label: 'Ora', now_title: 'A cosa sto lavorando',
+          now1_title: 'Sto rilasciando Luceo v2',
+          now1_desc: 'Aggiungo elaborazione in serie, nuove categorie e miglioro la qualità delle generazioni in base ai primi feedback.',
+          now2_title: 'Sto costruendo il prossimo strumento',
+          now2_desc: "Studio i problemi reali dell'e-commerce che l'AI può davvero risolvere — non demo, ma flussi di lavoro concreti.",
+          about_label: 'Chi sono', about_title: 'Ciao, sono Anton.',
+          about_p1: "Ho trascorso 15 anni a far crescere un brand retail premium — dalla gestione dei negozi a Mosca alla guida di prodotto, e-commerce e marketing per l'intera azienda. Ho portato una crescita online di 3,6x, generato oltre 6M$ di fatturato, dimezzato il CAC e costruito da zero il sistema di analytics.",
+          about_p2: 'Ora sono nel Nord Italia a costruire i miei progetti. Credo che i prodotti migliori nascano da chi ha vissuto il problema in prima persona — per questo creo strumenti per le attività che gestivo.',
+          proof1: 'crescita online', proof2: 'fatturato generato', proof3: 'anni in prodotto e operations',
+          contact_label: 'Contatti', contact_title: 'Parliamone',
+          contact_desc: 'Hai un progetto in mente, vuoi provare Luceo per la tua attività o semplicemente salutare — scrivimi.',
+          email_link: 'Scrivimi', footer_loc: 'Verona, Italia'
+        }
+      };
+
+      function applyLang(lang) {
+        if (!I18N[lang]) lang = 'en';
+        document.documentElement.setAttribute('lang', lang);
+        try { localStorage.setItem('antonko_lang', lang); } catch (e) {}
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+          var k = el.getAttribute('data-i18n');
+          if (I18N[lang][k] != null) el.innerHTML = I18N[lang][k];
+        });
+        document.querySelectorAll('[data-lang-only]').forEach(function(el) {
+          el.style.display = (el.getAttribute('data-lang-only') === lang) ? '' : 'none';
+        });
+        document.querySelectorAll('[data-set-lang]').forEach(function(b) {
+          b.classList.toggle('active', b.getAttribute('data-set-lang') === lang);
+        });
+      }
+
+      var saved = null;
+      try { saved = localStorage.getItem('antonko_lang'); } catch (e) {}
+      var lang = saved || ((navigator.language || 'en').toLowerCase().indexOf('it') === 0 ? 'it' : 'en');
+      document.querySelectorAll('[data-set-lang]').forEach(function(b) {
+        b.addEventListener('click', function() { applyLang(b.getAttribute('data-set-lang')); });
+      });
+      applyLang(lang);
     })();
   </script>
 </body>
