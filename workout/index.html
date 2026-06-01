@@ -236,13 +236,16 @@
 <main id="app"></main>
 
 <div class="timer-presets" id="timerPresets">
+  <button data-secs="20">20 s</button>
+  <button data-secs="30">30 s</button>
+  <button data-secs="45">45 s</button>
   <button data-secs="60">60 s</button>
   <button data-secs="90">90 s</button>
   <button data-secs="120">2 min</button>
   <button data-secs="180">3 min</button>
 </div>
 <div class="timer-fab" id="timerFab" onclick="toggleTimerMenu()">
-  <div class="label">REST</div>
+  <div class="label">TIMER</div>
   <div class="time" id="timerDisplay">—</div>
 </div>
 
@@ -356,12 +359,17 @@ function parseChecklistSection(heading, lines) {
 function parseBulletSection(heading, lines, subtype) {
   const items = [];
   const trailing = [];
+  let notes = "";
   for (const ln of lines) {
+    const noteM = ln.match(/^\*\*Notes\*\*\s*:\s*(.*)$/i);
+    if (noteM) { notes = noteM[1].trim(); continue; }
+    const cb = ln.match(/^-\s*\[([ xX])\]\s+(.*)$/);   // checkbox bullet (e.g. ankle test)
+    if (cb) { items.push({ done: cb[1].toLowerCase() === "x", text: cb[2].trim() }); continue; }
     const m = ln.match(/^-\s+(.*)$/);
-    if (m) items.push(m[1].trim());
-    else if (ln.trim() !== "" && ln.trim() !== "---") trailing.push(ln);
+    if (m) { items.push({ done: false, text: m[1].trim() }); continue; }
+    if (ln.trim() !== "" && ln.trim() !== "---") trailing.push(ln);
   }
-  return { type: subtype, heading, items, trailing };
+  return { type: subtype, heading, items, trailing, notes };
 }
 
 function parseFeedbackSection(heading, lines) {
@@ -497,10 +505,20 @@ function serializeSection(sec, out) {
       out.push(v ? `- **${f.label}**: ${v}` : `- **${f.label}**:`);
     }
   } else { // next or generic
-    for (const it of sec.items) out.push(`- ${it}`);
+    const asCheckbox = sec.type === "generic";
+    for (const it of sec.items) {
+      const text = typeof it === "string" ? it : it.text;
+      const done = typeof it === "object" && it.done;
+      out.push(asCheckbox ? `- [${done ? "x" : " "}] ${text}` : `- ${text}`);
+    }
     if (sec.trailing && sec.trailing.length) {
       out.push("");
       for (const ln of sec.trailing) out.push(ln);
+    }
+    const noteVal = (sec.notes || "").replace(/\s*\n\s*/g, " ").trim();
+    if (noteVal) {
+      out.push("");
+      out.push(`**Notes**: ${noteVal}`);
     }
   }
 }
@@ -849,13 +867,54 @@ function renderBulletSection(card, sec, idx) {
   const h = document.createElement("h2");
   h.textContent = sec.heading;
   card.appendChild(h);
+  const checkable = sec.type === "generic";   // ankle test / core / rehab — tappable; "next" stays plain
   const ul = document.createElement("ul");
-  sec.items.forEach((it) => {
+  if (checkable) ul.className = "checklist";
+  sec.items.forEach((it, i) => {
+    const text = typeof it === "string" ? it : it.text;
     const li = document.createElement("li");
-    li.innerHTML = mdInline(it);
+    if (checkable) {
+      const done = typeof it === "object" && it.done;
+      if (done) li.classList.add("done");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = done;
+      cb.onchange = () => {
+        if (typeof sec.items[i] === "string") sec.items[i] = { done: false, text: sec.items[i] };
+        sec.items[i].done = cb.checked;
+        li.classList.toggle("done", cb.checked);
+        autosave();
+      };
+      const span = document.createElement("span");
+      span.innerHTML = mdInline(text);
+      li.appendChild(cb);
+      li.appendChild(span);
+    } else {
+      li.innerHTML = mdInline(text);
+    }
     ul.appendChild(li);
   });
   card.appendChild(ul);
+  if (checkable) appendNotesBox(card, sec);
+}
+
+// Shared collapsed "Notes" box (used by block + bullet sections)
+function appendNotesBox(card, sec) {
+  const nd = document.createElement("details");
+  nd.className = "notes-det";
+  if (sec.notes && sec.notes.trim()) nd.open = true;
+  const sum = document.createElement("summary");
+  nd.appendChild(sum);
+  const ndBody = document.createElement("div");
+  const ta = document.createElement("textarea");
+  ta.value = sec.notes || "";
+  ta.rows = 2;
+  ta.placeholder = "Anything to remember about this — form, a tweak, what to change next time.";
+  ta.oninput = () => { sec.notes = ta.value; refreshNoteSummary(sum, ta.value); autosave(); };
+  ndBody.appendChild(ta);
+  nd.appendChild(ndBody);
+  refreshNoteSummary(sum, sec.notes);
+  card.appendChild(nd);
 }
 
 function inferPlaceholder(headerLabel) {
@@ -1138,6 +1197,11 @@ document.addEventListener("visibilitychange", () => {
     if (totalRunning) recomputeTotal();
   }
 });
+
+// iOS only grants wake lock from a user gesture — the on-load request can be denied
+// silently. Re-try on every tap until it sticks (cheap; no-op once held).
+document.addEventListener("touchend", () => { if (!wakeLock) requestWakeLock(); }, { passive: true });
+document.addEventListener("click", () => { if (!wakeLock) requestWakeLock(); }, { passive: true });
 
 function updateWakeStatus() {
   const el = document.getElementById("wakeStatus");
