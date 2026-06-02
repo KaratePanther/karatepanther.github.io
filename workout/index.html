@@ -629,7 +629,7 @@ function renderSession(app) {
         <button class="mini" id="viewToggle" onclick="toggleView()">${state.viewMode === 'focus' ? 'Overview' : 'Focus'}</button>
       </div>
     </div>
-    <div class="wake-status" id="wakeStatus" onclick="requestWakeLock()"></div>
+    <div class="wake-status" id="wakeStatus" onclick="toggleWakeLock()"></div>
     <div class="btn-row" style="margin-top:8px">
       <button class="ghost" onclick="resetSession()">Load different session</button>
     </div>
@@ -1178,39 +1178,73 @@ function applySummaryState() {
 // Wake lock (keep screen on)
 //---------------------------------------------------------
 let wakeLock = null;
+let wakeReq = false;                              // in-flight guard, avoids double-acquire
+const WAKE_PREF_KEY = "workoutapp.v1.wakeOn";
+let wakePref = loadWakePref();                    // persisted ON/OFF, default ON
+
+function loadWakePref() {
+  try {
+    const v = localStorage.getItem(WAKE_PREF_KEY);
+    return v === null ? true : v === "1";         // default: keep screen on
+  } catch (e) { return true; }
+}
+function saveWakePref() {
+  try { localStorage.setItem(WAKE_PREF_KEY, wakePref ? "1" : "0"); } catch (e) {}
+}
 
 async function requestWakeLock() {
+  if (!wakePref) { updateWakeStatus(); return; }  // user turned it off — honour that
+  if (wakeLock || wakeReq) { updateWakeStatus(); return; }   // already held / acquiring
+  wakeReq = true;
   try {
     if ("wakeLock" in navigator) {
       wakeLock = await navigator.wakeLock.request("screen");
       wakeLock.addEventListener("release", () => { wakeLock = null; updateWakeStatus(); });
     }
   } catch (e) { wakeLock = null; }
+  wakeReq = false;
+  updateWakeStatus();
+}
+
+async function releaseWakeLock() {
+  try { if (wakeLock) await wakeLock.release(); } catch (e) {}
+  wakeLock = null;
+  updateWakeStatus();
+}
+
+// Tap the status pill to flip ON↔OFF; the choice is remembered across app restarts.
+function toggleWakeLock() {
+  wakePref = !wakePref;
+  saveWakePref();
+  if (wakePref) requestWakeLock();
+  else releaseWakeLock();
   updateWakeStatus();
 }
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
-    // wake lock drops when the tab is hidden — re-acquire when it comes back
-    if (!wakeLock) requestWakeLock();
+    // wake lock drops when the tab is hidden — re-acquire if the user wants it on
+    if (wakePref && !wakeLock) requestWakeLock();
     // timers may have been throttled while hidden — resync from wall clock immediately
     if (totalRunning) recomputeTotal();
   }
 });
 
 // iOS only grants wake lock from a user gesture — the on-load request can be denied
-// silently. Re-try on every tap until it sticks (cheap; no-op once held).
-document.addEventListener("touchend", () => { if (!wakeLock) requestWakeLock(); }, { passive: true });
-document.addEventListener("click", () => { if (!wakeLock) requestWakeLock(); }, { passive: true });
+// silently. Re-try on every tap until it sticks (only while the pref is ON).
+document.addEventListener("touchend", () => { if (wakePref && !wakeLock) requestWakeLock(); }, { passive: true });
+document.addEventListener("click", () => { if (wakePref && !wakeLock) requestWakeLock(); }, { passive: true });
 
 function updateWakeStatus() {
   const el = document.getElementById("wakeStatus");
   if (!el) return;
-  const supported = "wakeLock" in navigator;
-  const on = !!wakeLock;
-  el.innerHTML = supported
-    ? `<span class="dot ${on ? "on" : "off"}"></span>${on ? "Screen stays on" : "Tap to keep screen on"}`
-    : `<span class="dot off"></span>Wake-lock not supported on this browser`;
+  if (!("wakeLock" in navigator)) {
+    el.innerHTML = `<span class="dot off"></span>Wake-lock not supported on this browser`;
+    return;
+  }
+  el.innerHTML = wakePref
+    ? `<span class="dot on"></span>Screen always ON · tap to turn off`
+    : `<span class="dot off"></span>Screen always OFF · tap to turn on`;
 }
 
 //---------------------------------------------------------
