@@ -1250,7 +1250,7 @@ function updateWakeStatus() {
 //---------------------------------------------------------
 // Rest timer
 //---------------------------------------------------------
-let timerState = { running: false, endsAt: 0, duration: 0, tick: null };
+let timerState = { running: false, endsAt: 0, duration: 0, tick: null, lastLeft: null };
 
 function toggleTimerMenu() {
   if (timerState.running) {
@@ -1282,8 +1282,10 @@ document.getElementById("timerPresets").addEventListener("click", (e) => {
 
 function startTimer(secs) {
   if (timerState.tick) clearInterval(timerState.tick);   // never stack intervals
+  unlockAudio();   // started from a tap → unlock/resume the shared AudioContext so the end beep fires reliably on iOS
   timerState.running = true;
   timerState.duration = secs;
+  timerState.lastLeft = null;
   timerState.endsAt = Date.now() + secs * 1000;
   document.getElementById("timerFab").classList.add("running");
   document.getElementById("timerFab").classList.remove("done");
@@ -1304,13 +1306,18 @@ function updateTimer() {
   const s = left % 60;
   document.getElementById("timerDisplay").textContent =
     m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}`;
+  // countdown ticks at 5,4,3,2,1 — fire once per second boundary (interval runs every 200ms)
+  if (left !== timerState.lastLeft) {
+    if (left >= 1 && left <= 5) beep(880, 0.12, 0.35);   // short high tick
+    timerState.lastLeft = left;
+  }
   if (left <= 0) {
     clearInterval(timerState.tick);
     timerState.running = false;
     document.getElementById("timerFab").classList.remove("running");
     document.getElementById("timerFab").classList.add("done");
     document.getElementById("timerDisplay").textContent = "GO";
-    beep();
+    beep(1320, 0.6, 0.5);   // longer, higher final beep
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
     setTimeout(() => {
       document.getElementById("timerFab").classList.remove("done");
@@ -1319,18 +1326,31 @@ function updateTimer() {
   }
 }
 
-function beep() {
+// ONE shared AudioContext, unlocked on a user gesture (timer-start tap). iOS suspends any
+// context created without a recent gesture, which is why the old per-beep ctx was silent
+// "sometimes" — the end beep fires seconds after the tap, with no gesture of its own.
+let audioCtx = null;
+function unlockAudio() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value = 880;
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch (e) { console.warn("audio unlock failed", e); }
+}
+
+function beep(freq = 880, dur = 0.6, vol = 0.5) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = freq;
     g.gain.value = 0.0001;
-    o.start();
-    g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
-    setTimeout(() => { o.stop(); ctx.close(); }, 700);
+    o.start(t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.stop(t + dur + 0.05);   // never close the shared ctx — reused for every beep
   } catch (e) { console.warn("beep failed", e); }
 }
 
