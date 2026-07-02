@@ -66,6 +66,13 @@
     }
     .chip:hover,.chip:active{background:var(--chip-hover);color:var(--chip-hover-ink);border-color:transparent;transform:translateY(-1px)}
     .section-title{font-size:16px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .cta-btn{
+      display:block;text-align:center;padding:15px 18px;border-radius:14px;
+      background:var(--chip-hover);color:var(--chip-hover-ink);font-weight:600;font-size:17px;
+      transition:transform .06s ease, opacity .15s ease
+    }
+    .cta-btn:hover,.cta-btn:active{opacity:.92;transform:translateY(-1px)}
+    .cta-sub{font-size:13.5px;color:var(--muted);text-align:center;margin:10px 0 0}
     .footer{font-size:13px;color:var(--muted);text-align:center;margin-top:10px}
     @media (min-width:680px){
       .avatar{width:108px;height:108px}
@@ -84,6 +91,12 @@
           <p class="tag">Product Manager sharing personal growth tactics, experiments & mini apps.</p>
         </div>
       </div>
+    </section>
+
+    <!-- FREE GUIDE CTA -->
+    <section class="card" aria-label="Free guide">
+      <a class="cta-btn" href="/guide">🌱 Get the free guide — 30 ideas to think clearer</a>
+      <p class="cta-sub">The Calm Reframe Pack · 7 five-minute tools + 23 calm reframes · free PDF</p>
     </section>
 
     <!-- LINKS -->
