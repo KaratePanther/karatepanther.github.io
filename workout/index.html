@@ -1301,6 +1301,7 @@ function stopTimer() {
 }
 
 function updateTimer() {
+  unlockAudio();   // keep the shared ctx warm through the whole rest — iOS suspends an idle ctx during long (3 min) rests, which silenced the 5s ticks. Re-resuming every 200ms means it's already running by the time the ticks fire.
   const left = Math.max(0, Math.ceil((timerState.endsAt - Date.now()) / 1000));
   const m = Math.floor(left / 60);
   const s = left % 60;
@@ -1333,14 +1334,17 @@ let audioCtx = null;
 function unlockAudio() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioCtx.state !== "running") audioCtx.resume();   // catches BOTH "suspended" and WebKit's "interrupted" state (a phone notification / system sound flips iOS to "interrupted", which the old "=== suspended" guard missed)
   } catch (e) { console.warn("audio unlock failed", e); }
 }
+
+// Coming back to the foreground (screen re-wake, app switch back) → re-arm audio so the next timer beeps.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) unlockAudio(); });
 
 function beep(freq = 880, dur = 0.6, vol = 0.5) {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioCtx.state !== "running") audioCtx.resume();
     const t = audioCtx.currentTime;
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
