@@ -1125,12 +1125,13 @@ function fmtRest(s) {
 function parseRestSeconds(heading) {
   if (!heading) return 0;
   const h = heading.toLowerCase();
-  let secs = 0, found = false;
-  const min = h.match(/(\d+(?:\.\d+)?)\s*min/);
-  if (min) { secs += parseFloat(min[1]) * 60; found = true; }
-  const sec = h.match(/(\d+)\s*s(?:ec)?\b/);
-  if (sec) { secs += parseInt(sec[1], 10); found = true; }
-  return found ? Math.round(secs) : 0;
+  // Only the value that directly precedes the word "rest" counts. Anchoring to
+  // "rest" stops tempo tokens elsewhere in the heading (e.g. "3s eccentric")
+  // from leaking in and being added to the rest time.
+  const m = h.match(/(\d+(?:\.\d+)?)\s*(min|m|sec|s)\s+rest\b/);
+  if (!m) return 0;
+  const val = parseFloat(m[1]);
+  return Math.round(m[2] === "min" || m[2] === "m" ? val * 60 : val);
 }
 
 //---------------------------------------------------------
