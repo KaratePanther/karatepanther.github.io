@@ -1331,11 +1331,48 @@ function updateTimer() {
 // ONE shared AudioContext, unlocked on a user gesture (timer-start tap). iOS suspends any
 // context created without a recent gesture, which is why the old per-beep ctx was silent
 // "sometimes" — the end beep fires seconds after the tap, with no gesture of its own.
+//
+// THE MID-WORKOUT BUG (fixed here): iOS also suspends an IDLE context a few seconds into a
+// long rest (and any concurrent app grabbing the audio session — e.g. the Polar app — flips
+// it to "interrupted"). While suspended, audioCtx.currentTime FREEZES, so every beep() we
+// fire schedules oscillator.start(t) against that frozen clock. They don't play — they queue.
+// When the context finally resumes (app-switch back, a tap), currentTime jumps forward and
+// all those stale beeps are now in the past → they flush in one burst. That's the "sounds
+// stopped mid-workout, then fired all at once after I went to Polar and came back" report.
+// A resume() from a setInterval/visibilitychange is NOT a user gesture, so iOS often leaves
+// it pending — spamming resume() didn't rescue it.
+//
+// FIX = (1) a silent keep-alive source that keeps the graph "active" so the context never
+// idles out for the whole session, and (2) beep() DROPS the tick when the ctx isn't running
+// instead of scheduling it against a frozen clock (a missed tick beats a delayed burst).
 let audioCtx = null;
+let keepAlive = null;   // looping inaudible source — stops iOS suspending an idle context
+
+function startKeepAlive() {
+  if (!audioCtx || keepAlive) return;
+  try {
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate); // 1s of silence
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const g = audioCtx.createGain();
+    g.gain.value = 0.0001;   // inaudible, but keeps the audio graph running
+    src.connect(g); g.connect(audioCtx.destination);
+    src.onended = () => { keepAlive = null; };   // if iOS tears it down, let unlockAudio() rebuild it
+    src.start(0);
+    keepAlive = src;
+  } catch (e) { console.warn("keepalive failed", e); }
+}
+
 function unlockAudio() {
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // auto-recover: if iOS ever flips us to suspended/interrupted, ask for a resume immediately
+      audioCtx.onstatechange = () => { if (audioCtx.state !== "running") audioCtx.resume(); };
+    }
     if (audioCtx.state !== "running") audioCtx.resume();   // catches BOTH "suspended" and WebKit's "interrupted" state (a phone notification / system sound flips iOS to "interrupted", which the old "=== suspended" guard missed)
+    startKeepAlive();   // idempotent — keeps the ctx from idling out during long rests
   } catch (e) { console.warn("audio unlock failed", e); }
 }
 
@@ -1344,8 +1381,11 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) unlo
 
 function beep(freq = 880, dur = 0.6, vol = 0.5) {
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state !== "running") audioCtx.resume();
+    if (!audioCtx) { unlockAudio(); }
+    if (!audioCtx || audioCtx.state !== "running") {
+      if (audioCtx) audioCtx.resume();   // ask for a resume, but DON'T schedule this beep against a frozen clock — drop it so nothing queues up to burst-fire later
+      return;
+    }
     const t = audioCtx.currentTime;
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
