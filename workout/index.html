@@ -1345,8 +1345,47 @@ function updateTimer() {
 // FIX = (1) a silent keep-alive source that keeps the graph "active" so the context never
 // idles out for the whole session, and (2) beep() DROPS the tick when the ctx isn't running
 // instead of scheduling it against a frozen clock (a missed tick beats a delayed burst).
+//
+// THE SIRI BUG (fixed 8/06): summoning Siri mid-rest and dismissing it leaves the timer
+// ticking but SILENT — and, unlike the bug above, nothing bursts afterwards. Reason: Siri
+// takes the audio session, WebKit flips us to "interrupted", and when it hands the session
+// back the context reports state === "running" again — but the underlying graph (including
+// the keep-alive source) is DEAD. So unlockAudio() no-ops (state looks fine, keepAlive is
+// non-null) and beep() happily schedules oscillators into a corpse. state is a LIAR after an
+// interruption; the only trustworthy signal is whether currentTime is actually advancing.
+// FIX = (a) remember that an interruption happened and force a full rebuild on the way back,
+// (b) a liveness watchdog that compares ctx.currentTime against the wall clock and rebuilds a
+// zombie context, (c) re-arm on any touch (a real gesture is what iOS actually wants), and
+// (d) fall back to a vibrate pulse for the tick when audio can't be revived.
 let audioCtx = null;
 let keepAlive = null;   // looping inaudible source — stops iOS suspending an idle context
+let sawInterruption = false;   // set when iOS takes the audio session (Siri, a call, another app)
+let lastCtxTime = 0, lastWallTime = 0, lastRebuild = 0;
+
+// Tear the whole context down and build a fresh one. Needed after an interruption because a
+// resumed-but-dead context can't be repaired — its source nodes never sound again.
+function rebuildAudio() {
+  if (Date.now() - lastRebuild < 2000) return;   // don't thrash: updateTimer() calls in every 200ms
+  lastRebuild = Date.now();
+  try { if (audioCtx) audioCtx.close(); } catch (e) { /* already gone */ }
+  audioCtx = null;
+  keepAlive = null;
+  sawInterruption = false;
+  lastCtxTime = lastWallTime = 0;
+  unlockAudio();
+}
+
+// Is the context actually producing sound? Trusts the clock, not ctx.state.
+// Returns false once currentTime has stalled while the wall clock kept moving.
+function audioIsLive() {
+  if (!audioCtx || audioCtx.state !== "running") return false;
+  const now = Date.now(), t = audioCtx.currentTime;
+  if (!lastWallTime) { lastWallTime = now; lastCtxTime = t; return true; }
+  if (now - lastWallTime < 500) return true;   // too soon to judge
+  const stalled = (t - lastCtxTime) < 0.05;    // ≥500ms of wall time, <50ms of audio time
+  lastWallTime = now; lastCtxTime = t;
+  return !stalled;
+}
 
 function startKeepAlive() {
   if (!audioCtx || keepAlive) return;
@@ -1368,22 +1407,39 @@ function unlockAudio() {
   try {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      // auto-recover: if iOS ever flips us to suspended/interrupted, ask for a resume immediately
-      audioCtx.onstatechange = () => { if (audioCtx.state !== "running") audioCtx.resume(); };
+      lastCtxTime = lastWallTime = 0;
+      // auto-recover: if iOS ever flips us to suspended/interrupted, ask for a resume immediately —
+      // and REMEMBER it, because coming back to "running" doesn't mean the graph survived (Siri).
+      audioCtx.onstatechange = () => {
+        if (!audioCtx) return;
+        if (audioCtx.state !== "running") { sawInterruption = true; audioCtx.resume(); }
+      };
     }
-    if (audioCtx.state !== "running") audioCtx.resume();   // catches BOTH "suspended" and WebKit's "interrupted" state (a phone notification / system sound flips iOS to "interrupted", which the old "=== suspended" guard missed)
+    if (audioCtx.state !== "running") { audioCtx.resume(); return; }   // catches BOTH "suspended" and WebKit's "interrupted" state (a phone notification / system sound flips iOS to "interrupted", which the old "=== suspended" guard missed)
+    // Back to "running" after something took the audio session → the graph is dead even though
+    // state says otherwise. Rebuild rather than trust it.
+    if (sawInterruption) { rebuildAudio(); return; }
+    if (!audioIsLive()) { rebuildAudio(); return; }   // watchdog: currentTime stalled = zombie ctx
     startKeepAlive();   // idempotent — keeps the ctx from idling out during long rests
   } catch (e) { console.warn("audio unlock failed", e); }
 }
 
 // Coming back to the foreground (screen re-wake, app switch back) → re-arm audio so the next timer beeps.
 document.addEventListener("visibilitychange", () => { if (!document.hidden) unlockAudio(); });
+// Siri overlays the page WITHOUT hiding it, so visibilitychange may never fire — but focus does.
+window.addEventListener("focus", unlockAudio);
+window.addEventListener("pageshow", unlockAudio);
+// Last resort, and the strongest one: a real touch is the gesture iOS actually wants. Any tap
+// anywhere re-arms audio, so the next set's timer beeps even if everything above missed.
+document.addEventListener("touchstart", unlockAudio, { passive: true });
 
 function beep(freq = 880, dur = 0.6, vol = 0.5) {
   try {
     if (!audioCtx) { unlockAudio(); }
-    if (!audioCtx || audioCtx.state !== "running") {
+    if (!audioCtx || audioCtx.state !== "running" || sawInterruption) {
       if (audioCtx) audioCtx.resume();   // ask for a resume, but DON'T schedule this beep against a frozen clock — drop it so nothing queues up to burst-fire later
+      if (sawInterruption) rebuildAudio();
+      if (navigator.vibrate) navigator.vibrate(80);   // audio is out — still give him the cue
       return;
     }
     const t = audioCtx.currentTime;
