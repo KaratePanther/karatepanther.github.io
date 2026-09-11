@@ -205,6 +205,35 @@
     font-variant-numeric: tabular-nums;
   }
   .topbar-btns { display: flex; gap: 6px; }
+
+  /* progress ring: elapsed total vs the session's **Est. time** */
+  .ring-wrap { position: relative; width: 92px; height: 92px; flex: none; }
+  .est-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-track { fill: none; stroke: #333; stroke-width: 7; }
+  .ring-arc {
+    fill: none; stroke: #2d8757; stroke-width: 7; stroke-linecap: round; opacity: 0;
+    transition: stroke-dashoffset 0.6s linear, stroke 0.3s;
+  }
+  .ring-arc.warn { stroke: #d4a017; }
+  .ring-arc.over { stroke: #c25450; }
+  .ring-text {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .topbar .ring-wrap .total { font-size: 1.15em; }
+  .tsub { font-size: 0.62em; color: #888; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+  /* portrait lock: iOS can't lock orientation from a web page, so in landscape the body is
+     counter-rotated (inline transform set by applyPortraitLock) and main becomes the scroller.
+     The timer FAB / presets / toast are body children, so they rotate with it and stay put. */
+  html.rot-lock, html.rot-lock body { overflow: hidden; }
+  html.rot-lock body {
+    position: fixed; top: 0; left: 0; min-height: 0; padding-bottom: 0;
+    transform-origin: 0 0;
+  }
+  html.rot-lock main {
+    height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 120px;
+  }
   .mini { min-height: 40px; padding: 8px 12px; font-size: 0.95em; min-width: auto; }
   .wake-status {
     font-size: 0.8em; color: #888; margin-top: 8px; cursor: pointer;
@@ -619,9 +648,15 @@ function renderSession(app) {
     <div class="summary-head" id="summaryHead" onclick="toggleSummary()"><span class="arrow">▾</span> Session summary</div>
     <div class="summary-body" id="summaryBody"><div class="meta meta-inner">${mdLinesToHtml(m.preamble)}</div></div>
     <div class="topbar">
-      <div class="total-wrap">
-        <div class="tlabel">TOTAL TIME</div>
-        <div class="total" id="totalDisplay">${fmtClock(state.totalSeconds || 0)}</div>
+      <div class="ring-wrap" title="Total time vs estimated session length">
+        <svg class="est-ring" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="ring-track" cx="50" cy="50" r="44"/>
+          <circle class="ring-arc" id="estArc" cx="50" cy="50" r="44"/>
+        </svg>
+        <div class="ring-text">
+          <div class="total" id="totalDisplay">${fmtClock(state.totalSeconds || 0)}</div>
+          <div class="tsub" id="estSub"></div>
+        </div>
       </div>
       <div class="topbar-btns">
         <button class="mini primary" id="totalBtn" onclick="toggleTotal()">▶</button>
@@ -635,6 +670,7 @@ function renderSession(app) {
     </div>
   `;
   app.appendChild(head);
+  updateRing();
 
   // sections — overview (full scroll) or focus (one section at a time)
   if (state.viewMode === "focus") {
@@ -1066,6 +1102,7 @@ function recomputeTotal() {
   state.totalSeconds = totalBase + Math.round((Date.now() - totalAnchor) / 1000);
   const el = document.getElementById("totalDisplay");
   if (el) el.textContent = fmtClock(state.totalSeconds);
+  updateRing();
 }
 
 function startTotal() {
@@ -1097,6 +1134,7 @@ function resetTotal() {
   state.totalSeconds = 0;
   const el = document.getElementById("totalDisplay");
   if (el) el.textContent = fmtClock(0);
+  updateRing();
   persist();
 }
 
@@ -1108,7 +1146,36 @@ function updateTotalBtn() {
 function syncTimerUI() {
   const el = document.getElementById("totalDisplay");
   if (el) el.textContent = fmtClock(state.totalSeconds || 0);
+  updateRing();
   updateTotalBtn();
+}
+
+// Estimated session length from the preamble line `**Est. time**: ~67 min — ...`
+// (first number wins, so an older "~60-65 min" reads as 60). 0 = no estimate.
+function estSeconds() {
+  const pre = (state.model && state.model.preamble) || [];
+  for (const ln of pre) {
+    const m = ln.replace(/\*/g, "").match(/est\.?\s*time\s*:\s*~?\s*(\d+(?:\.\d+)?)/i);
+    if (m) return Math.round(parseFloat(m[1]) * 60);
+  }
+  return 0;
+}
+
+const RING_C = 2 * Math.PI * 44;   // circumference of the r=44 ring
+
+// Fill the ring with elapsed / estimated: green, amber from 90%, red once past the estimate.
+function updateRing() {
+  const arc = document.getElementById("estArc"), sub = document.getElementById("estSub");
+  if (!arc || !sub) return;
+  const est = estSeconds(), t = state.totalSeconds || 0;
+  if (!est) { arc.style.opacity = 0; sub.textContent = "total"; return; }
+  const frac = t / est;
+  arc.style.strokeDasharray = RING_C;
+  arc.style.strokeDashoffset = RING_C * (1 - Math.min(frac, 1));
+  arc.style.opacity = t > 0 ? 1 : 0;   // round linecap would draw a dot at 0
+  arc.classList.toggle("warn", frac >= 0.9 && frac <= 1);
+  arc.classList.toggle("over", frac > 1);
+  sub.textContent = frac > 1 ? "+" + Math.ceil((t - est) / 60) + "m over" : "of " + Math.round(est / 60) + "m";
 }
 
 function fmtClock(s) {
@@ -1513,6 +1580,37 @@ function toast(msg, err) {
 }
 
 //---------------------------------------------------------
+// Portrait lock
+//---------------------------------------------------------
+// iOS gives web pages no orientation lock (no screen.orientation.lock(), manifest
+// `orientation` ignored), so when a phone turns sideways we counter-rotate the body to
+// keep the page upright relative to the phone. Desktop / wide screens are left alone.
+const IS_PHONE = window.matchMedia("(pointer: coarse)").matches;
+
+function deviceAngle() {
+  if (typeof window.orientation === "number") return window.orientation;   // iOS: 0, 90, -90, 180
+  const a = screen.orientation ? screen.orientation.angle : 0;
+  return a === 270 ? -90 : a;
+}
+
+function applyPortraitLock() {
+  const root = document.documentElement, b = document.body;
+  const w = window.innerWidth, h = window.innerHeight, o = deviceAngle();
+  if (!IS_PHONE || w <= h || (o !== 90 && o !== -90)) {
+    root.classList.remove("rot-lock");
+    b.style.width = b.style.height = b.style.transform = "";
+    return;
+  }
+  // Phone turned counter-clockwise (90) → rotate the page -90°, and vice versa.
+  root.classList.add("rot-lock");
+  b.style.width = h + "px";
+  b.style.height = w + "px";
+  b.style.transform = o === 90 ? `translateY(${h}px) rotate(-90deg)` : `translateX(${w}px) rotate(90deg)`;
+}
+window.addEventListener("resize", applyPortraitLock);
+window.addEventListener("orientationchange", () => setTimeout(applyPortraitLock, 150));
+
+//---------------------------------------------------------
 // Init
 //---------------------------------------------------------
 (function init() {
@@ -1531,6 +1629,7 @@ function toast(msg, err) {
   if (typeof state.summaryOpen !== "boolean") state.summaryOpen = false;
   totalRunning = false;
   render();
+  applyPortraitLock();
   requestWakeLock();
 })();
 </script>
