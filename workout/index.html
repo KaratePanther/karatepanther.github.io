@@ -297,7 +297,7 @@ let state = {
   filename: "",         // YYYY-MM-DD.md
   loadedAt: null,
   totalSeconds: 0,      // count-up total workout time (persisted)
-  viewMode: "overview", // "overview" (full scroll) | "focus" (one section)
+  viewMode: "focus",    // "overview" (full scroll) | "focus" (one section)
   focusIndex: 0,        // which section is shown in focus mode
   summaryOpen: false,   // session-summary collapsible — default closed so the workout screen stays clean
   dirty: false,         // edits made but not yet sent to Obsidian
@@ -991,7 +991,7 @@ function loadSession(md, filename) {
     state.filename = filename;
     state.loadedAt = Date.now();
     state.totalSeconds = 0;
-    state.viewMode = "overview";
+    state.viewMode = "focus";
     state.focusIndex = 0;
     state.summaryOpen = false;
     state.dirty = false;       // fresh load, nothing entered yet
@@ -1012,7 +1012,7 @@ function resetSession() {
   stopTotal();
   // intentionally keep the persisted autosave so user can restore
   state = { rawMarkdown: "", model: null, filename: "", loadedAt: null,
-            totalSeconds: 0, viewMode: "overview", focusIndex: 0, summaryOpen: false, dirty: false };
+            totalSeconds: 0, viewMode: "focus", focusIndex: 0, summaryOpen: false, dirty: false };
   render();
 }
 
@@ -1624,7 +1624,7 @@ window.addEventListener("orientationchange", () => setTimeout(applyPortraitLock,
   } catch (e) { console.warn("init restore failed", e); }
   // normalize fields that older saves won't have; total timer always resumes paused
   state.totalSeconds = state.totalSeconds || 0;
-  state.viewMode = state.viewMode || "overview";
+  state.viewMode = state.viewMode || "focus";
   state.focusIndex = state.focusIndex || 0;
   if (typeof state.summaryOpen !== "boolean") state.summaryOpen = false;
   totalRunning = false;
